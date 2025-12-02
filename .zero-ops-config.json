@@ -1,0 +1,22 @@
+{
+  "test": {
+    "path": "/Users/avinashgupta/Documents/ART/testingenv/snippent/tmpdir",
+    "active": true
+  },
+  "second": {
+    "path": "/Users/avinashgupta/Documents/ART/testingenv/snippent/tmpdir2",
+    "active": false
+  },
+  "mytool": {
+    "testpath": {
+      "path": "/Users/avinashgupta/Documents/ART/testingenv/snippent/temp_tool_test",
+      "active": true
+    }
+  },
+  "bigbang": {
+    "testpath": {
+      "path": "/Users/avinashgupta/Documents/ART/testingenv/snippent/temp_bigbang_test",
+      "active": true
+    }
+  }
+}

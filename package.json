@@ -1,0 +1,22 @@
+{
+  "name": "zero-ops",
+  "version": "1.0.0",
+  "description": "CLI utility for managing named paths (bigbang flow)",
+  "main": "zero-ops.js",
+  "bin": {
+    "zero-ops": "zero-ops.js"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "echo 'No build step required for this JS-only CLI'",
+    "install:global": "npm install -g .",
+    "package": "npm pack",
+    "release": "npm publish",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^12.0.0"
+  }
+}
