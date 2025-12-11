@@ -170,13 +170,16 @@ bot.on('text', async (ctx) => {
     ctx.reply(`Executing: ${text}...`);
     const output = await executeCommand(text);
 
-    // Check if output contains a file path that looks like an artifact (e.g. screenshot)
-    // "Screenshot saved to /path/to/file.png"
-    const fileMatch = output.match(/Screenshot saved to (.*?) and/);
-    if (fileMatch && fileMatch[1]) {
-        const filePath = fileMatch[1].trim();
-        if (fs.existsSync(filePath)) {
-            await ctx.replyWithPhoto({ source: filePath });
+    // Check if output contains a file path that looks like an artifact (e.g. screenshot or photo)
+    // "Screenshot saved to /path/to/file.png" or "Photo saved to /path/to/file.jpg"
+    const fileMatch = output.match(/(Screenshot|Photo|Image) saved to (.*?)(\s|$)/);
+    if (fileMatch && fileMatch[2]) {
+        const filePath = fileMatch[2].trim();
+        // Remove trailing period if present (often in sentences)
+        const cleanPath = filePath.replace(/\.$/, '');
+
+        if (fs.existsSync(cleanPath)) {
+            await ctx.replyWithPhoto({ source: cleanPath });
         }
     }
 
@@ -188,9 +191,66 @@ bot.on('text', async (ctx) => {
     }
 });
 
-bot.launch();
-log('Bot started.');
+// Error Handling
+bot.catch((err, ctx) => {
+    log(`Bot Error for ${ctx.updateType}: ${err.message}`);
+    // Do not crash, just log
+});
+
+// Bot Start/Restart Logic
+let isRestarting = false;
+
+async function startBot() {
+    if (isRestarting) return;
+    isRestarting = true;
+
+    try {
+        log('Starting bot...');
+        // Stop if running (ignore error)
+        try { bot.stop(); } catch (e) { }
+
+        await bot.launch();
+        log('Bot started successfully.');
+        isRestarting = false;
+    } catch (err) {
+        log(`Bot launch failed or crashed: ${err.message}`);
+        console.error('Bot launch error:', err);
+        isRestarting = false;
+
+        // Wait 5 seconds and retry
+        log('Retrying in 5 seconds...');
+        setTimeout(startBot, 5000);
+    }
+}
+
+startBot();
 
 // Enable graceful stop
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+process.once('SIGINT', () => {
+    bot.stop('SIGINT');
+    process.exit(0);
+});
+process.once('SIGTERM', () => {
+    bot.stop('SIGTERM');
+    process.exit(0);
+});
+
+// Global Exception Handlers to prevent crash on timeouts & Restart
+process.on('uncaughtException', (err) => {
+    log(`Uncaught Exception: ${err.message}`);
+    console.error('Uncaught Exception:', err);
+    if (err.message.includes('Timeout') || err.message.includes('ETIMEDOUT') || err.message.includes('network')) {
+        log('Network/Timeout error detected. Restarting bot...');
+        setTimeout(startBot, 2000);
+    }
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    const msg = reason instanceof Error ? reason.message : String(reason);
+    log(`Unhandled Rejection: ${msg}`);
+    console.error('Unhandled Rejection:', reason);
+    if (msg.includes('Timeout') || msg.includes('ETIMEDOUT') || msg.includes('network')) {
+        log('Network/Timeout error detected. Restarting bot...');
+        setTimeout(startBot, 2000);
+    }
+});

@@ -146,6 +146,11 @@ You can send almost any `zero-ops` command to the bot. Here are the most useful 
 - `telegram logs`: (Not recommended via chat, use terminal).
 - `commands` / `help`: Send this to the **bot** to list all available commands and examples.
 
+**Camera Tool** (`camera`)
+- `camera capture [name]`: Take a photo using the webcam.
+    - Requires system dependencies (`imagesnap` on macOS, `fswebcam` on Linux).
+    - Photos are saved to `~/.zero-ops/camera/` and auto-uploaded to Telegram if requested via bot.
+
 ---
 
 ## ⚠️ Important Note & Disclaimer
