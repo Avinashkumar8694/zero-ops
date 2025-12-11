@@ -94,7 +94,70 @@ zero-ops desktop screenshot region   # Interactive region selection
 # Interactive Window Selection
 # On macOS, run the command below, then PRESS SPACE to switch to window selection mode.
 zero-ops desktop screenshot window
+zero-ops desktop screenshot window
 ```
+
+### Telegram Remote Control
+Control `zero-ops` from your Telegram app.
+
+1. **Configure Credentials**
+   ```bash
+   zero-ops telegram config set token "YOUR_BOT_TOKEN"
+   zero-ops telegram config set chat_id "YOUR_CHAT_ID"
+   ```
+
+2. **Start the Bot in Background**
+   ```bash
+   zero-ops telegram start
+   ```
+
+3. **Check Status**
+   ```bash
+   zero-ops telegram status
+   ```
+
+4. **Stop the Bot**
+   ```bash
+   zero-ops telegram stop
+   ```
+
+5. **Usage**
+   - Send `desktop screenshot` to take a screenshot (the bot will upload the image back to you!).
+
+### Supported Telegram Commands
+You can send almost any `zero-ops` command to the bot. Here are the most useful ones:
+
+**Desktop Tool** (`desktop`)
+- `desktop list`: Show running applications.
+- `desktop minimize "App Name"`: Minimize a specific app.
+- `desktop minimize-all`: Minimize everything (Show Desktop).
+- `desktop close "App Name"`: Close a specific app.
+- `desktop close-all`: Close everything.
+- `desktop screenshot`: Take a full-screen screenshot (returns image).
+- `desktop screenshot window "App Name"`: Take a screenshot of a specific app window (e.g., `desktop screenshot window "Google Chrome"`).
+
+**BigBang Tool** (`bigbang`)
+- `bigbang config list`: View current path configurations.
+- `bigbang delete <name>`: Delete data in a named path.
+- `bigbang delete-active`: Delete data in all active paths.
+
+**Telegram Tool** (`telegram`)
+- `telegram status`: Check bot status remotely.
+- `telegram logs`: (Not recommended via chat, use terminal).
+- `commands` / `help`: Send this to the **bot** to list all available commands and examples.
+
+---
+
+## ⚠️ Important Note & Disclaimer
+
+**Platform Testing**:
+This tool has been primarily developed and **verified on macOS**. While Linux and Windows support has been implemented based on standard system tools (`wmctrl`, `PowerShell`, etc.), cross-platform behavior may vary.
+
+**Liability Disclaimer**:
+This software is provided "as is", without warranty of any kind, express or implied. By using this software, you agree that you are solely responsible for any consequences resulting from its use. The authors and contributors accept **no responsibility** for any damage, data loss, or system issues that may occur. Please use responsibly.
+
+
+
 
 ## Example Workflow
 ```bash

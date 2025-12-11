@@ -75,26 +75,74 @@ import os from 'os';
 import path from 'path';
 import fs from 'fs';
 
-export function captureScreenshot(type = 'full', toolName = 'desktop') {
+export function captureScreenshot(type = 'full', toolName = 'desktop', name = null) {
     return new Promise((resolve, reject) => {
-        if (type !== 'full') {
-            resolve('Interactive window/region screenshot not fully supported via CLI on Windows. Please use Win+Shift+S.');
-            return;
-        }
-
         const homeDir = os.homedir();
         const toolDir = path.join(homeDir, '.zero-ops', toolName);
 
-        // Ensure directory exists (PowerShell might need it pre-created or we do it here in node)
         if (!fs.existsSync(toolDir)) {
             fs.mkdirSync(toolDir, { recursive: true });
         }
 
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const filename = `screenshot-${timestamp}.png`;
+        const filename = `screenshot-${type}-${timestamp}.png`;
         const filePath = path.join(toolDir, filename);
+        // Escape backslashes for PowerShell
+        const safeFilePath = filePath.replace(/\\/g, '\\\\');
 
-        // PowerShell script to capture full screen, save to file, and set clipboard
+        if (type === 'window' && name) {
+            // Named Window Capture Logic
+            const script = `
+            Add-Type -AssemblyName System.Windows.Forms
+            Add-Type -AssemblyName System.Drawing
+            
+            # Find process by Name or Title
+            $proc = Get-Process | Where-Object { ($_.ProcessName -like "*${name}*" -or $_.MainWindowTitle -like "*${name}*") -and $_.MainWindowTitle -ne "" } | Select-Object -First 1
+            
+            if (-not $proc) {
+                Write-Error "Application '${name}' not found."
+                exit 1
+            }
+
+            # Acitvate Window by PID
+            $wshell = New-Object -ComObject WScript.Shell
+            $success = $wshell.AppActivate($proc.Id)
+            
+            if ($success) {
+                Start-Sleep -Milliseconds 500
+                # Alt+PrintScreen captures active window
+                [System.Windows.Forms.SendKeys]::SendWait("%{PRTSC}")
+                Start-Sleep -Milliseconds 500
+                
+                if ([System.Windows.Forms.Clipboard]::ContainsImage()) {
+                    $img = [System.Windows.Forms.Clipboard]::GetImage()
+                    $img.Save('${safeFilePath}')
+                } else {
+                    Write-Error "Clipboard empty or no image captured."
+                    exit 1
+                }
+            } else {
+                Write-Error "Failed to activate window for '${name}'."
+                exit 1
+            }
+            `;
+
+            exec(`powershell -Command "${script}"`, (error, stdout, stderr) => {
+                if (error) {
+                    reject(new Error(`Failed to capture named window: ${stderr || error.message}`));
+                    return;
+                }
+                resolve(`Screenshot saved to ${filePath} and copied to clipboard.`);
+            });
+            return;
+        }
+
+        if (type !== 'full') {
+            resolve('Interactive window/region screenshot not fully supported via CLI on Windows. Please use named window: zero-ops desktop screenshot window "AppName".');
+            return;
+        }
+
+        // ... Full Logic ...
         const script = `
         Add-Type -AssemblyName System.Windows.Forms
         Add-Type -AssemblyName System.Drawing
@@ -102,7 +150,7 @@ export function captureScreenshot(type = 'full', toolName = 'desktop') {
         $bitmap = New-Object System.Drawing.Bitmap $screen.Bounds.Width, $screen.Bounds.Height
         $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
         $graphics.CopyFromScreen($screen.Bounds.X, $screen.Bounds.Y, 0, 0, $bitmap.Size)
-        $bitmap.Save('${filePath.replace(/\\/g, '\\\\')}')
+        $bitmap.Save('${safeFilePath}')
         [System.Windows.Forms.Clipboard]::SetImage($bitmap)
         $graphics.Dispose()
         $bitmap.Dispose()

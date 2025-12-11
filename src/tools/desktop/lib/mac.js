@@ -89,66 +89,91 @@ import os from 'os';
 import path from 'path';
 import fs from 'fs';
 
-export function captureScreenshot(type = 'full', toolName = 'desktop') {
+export function captureScreenshot(type = 'full', toolName = 'desktop', name = null) {
     return new Promise((resolve, reject) => {
         const homeDir = os.homedir();
         const toolDir = path.join(homeDir, '.zero-ops', toolName);
-
-        // Ensure directory exists
         if (!fs.existsSync(toolDir)) {
             fs.mkdirSync(toolDir, { recursive: true });
         }
 
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const filename = `screenshot-${timestamp}.png`;
-        const filePath = path.join(toolDir, filename);
+        const fileName = `screenshot-${type}-${timestamp}.png`;
+        const filePath = path.join(toolDir, fileName);
 
-        // Revised command strategy:
-        // - Full: screencapture <file>
-        // - Window: screencapture -i <file> (User MUST press Space to toggle window mode)
-        // - Region: screencapture -i <file>
+        if (type === 'window' && name) {
+            // Named window capture
+            // 1. Get Window ID of the (frontmost) window of the app
+            const getWindowIdScript = `
+                tell application "System Events"
+                    set proc to first process whose name is "${name}"
+                    if exists proc then
+                        tell proc
+                            set winID to id of window 1
+                            return winID
+                        end tell
+                    else
+                        return "NOT_FOUND"
+                    end if
+                end tell
+            `;
+
+            exec(`osascript -e '${getWindowIdScript}'`, (err, stdout, stderr) => {
+                if (err) {
+                    reject(new Error(`Failed to find window for "${name}": ${err.message}`));
+                    return;
+                }
+                const winId = stdout.trim();
+                if (winId === 'NOT_FOUND') {
+                    reject(new Error(`Application "${name}" not found or has no windows.`));
+                    return;
+                }
+
+                // 2. Capture specific window by ID
+                const captureCmd = `screencapture -l ${winId} "${filePath}"`;
+                exec(captureCmd, (e) => {
+                    if (e) return reject(e);
+                    processClipboard(filePath, resolve, reject);
+                });
+            });
+            return;
+        }
 
         let captureCmd = `screencapture "${filePath}"`;
-        let instructions = '';
-
-        if (type === 'window') {
-            // -W and -i -W are flaky on some systems. -i is reliable.
-            captureCmd = `screencapture -i "${filePath}"`;
-            instructions = ' (Interactive Mode: Press SPACE to capture a window)';
-        }
-        if (type === 'region') {
-            captureCmd = `screencapture -i "${filePath}"`;
-            instructions = ' (Interactive Mode: Select region)';
+        // Fallback for local usage or if name missing (though CLI should enforce check? no, we act robustly)
+        if (type === 'window' && !name) {
+            // Interactive fallback if local? Or just error?
+            // User asked: "remove region feature... check how window name can be given"
+            // Let's error if remote, but for now interactive fallback is okay for local
+            // But simpler to just use -iW maybe?
+            // Let's stick to -i for interactive fallback if NO name given
+            captureCmd = `screencapture -iW "${filePath}"`;
         }
 
-        console.log(`Saving to: ${filePath}${instructions}`);
-
-        exec(captureCmd, (error, stdout, stderr) => {
+        exec(captureCmd, (error) => {
             if (error) {
-                if (stderr && stderr.includes('could not create image from window')) {
-                    reject(new Error('not allowed to take screenshot (window capture failed)'));
-                } else if (error.message && error.message.includes('could not create image from window')) {
-                    reject(new Error('not allowed to take screenshot (window capture failed)'));
+                if (error.message.includes('not allowed')) {
+                    reject(new Error('Permission denied. Zero-ops needs Screen Recording permission.'));
                 } else {
                     reject(error);
                 }
                 return;
             }
-
-            // Usage of «class PNGf» is more robust for PNG files in AppleScript
-            const clipScript = `set the clipboard to (read (POSIX file "${filePath}") as «class PNGf»)`;
-            exec(`osascript -e '${clipScript}'`, (e, out, err) => {
-                if (e) {
-                    // Fallback
-                    const fallbackScript = `set the clipboard to (read (POSIX file "${filePath}") as TIFF picture)`;
-                    exec(`osascript -e '${fallbackScript}'`, (e2) => {
-                        if (e2) console.warn('Warning: Failed to copy to clipboard.');
-                        resolve(`Screenshot saved to ${filePath} and copied to clipboard.`);
-                    });
-                } else {
-                    resolve(`Screenshot saved to ${filePath} and copied to clipboard.`);
-                }
-            });
+            processClipboard(filePath, resolve, reject);
         });
+    });
+}
+
+function processClipboard(filePath, resolve, reject) {
+    const clipScript = `set the clipboard to (read (POSIX file "${filePath}") as «class PNGf»)`;
+    exec(`osascript -e '${clipScript}'`, (e) => {
+        if (e) {
+            const fallbackScript = `set the clipboard to (read (POSIX file "${filePath}") as TIFF picture)`;
+            exec(`osascript -e '${fallbackScript}'`, () => {
+                resolve(`Screenshot saved to ${filePath} and copied to clipboard.`);
+            });
+        } else {
+            resolve(`Screenshot saved to ${filePath} and copied to clipboard.`);
+        }
     });
 }

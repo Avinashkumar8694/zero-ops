@@ -109,8 +109,9 @@ export function closeAll() {
 
 import os from 'os';
 import path from 'path';
+import fs from 'fs';
 
-export function captureScreenshot(type = 'full', toolName = 'desktop') {
+export function captureScreenshot(type = 'full', toolName = 'desktop', name = null) {
     return new Promise((resolve, reject) => {
         exec('which gnome-screenshot', (err) => {
             if (err) {
@@ -125,33 +126,57 @@ export function captureScreenshot(type = 'full', toolName = 'desktop') {
             }
 
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            const filename = `screenshot-${timestamp}.png`;
+            const filename = `screenshot-${type}-${timestamp}.png`;
             const filePath = path.join(toolDir, filename);
 
-            let flags = '-f'; // file
-            if (type === 'window') flags += ' -w';
-            else if (type === 'region') flags += ' -a';
-            else if (type !== 'full') {
-                reject(new Error('Invalid type')); return;
+            if (type === 'window' && name) {
+                // Named window capture: Focus then capture active
+                exec('which wmctrl', (e) => {
+                    if (e) return reject(new Error('wmctrl is required for named window capture. Please install it.'));
+
+                    // Activate window
+                    exec(`wmctrl -a "${name}"`, (err) => {
+                        if (err) return reject(new Error(`Failed to focus window "${name}". Is it running?`));
+
+                        // Wait for focus
+                        setTimeout(() => {
+                            exec(`gnome-screenshot -w -f "${filePath}"`, (error) => {
+                                if (error) return reject(error);
+                                processClipboard(filePath, resolve);
+                            });
+                        }, 500);
+                    });
+                });
+                return;
             }
 
-            // Command: gnome-screenshot [flags] <path> 
-            // Then xclip to clipboard
-            exec(`gnome-screenshot ${flags} "${filePath}"`, (error, stdout, stderr) => {
+            let flags = '-f'; // file
+            // If type is window but no name, maybe interactive or active?
+            // gnome-screenshot default is interactive-ish/GUI if no args, but -w takes active.
+            // Let's use -w for active window if no name provided? 
+            // Or maybe default to full if not sure?
+            // The prompt "remove region feature checks how window name can be given" implies we want named.
+            // Let's fallback to current active window if 'window' is passed without name, or maybe error.
+            if (type === 'window') flags += ' -w';
+
+            // exec command
+            exec(`gnome-screenshot ${flags} "${filePath}"`, (error) => {
                 if (error) {
                     reject(error);
                     return;
                 }
-
-                // Try xclip
-                exec(`xclip -selection clipboard -t image/png -i "${filePath}"`, (e) => {
-                    if (e) {
-                        resolve(`Screenshot saved to ${filePath}. (Clipboard copy failed: xclip missing?)`);
-                    } else {
-                        resolve(`Screenshot saved to ${filePath} and copied to clipboard.`);
-                    }
-                });
+                processClipboard(filePath, resolve);
             });
         });
+    });
+}
+
+function processClipboard(filePath, resolve) {
+    exec(`xclip -selection clipboard -t image/png -i "${filePath}"`, (e) => {
+        if (e) {
+            resolve(`Screenshot saved to ${filePath}. (Clipboard copy failed: xclip missing?)`);
+        } else {
+            resolve(`Screenshot saved to ${filePath} and copied to clipboard.`);
+        }
     });
 }

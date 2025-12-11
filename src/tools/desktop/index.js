@@ -118,17 +118,17 @@ export default async function (program, toolName) {
 
     // Screenshot command
     program
-        .command('screenshot [type]')
-        .description('Capture screenshot (type: full, window, region)')
-        .action(async (type = 'full') => {
+        .command('screenshot [type] [name]')
+        .description('Capture screenshot (type: full, window)')
+        .action(async (type = 'full', name) => {
             if (!platformLib) {
                 console.error('Platform not supported.');
                 return;
             }
             try {
-                console.log(`Taking ${type} screenshot...`);
+                console.log(`Taking ${type} screenshot${name ? ' of ' + name : ''}...`);
                 // Interactive modes might need time/user interaction, so strict timeouts might be tricky
-                const message = await platformLib.captureScreenshot(type, toolName);
+                const message = await platformLib.captureScreenshot(type, toolName, name);
                 console.log(message);
             } catch (err) {
                 console.error(`Failed to take screenshot: ${err.message}`);
@@ -156,10 +156,7 @@ Examples:
   Take screenshot (Full Screen):
     $ zero-ops desktop screenshot
 
-  Take screenshot (Interactive Window):
-    $ zero-ops desktop screenshot window
-
-  Take screenshot (Interactive Region):
-    $ zero-ops desktop screenshot region
+  Take screenshot (Named Window):
+    $ zero-ops desktop screenshot window "Google Chrome"
     `);
 }
