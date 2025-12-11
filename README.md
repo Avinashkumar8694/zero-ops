@@ -63,7 +63,29 @@ Deletes all files/folders inside the directory associated with `<name>` for the 
 ```bash
 zero-ops <tool> delete-active
 ```
+zero-ops <tool> delete-active
+```
 Deletes the contents of every path marked as active for the specified `<tool>`.
+
+### Desktop Management
+**Note:** Fully supported on macOS. Windows/Linux support is experimental/limited.
+
+```bash
+# List running applications
+zero-ops desktop list
+
+# Minimize an application
+zero-ops desktop minimize "AppName"
+
+# Minimize all applications
+zero-ops desktop minimize-all
+
+# Close an application
+zero-ops desktop close "AppName"
+
+# Close all applications
+zero-ops desktop close-all
+```
 
 ## Example Workflow
 ```bash

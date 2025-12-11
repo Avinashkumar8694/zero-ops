@@ -41,9 +41,9 @@ if (args.length > 0 && !args[0].startsWith('-') && args[0] !== 'help') {
 if (toolName) {
     const toolModulePath = path.join(__dirname, 'src', 'tools', toolName, 'index.js');
     if (fs.existsSync(toolModulePath)) {
-        import(toolModulePath).then(mod => {
+        import(toolModulePath).then(async mod => {
             if (typeof mod.default === 'function') {
-                mod.default(program, toolName);
+                await mod.default(program, toolName);
                 program.parse(process.argv);
             } else {
                 console.error(`Error: Tool module '${toolName}' does not export a default function.`);
