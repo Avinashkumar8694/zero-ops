@@ -42,6 +42,12 @@ zero-ops <tool> config activate <name>
 zero-ops <tool> config deactivate <name>
 ```
 
+### Activate / Deactivate all paths
+```bash
+zero-ops <tool> config activate-all
+zero-ops <tool> config deactivate-all
+```
+
 ### Delete a specific configuration entry
 ```bash
 zero-ops <tool> config delete <name>

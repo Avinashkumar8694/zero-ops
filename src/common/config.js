@@ -108,6 +108,58 @@ Example:
         });
 
     config
+        .command('activate-all')
+        .description('Mark all paths as active for this tool')
+        .addHelpText('after', `
+Example:
+  $ zero-ops ${toolName || '<tool>'} config activate-all
+        `)
+        .action(() => {
+            if (!toolName) {
+                console.error('Error: Tool name is required. Usage: zero-ops <tool> config activate-all');
+                process.exit(1);
+            }
+            const cfg = loadConfig();
+            if (cfg[toolName]) {
+                let count = 0;
+                for (const name in cfg[toolName]) {
+                    cfg[toolName][name].active = true;
+                    count++;
+                }
+                saveConfig(cfg);
+                console.log(`Activated ${count} paths for tool '${toolName}'.`);
+            } else {
+                console.warn(`No configurations found for tool '${toolName}'.`);
+            }
+        });
+
+    config
+        .command('deactivate-all')
+        .description('Mark all paths as inactive for this tool')
+        .addHelpText('after', `
+Example:
+  $ zero-ops ${toolName || '<tool>'} config deactivate-all
+        `)
+        .action(() => {
+            if (!toolName) {
+                console.error('Error: Tool name is required. Usage: zero-ops <tool> config deactivate-all');
+                process.exit(1);
+            }
+            const cfg = loadConfig();
+            if (cfg[toolName]) {
+                let count = 0;
+                for (const name in cfg[toolName]) {
+                    cfg[toolName][name].active = false;
+                    count++;
+                }
+                saveConfig(cfg);
+                console.log(`Deactivated ${count} paths for tool '${toolName}'.`);
+            } else {
+                console.warn(`No configurations found for tool '${toolName}'.`);
+            }
+        });
+
+    config
         .command('list')
         .description('List all stored configurations for this tool')
         .addHelpText('after', `
