@@ -24,6 +24,8 @@ export default async function (program, toolName) {
         console.error(`Error loading platform library: ${err.message}`);
     }
 
+    program.description('Desktop management: list, minimize, close, and capture screenshots of applications.');
+
     // List command
     program
         .command('list')
@@ -137,27 +139,27 @@ export default async function (program, toolName) {
     program.addHelpText('after', `
 Examples:
   List open apps:
-    $ zero-ops ${toolName} desktop list
+    $ zero-ops desktop list
 
   Minimize an app:
-    $ zero-ops ${toolName} desktop minimize "Google Chrome"
+    $ zero-ops desktop minimize "Google Chrome"
 
   Minimize all apps:
-    $ zero-ops ${toolName} desktop minimize-all
+    $ zero-ops desktop minimize-all
 
   Close an app:
-    $ zero-ops ${toolName} desktop close "Slack"
+    $ zero-ops desktop close "Slack"
 
   Close all apps:
-    $ zero-ops ${toolName} desktop close-all
+    $ zero-ops desktop close-all
 
   Take screenshot (Full Screen):
-    $ zero-ops ${toolName} desktop screenshot
+    $ zero-ops desktop screenshot
 
   Take screenshot (Interactive Window):
-    $ zero-ops ${toolName} desktop screenshot window
+    $ zero-ops desktop screenshot window
 
   Take screenshot (Interactive Region):
-    $ zero-ops ${toolName} desktop screenshot region
+    $ zero-ops desktop screenshot region
     `);
 }
