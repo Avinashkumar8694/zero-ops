@@ -83,3 +83,72 @@ export function closeAll() {
         });
     });
 }
+
+
+import os from 'os';
+import path from 'path';
+import fs from 'fs';
+
+export function captureScreenshot(type = 'full', toolName = 'desktop') {
+    return new Promise((resolve, reject) => {
+        const homeDir = os.homedir();
+        const toolDir = path.join(homeDir, '.zero-ops', toolName);
+
+        // Ensure directory exists
+        if (!fs.existsSync(toolDir)) {
+            fs.mkdirSync(toolDir, { recursive: true });
+        }
+
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `screenshot-${timestamp}.png`;
+        const filePath = path.join(toolDir, filename);
+
+        // Revised command strategy:
+        // - Full: screencapture <file>
+        // - Window: screencapture -i <file> (User MUST press Space to toggle window mode)
+        // - Region: screencapture -i <file>
+
+        let captureCmd = `screencapture "${filePath}"`;
+        let instructions = '';
+
+        if (type === 'window') {
+            // -W and -i -W are flaky on some systems. -i is reliable.
+            captureCmd = `screencapture -i "${filePath}"`;
+            instructions = ' (Interactive Mode: Press SPACE to capture a window)';
+        }
+        if (type === 'region') {
+            captureCmd = `screencapture -i "${filePath}"`;
+            instructions = ' (Interactive Mode: Select region)';
+        }
+
+        console.log(`Saving to: ${filePath}${instructions}`);
+
+        exec(captureCmd, (error, stdout, stderr) => {
+            if (error) {
+                if (stderr && stderr.includes('could not create image from window')) {
+                    reject(new Error('not allowed to take screenshot (window capture failed)'));
+                } else if (error.message && error.message.includes('could not create image from window')) {
+                    reject(new Error('not allowed to take screenshot (window capture failed)'));
+                } else {
+                    reject(error);
+                }
+                return;
+            }
+
+            // Usage of «class PNGf» is more robust for PNG files in AppleScript
+            const clipScript = `set the clipboard to (read (POSIX file "${filePath}") as «class PNGf»)`;
+            exec(`osascript -e '${clipScript}'`, (e, out, err) => {
+                if (e) {
+                    // Fallback
+                    const fallbackScript = `set the clipboard to (read (POSIX file "${filePath}") as TIFF picture)`;
+                    exec(`osascript -e '${fallbackScript}'`, (e2) => {
+                        if (e2) console.warn('Warning: Failed to copy to clipboard.');
+                        resolve(`Screenshot saved to ${filePath} and copied to clipboard.`);
+                    });
+                } else {
+                    resolve(`Screenshot saved to ${filePath} and copied to clipboard.`);
+                }
+            });
+        });
+    });
+}

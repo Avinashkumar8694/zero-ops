@@ -85,6 +85,15 @@ zero-ops desktop close "AppName"
 
 # Close all applications
 zero-ops desktop close-all
+
+# Screenshot
+# Captures are saved to ~/.zero-ops/ and copied to clipboard.
+zero-ops desktop screenshot          # Full screen
+zero-ops desktop screenshot region   # Interactive region selection
+
+# Interactive Window Selection
+# On macOS, run the command below, then PRESS SPACE to switch to window selection mode.
+zero-ops desktop screenshot window
 ```
 
 ## Example Workflow

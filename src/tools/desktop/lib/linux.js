@@ -106,3 +106,52 @@ export function closeAll() {
         });
     });
 }
+
+import os from 'os';
+import path from 'path';
+
+export function captureScreenshot(type = 'full', toolName = 'desktop') {
+    return new Promise((resolve, reject) => {
+        exec('which gnome-screenshot', (err) => {
+            if (err) {
+                return reject(new Error('gnome-screenshot is not installed. Please install it.'));
+            }
+
+            const homeDir = os.homedir();
+            const toolDir = path.join(homeDir, '.zero-ops', toolName);
+
+            if (!fs.existsSync(toolDir)) {
+                fs.mkdirSync(toolDir, { recursive: true });
+            }
+
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const filename = `screenshot-${timestamp}.png`;
+            const filePath = path.join(toolDir, filename);
+
+            let flags = '-f'; // file
+            if (type === 'window') flags += ' -w';
+            else if (type === 'region') flags += ' -a';
+            else if (type !== 'full') {
+                reject(new Error('Invalid type')); return;
+            }
+
+            // Command: gnome-screenshot [flags] <path> 
+            // Then xclip to clipboard
+            exec(`gnome-screenshot ${flags} "${filePath}"`, (error, stdout, stderr) => {
+                if (error) {
+                    reject(error);
+                    return;
+                }
+
+                // Try xclip
+                exec(`xclip -selection clipboard -t image/png -i "${filePath}"`, (e) => {
+                    if (e) {
+                        resolve(`Screenshot saved to ${filePath}. (Clipboard copy failed: xclip missing?)`);
+                    } else {
+                        resolve(`Screenshot saved to ${filePath} and copied to clipboard.`);
+                    }
+                });
+            });
+        });
+    });
+}

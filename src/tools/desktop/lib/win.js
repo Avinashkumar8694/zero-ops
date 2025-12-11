@@ -70,3 +70,50 @@ export function closeAll() {
         });
     });
 }
+
+import os from 'os';
+import path from 'path';
+import fs from 'fs';
+
+export function captureScreenshot(type = 'full', toolName = 'desktop') {
+    return new Promise((resolve, reject) => {
+        if (type !== 'full') {
+            resolve('Interactive window/region screenshot not fully supported via CLI on Windows. Please use Win+Shift+S.');
+            return;
+        }
+
+        const homeDir = os.homedir();
+        const toolDir = path.join(homeDir, '.zero-ops', toolName);
+
+        // Ensure directory exists (PowerShell might need it pre-created or we do it here in node)
+        if (!fs.existsSync(toolDir)) {
+            fs.mkdirSync(toolDir, { recursive: true });
+        }
+
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `screenshot-${timestamp}.png`;
+        const filePath = path.join(toolDir, filename);
+
+        // PowerShell script to capture full screen, save to file, and set clipboard
+        const script = `
+        Add-Type -AssemblyName System.Windows.Forms
+        Add-Type -AssemblyName System.Drawing
+        $screen = [System.Windows.Forms.Screen]::PrimaryScreen
+        $bitmap = New-Object System.Drawing.Bitmap $screen.Bounds.Width, $screen.Bounds.Height
+        $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+        $graphics.CopyFromScreen($screen.Bounds.X, $screen.Bounds.Y, 0, 0, $bitmap.Size)
+        $bitmap.Save('${filePath.replace(/\\/g, '\\\\')}')
+        [System.Windows.Forms.Clipboard]::SetImage($bitmap)
+        $graphics.Dispose()
+        $bitmap.Dispose()
+        `;
+
+        exec(`powershell -Command "${script}"`, (error, stdout, stderr) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+            resolve(`Screenshot saved to ${filePath} and copied to clipboard.`);
+        });
+    });
+}

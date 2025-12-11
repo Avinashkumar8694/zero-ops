@@ -114,6 +114,25 @@ export default async function (program, toolName) {
             }
         });
 
+    // Screenshot command
+    program
+        .command('screenshot [type]')
+        .description('Capture screenshot (type: full, window, region)')
+        .action(async (type = 'full') => {
+            if (!platformLib) {
+                console.error('Platform not supported.');
+                return;
+            }
+            try {
+                console.log(`Taking ${type} screenshot...`);
+                // Interactive modes might need time/user interaction, so strict timeouts might be tricky
+                const message = await platformLib.captureScreenshot(type, toolName);
+                console.log(message);
+            } catch (err) {
+                console.error(`Failed to take screenshot: ${err.message}`);
+            }
+        });
+
     // Add help text
     program.addHelpText('after', `
 Examples:
@@ -131,5 +150,14 @@ Examples:
 
   Close all apps:
     $ zero-ops ${toolName} desktop close-all
+
+  Take screenshot (Full Screen):
+    $ zero-ops ${toolName} desktop screenshot
+
+  Take screenshot (Interactive Window):
+    $ zero-ops ${toolName} desktop screenshot window
+
+  Take screenshot (Interactive Region):
+    $ zero-ops ${toolName} desktop screenshot region
     `);
 }
