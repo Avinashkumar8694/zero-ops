@@ -5,9 +5,11 @@ import path from 'path';
 
 import { fileURLToPath } from 'url';
 
+import os from 'os';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const CONFIG_FILE = path.resolve(__dirname, '..', '..', '.zero-ops-config.json');
+const CONFIG_FILE = path.join(os.homedir(), '.zero-ops-config.json');
 
 export function loadConfig() {
     try {

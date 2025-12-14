@@ -5,7 +5,7 @@
 
 import { Command } from 'commander';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import fs from 'fs';
 
 // Resolve __dirname in ES module
@@ -41,7 +41,7 @@ if (args.length > 0 && !args[0].startsWith('-') && args[0] !== 'help') {
 if (toolName) {
     const toolModulePath = path.join(__dirname, 'src', 'tools', toolName, 'index.js');
     if (fs.existsSync(toolModulePath)) {
-        import(toolModulePath).then(async mod => {
+        import(pathToFileURL(toolModulePath).href).then(async mod => {
             if (typeof mod.default === 'function') {
                 await mod.default(program, toolName);
                 program.parse(process.argv);

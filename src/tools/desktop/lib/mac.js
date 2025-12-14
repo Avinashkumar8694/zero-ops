@@ -3,7 +3,12 @@ import { exec } from 'child_process';
 export function listApps() {
     return new Promise((resolve, reject) => {
         const script = 'tell application "System Events" to get name of (processes where background only is false)';
-        exec(`osascript -e '${script}'`, (error, stdout, stderr) => {
+        const scriptPath = path.join(os.tmpdir(), `list-apps-${Math.random().toString(36).slice(2)}.applescript`);
+        fs.writeFileSync(scriptPath, script);
+
+        exec(`osascript "${scriptPath}"`, (error, stdout, stderr) => {
+            try { fs.unlinkSync(scriptPath); } catch (e) { }
+
             if (error) {
                 reject(error);
                 return;
@@ -20,10 +25,14 @@ export function listApps() {
 
 export function minimizeApp(appName) {
     return new Promise((resolve, reject) => {
-        // "set visible to false" effectively hides the application (Cmd+H behavior),
-        // which is often more reliable than trying to minimize specific windows via AppleScript.
-        const script = `tell application "System Events" to set visible of process "${appName}" to false`;
-        exec(`osascript -e '${script}'`, (error, stdout, stderr) => {
+        // "set visible to false" effectively hides the application (Cmd+H behavior)
+        const script = `tell application "System Events" to set visible of process "${appName.replace(/"/g, '\\"')}" to false`;
+        const scriptPath = path.join(os.tmpdir(), `minimize-${Math.random().toString(36).slice(2)}.applescript`);
+        fs.writeFileSync(scriptPath, script);
+
+        exec(`osascript "${scriptPath}"`, (error, stdout, stderr) => {
+            try { fs.unlinkSync(scriptPath); } catch (e) { }
+
             if (error) {
                 reject(error);
                 return;
@@ -36,7 +45,12 @@ export function minimizeApp(appName) {
 export function minimizeAll() {
     return new Promise((resolve, reject) => {
         const script = 'tell application "System Events" to set visible of (every process where background only is false) to false';
-        exec(`osascript -e '${script}'`, (error, stdout, stderr) => {
+        const scriptPath = path.join(os.tmpdir(), `minimize-all-${Math.random().toString(36).slice(2)}.applescript`);
+        fs.writeFileSync(scriptPath, script);
+
+        exec(`osascript "${scriptPath}"`, (error, stdout, stderr) => {
+            try { fs.unlinkSync(scriptPath); } catch (e) { }
+
             if (error) {
                 reject(error);
                 return;
@@ -49,8 +63,13 @@ export function minimizeAll() {
 export function closeApp(appName) {
     return new Promise((resolve, reject) => {
         // "quit" is the standard AppleScript command to close an app gracefully
-        const script = `tell application "${appName}" to quit`;
-        exec(`osascript -e '${script}'`, (error, stdout, stderr) => {
+        const script = `tell application "${appName.replace(/"/g, '\\"')}" to quit`;
+        const scriptPath = path.join(os.tmpdir(), `close-${Math.random().toString(36).slice(2)}.applescript`);
+        fs.writeFileSync(scriptPath, script);
+
+        exec(`osascript "${scriptPath}"`, (error, stdout, stderr) => {
+            try { fs.unlinkSync(scriptPath); } catch (e) { }
+
             if (error) {
                 reject(error);
                 return;
@@ -74,7 +93,12 @@ export function closeAll() {
             end if
         end repeat
         `;
-        exec(`osascript -e '${script}'`, (error, stdout, stderr) => {
+        const scriptPath = path.join(os.tmpdir(), `close-all-${Math.random().toString(36).slice(2)}.applescript`);
+        fs.writeFileSync(scriptPath, script);
+
+        exec(`osascript "${scriptPath}"`, (error, stdout, stderr) => {
+            try { fs.unlinkSync(scriptPath); } catch (e) { }
+
             if (error) {
                 reject(error);
                 return;
@@ -106,7 +130,7 @@ export function captureScreenshot(type = 'full', toolName = 'desktop', name = nu
             // 1. Get Window ID of the (frontmost) window of the app
             const getWindowIdScript = `
                 tell application "System Events"
-                    set proc to first process whose name is "${name}"
+                    set proc to first process whose name is "${name.replace(/"/g, '\\"')}"
                     if exists proc then
                         tell proc
                             set winID to id of window 1
@@ -117,8 +141,12 @@ export function captureScreenshot(type = 'full', toolName = 'desktop', name = nu
                     end if
                 end tell
             `;
+            const scriptPath = path.join(os.tmpdir(), `get-win-id-${Math.random().toString(36).slice(2)}.applescript`);
+            fs.writeFileSync(scriptPath, getWindowIdScript);
 
-            exec(`osascript -e '${getWindowIdScript}'`, (err, stdout, stderr) => {
+            exec(`osascript "${scriptPath}"`, (err, stdout, stderr) => {
+                try { fs.unlinkSync(scriptPath); } catch (e) { }
+
                 if (err) {
                     reject(new Error(`Failed to find window for "${name}": ${err.message}`));
                     return;
@@ -166,10 +194,19 @@ export function captureScreenshot(type = 'full', toolName = 'desktop', name = nu
 
 function processClipboard(filePath, resolve, reject) {
     const clipScript = `set the clipboard to (read (POSIX file "${filePath}") as «class PNGf»)`;
-    exec(`osascript -e '${clipScript}'`, (e) => {
+    const scriptPath = path.join(os.tmpdir(), `clip-${Math.random().toString(36).slice(2)}.applescript`);
+    fs.writeFileSync(scriptPath, clipScript);
+
+    exec(`osascript "${scriptPath}"`, (e) => {
+        try { fs.unlinkSync(scriptPath); } catch (e) { }
+
         if (e) {
             const fallbackScript = `set the clipboard to (read (POSIX file "${filePath}") as TIFF picture)`;
-            exec(`osascript -e '${fallbackScript}'`, () => {
+            const fallbackPath = path.join(os.tmpdir(), `clip-fallback-${Math.random().toString(36).slice(2)}.applescript`);
+            fs.writeFileSync(fallbackPath, fallbackScript);
+
+            exec(`osascript "${fallbackPath}"`, () => {
+                try { fs.unlinkSync(fallbackPath); } catch (e) { }
                 resolve(`Screenshot saved to ${filePath} and copied to clipboard.`);
             });
         } else {

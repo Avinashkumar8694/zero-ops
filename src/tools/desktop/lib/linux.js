@@ -35,7 +35,8 @@ export function minimizeApp(appName) {
             if (err) {
                 return reject(new Error('wmctrl is not installed. Please install it.'));
             }
-            exec(`wmctrl -r "${appName}" -b add,hidden`, (error, stdout, stderr) => {
+            const safeAppName = appName.replace(/"/g, '\\"');
+            exec(`wmctrl -r "${safeAppName}" -b add,hidden`, (error, stdout, stderr) => {
                 if (error) {
                     // Start strict match failed, try substring match is default for -r? 
                     // -r uses substring match by default.
@@ -68,7 +69,8 @@ export function minimizeAll() {
 
 export function closeApp(appName) {
     return new Promise((resolve, reject) => {
-        exec(`wmctrl -c "${appName}"`, (error, stdout, stderr) => {
+        const safeAppName = appName.replace(/"/g, '\\"');
+        exec(`wmctrl -c "${safeAppName}"`, (error, stdout, stderr) => {
             if (error) {
                 reject(error);
                 return;
@@ -135,7 +137,8 @@ export function captureScreenshot(type = 'full', toolName = 'desktop', name = nu
                     if (e) return reject(new Error('wmctrl is required for named window capture. Please install it.'));
 
                     // Activate window
-                    exec(`wmctrl -a "${name}"`, (err) => {
+                    const safeName = name.replace(/"/g, '\\"');
+                    exec(`wmctrl -a "${safeName}"`, (err) => {
                         if (err) return reject(new Error(`Failed to focus window "${name}". Is it running?`));
 
                         // Wait for focus

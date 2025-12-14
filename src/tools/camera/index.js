@@ -18,7 +18,12 @@ export default async function (program, toolName) {
             }
 
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            const finalName = filename || `photo-${timestamp}.jpg`;
+            let finalName = filename || `photo-${timestamp}.jpg`;
+
+            // Security: Sanitize filename to prevent path traversal or shell injection
+            // Allow only alphanumeric, dashes, underscores, dots.
+            finalName = finalName.replace(/[^a-zA-Z0-9._-]/g, '_');
+
             const filePath = path.join(toolDir, finalName);
             // node-webcam appends extension if missing, but let's be explicit
             const savePath = filePath.replace(/\.jpg$/i, '');

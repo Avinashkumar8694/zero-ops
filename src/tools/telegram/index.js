@@ -3,12 +3,12 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { fileURLToPath } from 'url';
+import { loadConfig, saveConfig } from '../../utils/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export default async function (program, toolName) {
-    const configPath = path.join(os.homedir(), '.zero-ops-config.json');
     const pidFile = path.join(os.homedir(), '.zero-ops', 'telegram.pid');
 
     // Ensure .zero-ops dir exists
@@ -17,16 +17,7 @@ export default async function (program, toolName) {
         fs.mkdirSync(zeroOpsDir, { recursive: true });
     }
 
-    const getConfig = () => {
-        if (fs.existsSync(configPath)) {
-            return JSON.parse(fs.readFileSync(configPath, 'utf8'));
-        }
-        return {};
-    };
-
-    const setConfig = (data) => {
-        fs.writeFileSync(configPath, JSON.stringify(data, null, 2));
-    };
+    // Handlers use shared utils now
 
     program.description('Control zero-ops remotely via Telegram bot');
 
@@ -41,10 +32,10 @@ export default async function (program, toolName) {
                 console.error('Invalid key. Allowed keys: token, chat_id');
                 return;
             }
-            const config = getConfig();
+            const config = loadConfig();
             if (!config[toolName]) config[toolName] = {};
             config[toolName][key] = value;
-            setConfig(config);
+            saveConfig(config);
             console.log(`Telegram ${key} set.`);
         });
 
@@ -52,7 +43,7 @@ export default async function (program, toolName) {
         .command('get <key>')
         .description('Get configuration value')
         .action((key) => {
-            const config = getConfig();
+            const config = loadConfig();
             if (config[toolName] && config[toolName][key]) {
                 console.log(config[toolName][key]);
             } else {
@@ -65,7 +56,7 @@ export default async function (program, toolName) {
         .command('start')
         .description('Start the Telegram bot daemon in background')
         .action(() => {
-            const config = getConfig();
+            const config = loadConfig();
             if (!config[toolName]?.token || !config[toolName]?.chat_id) {
                 console.error('Error: Token and Chat ID must be configured first.');
                 return;
@@ -122,7 +113,7 @@ export default async function (program, toolName) {
         .command('status')
         .description('Check status of Telegram bot')
         .action(() => {
-            const config = getConfig();
+            const config = loadConfig();
             const logFile = path.join(zeroOpsDir, 'telegram.log');
             let statusData = {
                 'Status': 'Stopped',

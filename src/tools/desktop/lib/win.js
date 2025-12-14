@@ -2,7 +2,7 @@ import { exec } from 'child_process';
 
 export function listApps() {
     return new Promise((resolve, reject) => {
-        const script = 'Get-Process | Where-Object {$_.MainWindowTitle -ne ""} | Select-Object -ExpandProperty ProcessName';
+        const script = "Get-Process | Where-Object {$_.MainWindowTitle -ne ''} | Select-Object -ExpandProperty ProcessName";
         exec(`powershell -Command "${script}"`, (error, stdout, stderr) => {
             if (error) {
                 reject(error);
@@ -18,17 +18,44 @@ export function listApps() {
 
 export function minimizeApp(appName) {
     return new Promise((resolve, reject) => {
-        // This is a basic implementation. Minimizing specific windows reliably via PowerShell
-        // without external tools (like WASP or C# embedding) is complex.
-        // This uses a Shell.Application approach to minimize all windows, as essentially a placeholder,
-        // or we could warn.
-        // Better approach for specific app: use a C# inline snippet.
+        const psScript = `
+        $code = @'
+        using System;
+        using System.Runtime.InteropServices;
+        public class Win32 {
+            [DllImport("user32.dll")] 
+            public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+        }
+'@
+        Add-Type -TypeDefinition $code
+        
+        $proc = Get-Process -Name "${appName}" -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($proc) {
+            # 2 = SW_MINIMIZE, 6 = SW_MINIMIZE (Difference is activation, 6 is safe)
+            [Win32]::ShowWindowAsync($proc.MainWindowHandle, 6)
+            Write-Output "App minimized"
+        } else {
+            Write-Error "App not found"
+        }
+        `;
 
-        // For now, we will return a not implemented warning or best-effort.
-        // Let's try a best effort "Minimize All" as minimizing a specific PID is hard pure PS.
-        // Actually, we can just warn for now as per plan "best-effort code blocks".
+        const scriptPath = path.join(os.tmpdir(), `minimize-${Math.random().toString(36).slice(2)}.ps1`);
+        fs.writeFileSync(scriptPath, psScript);
 
-        resolve(`Windows minimize for "${appName}" is not fully implemented yet. Please use native window controls.`);
+        exec(`powershell -ExecutionPolicy Bypass -File "${scriptPath}"`, (error, stdout, stderr) => {
+            // Cleanup
+            try { fs.unlinkSync(scriptPath); } catch (e) { }
+
+            if (error) {
+                if (stderr.includes('App not found')) {
+                    reject(new Error(`Application "${appName}" not found.`));
+                } else {
+                    reject(new Error(stderr || error.message));
+                }
+                return;
+            }
+            resolve(`App "${appName}" minimized.`);
+        });
     });
 }
 
@@ -60,7 +87,7 @@ export function closeApp(appName) {
 
 export function closeAll() {
     return new Promise((resolve, reject) => {
-        const script = 'Get-Process | Where-Object {$_.MainWindowTitle -ne ""} | ForEach-Object { $_.CloseMainWindow() }';
+        const script = "Get-Process | Where-Object {$_.MainWindowTitle -ne ''} | ForEach-Object { $_.CloseMainWindow() }";
         exec(`powershell -Command "${script}"`, (error, stdout, stderr) => {
             if (error) {
                 reject(error);
@@ -92,7 +119,7 @@ export function captureScreenshot(type = 'full', toolName = 'desktop', name = nu
 
         if (type === 'window' && name) {
             // Named Window Capture Logic
-            const script = `
+            const psScript = `
             Add-Type -AssemblyName System.Windows.Forms
             Add-Type -AssemblyName System.Drawing
             
@@ -127,7 +154,13 @@ export function captureScreenshot(type = 'full', toolName = 'desktop', name = nu
             }
             `;
 
-            exec(`powershell -Command "${script}"`, (error, stdout, stderr) => {
+            const scriptPath = path.join(os.tmpdir(), `screenshot-named-${Math.random().toString(36).slice(2)}.ps1`);
+            fs.writeFileSync(scriptPath, psScript);
+
+            exec(`powershell -ExecutionPolicy Bypass -File "${scriptPath}"`, (error, stdout, stderr) => {
+                // Cleanup
+                try { fs.unlinkSync(scriptPath); } catch (e) { }
+
                 if (error) {
                     reject(new Error(`Failed to capture named window: ${stderr || error.message}`));
                     return;
@@ -143,7 +176,8 @@ export function captureScreenshot(type = 'full', toolName = 'desktop', name = nu
         }
 
         // ... Full Logic ...
-        const script = `
+        // ... Full Logic ...
+        const psScript = `
         Add-Type -AssemblyName System.Windows.Forms
         Add-Type -AssemblyName System.Drawing
         $screen = [System.Windows.Forms.Screen]::PrimaryScreen
@@ -156,7 +190,13 @@ export function captureScreenshot(type = 'full', toolName = 'desktop', name = nu
         $bitmap.Dispose()
         `;
 
-        exec(`powershell -Command "${script}"`, (error, stdout, stderr) => {
+        const scriptPath = path.join(os.tmpdir(), `screenshot-full-${Math.random().toString(36).slice(2)}.ps1`);
+        fs.writeFileSync(scriptPath, psScript);
+
+        exec(`powershell -ExecutionPolicy Bypass -File "${scriptPath}"`, (error, stdout, stderr) => {
+            // Cleanup
+            try { fs.unlinkSync(scriptPath); } catch (e) { }
+
             if (error) {
                 reject(error);
                 return;

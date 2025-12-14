@@ -2,8 +2,10 @@ import { Telegraf } from 'telegraf';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { fileURLToPath } from 'url';
+
+import { loadConfig } from '../../utils/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,7 +13,6 @@ const projectRoot = path.resolve(__dirname, '../../..'); // snippent root (packa
 const zeroOpsScript = path.join(projectRoot, 'zero-ops.js');
 
 const toolName = process.env.ZERO_OPS_TOOL_NAME || 'telegram';
-const configPath = path.join(os.homedir(), '.zero-ops-config.json');
 
 // Log helper
 function log(msg) {
@@ -21,15 +22,7 @@ function log(msg) {
 }
 
 // Load config
-let config = {};
-try {
-    if (fs.existsSync(configPath)) {
-        config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    }
-} catch (e) {
-    log(`Error loading config: ${e.message}`);
-    process.exit(1);
-}
+let config = loadConfig();
 
 const telegramConfig = config[toolName];
 if (!telegramConfig || !telegramConfig.token || !telegramConfig.chat_id) {
@@ -59,20 +52,39 @@ function getAvailableTools() {
 }
 
 // Helper: Execute command
+// Helper: Execute command
 function executeCommand(cmdStr) {
     return new Promise((resolve) => {
-        // Construct full command: node zero-ops.js <cmdStr>
-        // cmdStr e.g. "desktop list"
-        const fullCmd = `${process.execPath} "${zeroOpsScript}" ${cmdStr}`;
-        log(`Executing: ${fullCmd}`);
+        // cmdStr e.g. "desktop list" or "desktop minimize 'app name'"
+        // We need to parse cmdStr into arguments array safely.
+        // Simple split by space is not enough for quoted arguments.
+        // We will match regex for spaces outside quotes.
 
-        exec(fullCmd, (error, stdout, stderr) => {
-            if (error) {
-                log(`Error execution: ${error.message}`);
-                resolve(`Error: ${error.message}\nStderr: ${stderr}`);
-                return;
+        const argsMatch = cmdStr.match(/(?:[^\s"]+|"[^"]*")+/g);
+        const args = argsMatch ? argsMatch.map(a => a.replace(/^"|"$/g, '')) : [];
+
+        log(`Executing: node zero-ops.js ${args.join(' ')}`);
+
+        const subprocess = spawn(process.execPath, [zeroOpsScript, ...args]);
+
+        let stdout = '';
+        let stderr = '';
+
+        subprocess.stdout.on('data', (data) => { stdout += data; });
+        subprocess.stderr.on('data', (data) => { stderr += data; });
+
+        subprocess.on('close', (code) => {
+            if (code !== 0) {
+                log(`Error execution code ${code}: ${stderr}`);
+                resolve(`Error (Exit Code ${code}):\n${stderr || stdout}`);
+            } else {
+                resolve(stdout || stderr || 'Command executed empty output.');
             }
-            resolve(stdout || stderr || 'Command executed empty output.');
+        });
+
+        subprocess.on('error', (err) => {
+            log(`Error parsing: ${err.message}`);
+            resolve(`Execution Error: ${err.message}`);
         });
     });
 }
