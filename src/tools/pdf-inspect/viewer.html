@@ -5,7 +5,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PDF Inspector — zero-ops</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.min.mjs" type="module"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
@@ -39,7 +38,6 @@
             overflow-x: hidden;
         }
 
-        /* Header */
         .header {
             position: sticky;
             top: 0;
@@ -71,7 +69,6 @@
             font-family: 'JetBrains Mono', monospace;
         }
 
-        /* PDF Container */
         .pdf-container {
             display: flex;
             flex-direction: column;
@@ -101,7 +98,6 @@
             font-family: 'JetBrains Mono', monospace;
         }
 
-        /* Text layer overlay */
         .text-layer {
             position: absolute;
             top: 0;
@@ -126,11 +122,10 @@
             outline: 1.5px solid rgba(129, 140, 248, 0.5);
         }
 
-        /* Image/Graphics overlay items */
         .text-layer .img-item {
             position: absolute;
             cursor: crosshair;
-            transition: background 0.15s ease, outline 0.15s ease;
+            transition: background 0.15s ease;
             border-radius: 1px;
         }
 
@@ -139,7 +134,7 @@
             outline: 2px solid rgba(52, 211, 153, 0.6);
         }
 
-        /* Inspector Panel */
+        /* Inspector */
         .inspector {
             position: fixed;
             z-index: 999;
@@ -147,8 +142,8 @@
             opacity: 0;
             transition: opacity 0.2s ease, transform 0.2s ease;
             transform: translateY(6px);
-            max-width: 380px;
-            min-width: 280px;
+            max-width: 400px;
+            min-width: 300px;
         }
 
         .inspector.visible {
@@ -169,8 +164,8 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            margin-bottom: 12px;
-            padding-bottom: 10px;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.06);
         }
 
@@ -206,7 +201,18 @@
         .inspector-content {
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 4px;
+        }
+
+        .inspector-section-label {
+            font-size: 9px;
+            font-weight: 600;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            margin-top: 6px;
+            margin-bottom: 2px;
+            opacity: 0.7;
         }
 
         .inspector-row {
@@ -214,33 +220,33 @@
             align-items: baseline;
             gap: 8px;
             font-size: 12px;
-            line-height: 1.5;
+            line-height: 1.4;
         }
 
         .inspector-key {
             color: var(--text-muted);
             font-family: 'JetBrains Mono', monospace;
-            font-size: 10.5px;
-            min-width: 90px;
+            font-size: 10px;
+            min-width: 100px;
             flex-shrink: 0;
         }
 
         .inspector-val {
             color: var(--text);
             font-family: 'JetBrains Mono', monospace;
-            font-size: 11px;
+            font-size: 10.5px;
             word-break: break-all;
         }
 
         .inspector-text-preview {
-            margin-top: 8px;
-            padding: 8px 10px;
+            margin-top: 6px;
+            padding: 6px 8px;
             background: rgba(255, 255, 255, 0.04);
             border-radius: 6px;
             font-family: 'JetBrains Mono', monospace;
             font-size: 11px;
             color: var(--text);
-            max-height: 60px;
+            max-height: 48px;
             overflow: hidden;
             text-overflow: ellipsis;
             border: 1px solid rgba(255, 255, 255, 0.04);
@@ -249,15 +255,40 @@
         .inspector-divider {
             height: 1px;
             background: rgba(255, 255, 255, 0.06);
-            margin: 6px 0;
+            margin: 4px 0;
+        }
+
+        .color-preview {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            vertical-align: middle;
+            margin-right: 6px;
         }
 
         .click-hint {
-            margin-top: 8px;
-            font-size: 10px;
+            margin-top: 6px;
+            font-size: 9px;
             color: var(--text-muted);
             text-align: center;
             font-style: italic;
+        }
+
+        .css-snippet {
+            margin-top: 8px;
+            padding: 8px 10px;
+            background: rgba(129, 140, 248, 0.06);
+            border: 1px solid rgba(129, 140, 248, 0.15);
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 9.5px;
+            color: var(--text);
+            white-space: pre-wrap;
+            max-height: 120px;
+            overflow-y: auto;
+            line-height: 1.5;
         }
 
         /* Loading */
@@ -290,7 +321,7 @@
             color: var(--text-muted);
         }
 
-        /* Zoom Controls */
+        /* Zoom */
         .zoom-controls {
             display: flex;
             align-items: center;
@@ -355,9 +386,7 @@
 
 <body>
     <div class="header">
-        <div class="header-title">
-            PDF Inspector <span>— zero-ops</span>
-        </div>
+        <div class="header-title">PDF Inspector <span>— zero-ops</span></div>
         <div style="display:flex;align-items:center;gap:16px;">
             <div class="header-info" id="fileInfo">Loading...</div>
             <div class="zoom-controls">
@@ -375,20 +404,18 @@
 
     <div class="pdf-container" id="pdfContainer" style="display:none;"></div>
 
-    <!-- Inspector Panel -->
     <div class="inspector" id="inspector">
         <div class="inspector-inner">
             <div class="inspector-header">
                 <div class="inspector-icon" id="inspectorIcon">Aa</div>
-                <div class="inspector-title" id="inspectorTitle">Element Inspector</div>
+                <div class="inspector-title" id="inspectorTitle">Text Element</div>
             </div>
             <div class="inspector-content" id="inspectorContent"></div>
-            <div class="click-hint">Click to copy properties</div>
+            <div class="click-hint">Click to copy CSS + properties</div>
         </div>
     </div>
 
-    <!-- Toast -->
-    <div class="toast" id="toast">✓ Properties copied to clipboard</div>
+    <div class="toast" id="toast">✓ Copied to clipboard</div>
 
     <script type="module">
         const pdfjsLib = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.min.mjs');
@@ -406,9 +433,10 @@
 
         let currentScale = 1.5;
         let pdfDoc = null;
-        let lastInspectedData = null; // store last hovered element's data for click-to-copy
+        let lastCopyData = null;
 
-        // Fetch the PDF
+        const PT_TO_PX = 1.3333; // 1pt = 1.3333px (96/72)
+
         async function loadPDF() {
             try {
                 const loadingTask = pdfjsLib.getDocument('/pdf');
@@ -433,46 +461,110 @@
             const page = await pdfDoc.getPage(pageNum);
             const viewport = page.getViewport({ scale: currentScale });
 
-            // Wrapper
             const wrapper = document.createElement('div');
             wrapper.className = 'page-wrapper';
             wrapper.style.width = viewport.width + 'px';
             wrapper.style.height = viewport.height + 'px';
 
-            // Label
             const label = document.createElement('div');
             label.className = 'page-label';
             label.textContent = `Page ${pageNum}`;
             wrapper.appendChild(label);
 
-            // Canvas
             const canvas = document.createElement('canvas');
             canvas.width = viewport.width;
             canvas.height = viewport.height;
-            const ctx = canvas.getContext('2d');
             wrapper.appendChild(canvas);
 
-            // Render canvas
-            await page.render({ canvasContext: ctx, viewport }).promise;
+            await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
 
-            // Text layer
             const textLayer = document.createElement('div');
             textLayer.className = 'text-layer';
             wrapper.appendChild(textLayer);
 
-            // Get text content
+            // ═══ Get text content WITH styles ═══
             const textContent = await page.getTextContent();
+            const styles = textContent.styles;
 
-            // ─── Process text items ───
-            for (const item of textContent.items) {
+            // ═══ Resolve REAL font names from PDF.js font objects (async callback API) ═══
+            const fontInfoCache = {};
+            const fontPromises = [];
+            for (const [loadedName, style] of Object.entries(styles)) {
+                fontPromises.push(new Promise(resolve => {
+                    try {
+                        // Use callback API — more reliable than sync .get()
+                        page.commonObjs.get(loadedName, (fontObj) => {
+                            let psName = style.fontFamily || loadedName;
+                            let isBold = false;
+                            let isItalic = false;
+                            if (fontObj) {
+                                if (fontObj.name) psName = fontObj.name;
+                                if (fontObj.bold !== undefined) isBold = !!fontObj.bold;
+                                if (fontObj.italic !== undefined) isItalic = !!fontObj.italic;
+                            }
+                            fontInfoCache[loadedName] = { psName, isBold, isItalic, ascent: style.ascent, descent: style.descent };
+                            resolve();
+                        });
+                    } catch (e) {
+                        fontInfoCache[loadedName] = {
+                            psName: style.fontFamily || loadedName,
+                            isBold: false, isItalic: false,
+                            ascent: style.ascent, descent: style.descent
+                        };
+                        resolve();
+                    }
+                }));
+            }
+            await Promise.all(fontPromises);
+
+            // ═══ Canvas context for pixel color sampling ═══
+            const canvasCtx = canvas.getContext('2d');
+
+            // ═══ Compute line heights from text items ═══
+            const lineHeightMap = computeLineHeights(textContent.items);
+
+            // ═══ Process text items ═══
+            for (let idx = 0; idx < textContent.items.length; idx++) {
+                const item = textContent.items[idx];
                 if (!item.str || item.str.trim() === '') continue;
 
                 const tx = item.transform;
-                const fontHeight = Math.abs(tx[3]) * currentScale;
+                const fontSizePt = Math.abs(tx[3]);
+                const fontSizePx = fontSizePt * PT_TO_PX;
+                const fontHeight = fontSizePt * currentScale;
                 const x = tx[4] * currentScale;
                 const y = viewport.height - (tx[5] * currentScale) - fontHeight;
                 const w = item.width * currentScale;
                 const h = item.height * currentScale;
+
+                // Get font info from cache (resolved from commonObjs)
+                const fi = fontInfoCache[item.fontName] || { psName: item.fontName, isBold: false, isItalic: false };
+                const fontMeta = resolveFontMeta(fi.psName, fi.isBold, fi.isItalic);
+
+                // ═══ Sample color directly from rendered canvas ═══
+                const sampleX = Math.floor(x + Math.min(fontHeight * 0.4, w * 0.3));
+                const sampleY = Math.floor(y + fontHeight * 0.6);
+                let color = '#000000';
+                if (sampleX >= 0 && sampleX < canvas.width && sampleY >= 0 && sampleY < canvas.height) {
+                    const pixel = canvasCtx.getImageData(sampleX, sampleY, 1, 1).data;
+                    // Only use sampled color if it's not the white background
+                    const isBackground = (pixel[0] > 250 && pixel[1] > 250 && pixel[2] > 250);
+                    if (!isBackground) {
+                        color = '#' + pixel[0].toString(16).padStart(2, '0')
+                            + pixel[1].toString(16).padStart(2, '0')
+                            + pixel[2].toString(16).padStart(2, '0');
+                    }
+                }
+
+                // Character width & letter spacing estimate
+                const charCount = item.str.length;
+                const avgCharWidthPt = charCount > 0 ? (item.width / charCount) : 0;
+                const expectedCharWidth = fontSizePt * 0.5;
+                const letterSpacingPt = charCount > 1 ? Math.max(0, avgCharWidthPt - expectedCharWidth) : 0;
+
+                // Line height
+                const lineHeightPt = lineHeightMap[idx] || (fontSizePt * 1.2);
+                const lineHeightRatio = fontSizePt > 0 ? (lineHeightPt / fontSizePt).toFixed(2) : '1.20';
 
                 const span = document.createElement('span');
                 span.className = 'text-item';
@@ -485,18 +577,44 @@
 
                 span.dataset.type = 'text';
                 span.dataset.text = item.str;
-                span.dataset.fontName = item.fontName || 'Unknown';
-                span.dataset.fontSize = (Math.abs(tx[3])).toFixed(2);
-                span.dataset.posX = tx[4].toFixed(2);
-                span.dataset.posY = tx[5].toFixed(2);
-                span.dataset.width = (item.width || 0).toFixed(2);
-                span.dataset.height = (item.height || 0).toFixed(2);
+                // Font (from actual PDF font descriptor)
+                span.dataset.fontExact = fontMeta.exactName;
+                span.dataset.fontFamily = fontMeta.family;
+                span.dataset.fontSizePt = fontSizePt.toFixed(2);
+                span.dataset.fontSizePx = fontSizePx.toFixed(2);
+                span.dataset.fontWeight = fontMeta.weight;
+                span.dataset.fontWeightCss = fontMeta.weightNum;
+                span.dataset.fontStyle = fontMeta.style;
+                // Layout
+                span.dataset.lineHeightPt = lineHeightPt.toFixed(2);
+                span.dataset.lineHeightPx = (lineHeightPt * PT_TO_PX).toFixed(2);
+                span.dataset.lineHeightRatio = lineHeightRatio;
+                span.dataset.letterSpacingPt = letterSpacingPt.toFixed(2);
+                span.dataset.letterSpacingPx = (letterSpacingPt * PT_TO_PX).toFixed(2);
+                span.dataset.charWidth = avgCharWidthPt.toFixed(2);
+                // Position
+                span.dataset.posXPt = tx[4].toFixed(2);
+                span.dataset.posYPt = tx[5].toFixed(2);
+                span.dataset.posXPx = (tx[4] * PT_TO_PX).toFixed(2);
+                span.dataset.posYPx = (tx[5] * PT_TO_PX).toFixed(2);
+                span.dataset.widthPt = (item.width || 0).toFixed(2);
+                span.dataset.heightPt = (item.height || 0).toFixed(2);
+                span.dataset.widthPx = ((item.width || 0) * PT_TO_PX).toFixed(2);
+                span.dataset.heightPx = ((item.height || 0) * PT_TO_PX).toFixed(2);
+                // Color (sampled from canvas)
+                span.dataset.color = color;
+                // Transform
                 span.dataset.scaleX = tx[0].toFixed(4);
                 span.dataset.scaleY = tx[3].toFixed(4);
                 span.dataset.skewX = tx[2].toFixed(4);
                 span.dataset.skewY = tx[1].toFixed(4);
+                span.dataset.rotation = getRotation(tx).toFixed(1);
+                // Meta
                 span.dataset.direction = item.dir || 'ltr';
                 span.dataset.page = pageNum;
+                span.dataset.rawFont = item.fontName;
+                span.dataset.ascent = (fi.ascent || 0).toFixed(3);
+                span.dataset.descent = (fi.descent || 0).toFixed(3);
 
                 span.addEventListener('mouseenter', showInspector);
                 span.addEventListener('mouseleave', hideInspector);
@@ -506,13 +624,11 @@
                 textLayer.appendChild(span);
             }
 
-            // ─── Process images from operator list ───
+
+            // ═══ Process images (requires operator list for CTM tracking) ═══
             const opList = await page.getOperatorList();
             const OPS = pdfjsLib.OPS;
-
-            // Track transform state to compute image positions
             const ctmStack = [];
-            // Start with the viewport transform
             let ctm = viewport.transform.slice();
 
             for (let i = 0; i < opList.fnArray.length; i++) {
@@ -524,26 +640,27 @@
                 } else if (fn === OPS.restore) {
                     ctm = ctmStack.pop() || viewport.transform.slice();
                 } else if (fn === OPS.transform) {
-                    // args = [a, b, c, d, e, f]
                     ctm = multiplyMatrices(ctm, args);
                 } else if (fn === OPS.paintImageXObject || fn === OPS.paintJpegXObject) {
                     const imgName = args[0];
-                    let imgWidth = args[1] || 0;
-                    let imgHeight = args[2] || 0;
+                    let pixelWidth = args[1] || 0;
+                    let pixelHeight = args[2] || 0;
+                    let bitsPerComponent = 0;
+                    let colorSpace = 'unknown';
 
-                    // Try to get actual image object for pixel dimensions
-                    let pixelWidth = imgWidth;
-                    let pixelHeight = imgHeight;
                     try {
                         const imgData = page.objs.get(imgName);
                         if (imgData) {
-                            pixelWidth = imgData.width || imgWidth;
-                            pixelHeight = imgData.height || imgHeight;
+                            pixelWidth = imgData.width || pixelWidth;
+                            pixelHeight = imgData.height || pixelHeight;
+                            bitsPerComponent = imgData.bitsPerComponent || 8;
+                            if (imgData.data) {
+                                const channels = imgData.data.length / (pixelWidth * pixelHeight);
+                                colorSpace = channels >= 4 ? 'RGBA' : channels === 3 ? 'RGB' : channels === 1 ? 'Grayscale' : 'unknown';
+                            }
                         }
                     } catch (e) { /* ignore */ }
 
-                    // Images in PDF are drawn in a 1x1 unit square, scaled by the CTM
-                    // The CTM maps (0,0)→(1,1) to the actual position
                     const p0 = transformPoint(ctm, 0, 0);
                     const p1 = transformPoint(ctm, 1, 0);
                     const p2 = transformPoint(ctm, 0, 1);
@@ -556,11 +673,11 @@
 
                     const drawW = maxX - minX;
                     const drawH = maxY - minY;
-
-                    // Skip tiny images (likely artifacts or patterns)
                     if (drawW < 5 || drawH < 5) continue;
 
-                    // PDF coord to screen: ctm already includes viewport transform
+                    const renderedWPt = drawW / currentScale;
+                    const renderedHPt = drawH / currentScale;
+
                     const div = document.createElement('div');
                     div.className = 'img-item';
                     div.style.left = minX + 'px';
@@ -568,24 +685,23 @@
                     div.style.width = drawW + 'px';
                     div.style.height = drawH + 'px';
 
-                    // Compute rendered dimensions in pt (without scale)
-                    const renderedWPt = (drawW / currentScale).toFixed(2);
-                    const renderedHPt = (drawH / currentScale).toFixed(2);
-
                     div.dataset.type = 'image';
                     div.dataset.imgName = imgName;
                     div.dataset.pixelWidth = pixelWidth;
                     div.dataset.pixelHeight = pixelHeight;
-                    div.dataset.renderedWidth = renderedWPt;
-                    div.dataset.renderedHeight = renderedHPt;
-                    div.dataset.posX = (minX / currentScale).toFixed(2);
-                    div.dataset.posY = (minY / currentScale).toFixed(2);
-                    div.dataset.dpiX = pixelWidth > 0 ? ((pixelWidth / (parseFloat(renderedWPt) / 72))).toFixed(0) : 'N/A';
-                    div.dataset.dpiY = pixelHeight > 0 ? ((pixelHeight / (parseFloat(renderedHPt) / 72))).toFixed(0) : 'N/A';
+                    div.dataset.renderedWidthPt = renderedWPt.toFixed(2);
+                    div.dataset.renderedHeightPt = renderedHPt.toFixed(2);
+                    div.dataset.renderedWidthPx = (renderedWPt * PT_TO_PX).toFixed(1);
+                    div.dataset.renderedHeightPx = (renderedHPt * PT_TO_PX).toFixed(1);
+                    div.dataset.posXPt = (minX / currentScale).toFixed(2);
+                    div.dataset.posYPt = (minY / currentScale).toFixed(2);
+                    div.dataset.dpiX = pixelWidth > 0 ? ((pixelWidth / (renderedWPt / 72))).toFixed(0) : 'N/A';
+                    div.dataset.dpiY = pixelHeight > 0 ? ((pixelHeight / (renderedHPt / 72))).toFixed(0) : 'N/A';
+                    div.dataset.aspectRatio = pixelWidth > 0 && pixelHeight > 0 ? (pixelWidth / pixelHeight).toFixed(3) : 'N/A';
+                    div.dataset.colorSpace = colorSpace;
+                    div.dataset.bitsPerComponent = bitsPerComponent;
+                    div.dataset.format = fn === OPS.paintJpegXObject ? 'JPEG' : 'Inline/PNG';
                     div.dataset.page = pageNum;
-                    div.dataset.aspectRatio = pixelWidth > 0 && pixelHeight > 0
-                        ? (pixelWidth / pixelHeight).toFixed(3)
-                        : 'N/A';
 
                     div.addEventListener('mouseenter', showInspector);
                     div.addEventListener('mouseleave', hideInspector);
@@ -599,103 +715,141 @@
             pdfContainer.appendChild(wrapper);
         }
 
-        // ─── Matrix math ───
-        function multiplyMatrices(m1, m2) {
-            // 2D affine: [a,b,c,d,e,f]
-            return [
-                m1[0] * m2[0] + m1[2] * m2[1],
-                m1[1] * m2[0] + m1[3] * m2[1],
-                m1[0] * m2[2] + m1[2] * m2[3],
-                m1[1] * m2[2] + m1[3] * m2[3],
-                m1[0] * m2[4] + m1[2] * m2[5] + m1[4],
-                m1[1] * m2[4] + m1[3] * m2[5] + m1[5]
-            ];
+
+        // ═══ Compute line heights from vertical spacing between items ═══
+        function computeLineHeights(items) {
+            const map = {};
+            for (let i = 0; i < items.length; i++) {
+                if (!items[i].str || !items[i].transform) continue;
+                const yI = items[i].transform[5];
+                const fontSizeI = Math.abs(items[i].transform[3]);
+                let bestGap = fontSizeI * 1.2;
+
+                for (let j = i + 1; j < Math.min(i + 20, items.length); j++) {
+                    if (!items[j].str || !items[j].transform) continue;
+                    const yJ = items[j].transform[5];
+                    const gap = Math.abs(yI - yJ);
+                    if (gap > fontSizeI * 0.3 && gap < fontSizeI * 4) {
+                        bestGap = gap;
+                        break;
+                    }
+                }
+                map[i] = bestGap;
+            }
+            return map;
         }
 
-        function transformPoint(m, x, y) {
-            return [
-                m[0] * x + m[2] * y + m[4],
-                m[1] * x + m[3] * y + m[5]
-            ];
-        }
+        // ═══ Font metadata resolution ═══
+        // psName = PostScript name from PDF font descriptor (e.g. "Arial-BoldMT")
+        // isBold / isItalic = explicit flags from PDF font descriptor
+        function resolveFontMeta(psName, isBold, isItalic) {
+            // Strip subset prefix (e.g. ABCDEF+Arial-BoldMT → Arial-BoldMT)
+            const exactName = psName.replace(/^[A-Z]{6}\+/, '');
+            const nameLower = exactName.toLowerCase();
 
-        // ─── Font style resolution ───
-        function resolveFontStyle(fontName) {
-            const name = (fontName || '').toLowerCase();
-            let weight = '400 (Regular)';
+            // Weight: use explicit bold flag first, then check PostScript name
+            let weight = 'normal';
+            let weightNum = '400';
+            if (isBold) {
+                weight = 'Bold'; weightNum = '700';
+            }
+            // Refine weight from name (more specific variants)
+            if (nameLower.includes('extrabold') || nameLower.includes('ultrabold') || nameLower.includes('black')) {
+                weight = 'ExtraBold'; weightNum = '800';
+            } else if (nameLower.includes('semibold') || nameLower.includes('demibold') || nameLower.includes('demi')) {
+                weight = 'SemiBold'; weightNum = '600';
+            } else if (nameLower.includes('bold') || isBold) {
+                weight = 'Bold'; weightNum = '700';
+            } else if (nameLower.includes('medium')) {
+                weight = 'Medium'; weightNum = '500';
+            } else if (nameLower.includes('light') || nameLower.includes('lite')) {
+                weight = 'Light'; weightNum = '300';
+            } else if (nameLower.includes('thin') || nameLower.includes('hairline')) {
+                weight = 'Thin'; weightNum = '100';
+            }
+
+            // Style: use explicit italic flag first, then check name
             let style = 'normal';
-            let family = fontName;
+            if (isItalic || nameLower.includes('italic') || nameLower.includes('oblique')) {
+                style = 'italic';
+            }
 
-            if (name.includes('bold') && name.includes('italic')) { weight = '700 (Bold)'; style = 'italic'; }
-            else if (name.includes('bold')) weight = '700 (Bold)';
-            else if (name.includes('semibold')) weight = '600 (SemiBold)';
-            else if (name.includes('light')) weight = '300 (Light)';
-            else if (name.includes('thin')) weight = '100 (Thin)';
-            else if (name.includes('medium')) weight = '500 (Medium)';
+            // Extract clean family name (strip weight/style suffixes for CSS)
+            let family = exactName
+                .replace(/[-,]?(Extra)?Bold|[-,]?Italic|[-,]?Regular|[-,]?Light|[-,]?Medium|[-,]?SemiBold|[-,]?Thin|[-,]?Oblique|[-,]?Roman|[-,]?Book|[-,]?Condensed|[-,]?Black|[-,]?Demi|[-,]?Heavy/gi, '')
+                .replace(/[-]+$/, '').replace(/^[-]+/, '').trim();
+            // Handle common PostScript name patterns: ArialMT → Arial
+            family = family.replace(/MT$/i, '').replace(/PS$/i, '').replace(/PSMT$/i, '');
+            if (!family) family = exactName;
 
-            if (name.includes('italic') || name.includes('oblique')) style = 'italic';
-
-            family = fontName.replace(/^[A-Z]{6}\+/, '');
-            family = family.replace(/[-,](Bold|Italic|Regular|Light|Medium|SemiBold|Thin|Oblique|Roman)/gi, '');
-
-            return { family, weight, style };
+            return { exactName, family, weight, weightNum, style };
         }
 
-        // ─── Inspector Logic ───
+        function getRotation(matrix) {
+            return Math.atan2(matrix[1], matrix[0]) * (180 / Math.PI);
+        }
+
+        // ═══ Inspector ═══
         function showInspector(e) {
             const el = e.target;
             const d = el.dataset;
-
             let html = '';
-            let propsObj = {};
+            let copyObj = {};
 
             if (d.type === 'text') {
-                const font = resolveFontStyle(d.fontName);
-
                 inspectorIcon.textContent = 'Aa';
                 inspectorIcon.className = 'inspector-icon';
                 inspectorTitle.textContent = 'Text Element';
                 inspectorTitle.className = 'inspector-title';
 
                 html += `<div class="inspector-text-preview">"${escapeHtml(d.text)}"</div>`;
-                html += `<div class="inspector-divider"></div>`;
-                html += row('font-family', font.family);
-                html += row('font-size', d.fontSize + ' pt');
-                html += row('font-weight', font.weight);
-                html += row('font-style', font.style);
-                html += `<div class="inspector-divider"></div>`;
-                html += row('x', d.posX + ' pt');
-                html += row('y', d.posY + ' pt');
-                html += row('width', d.width + ' pt');
-                html += row('height', d.height + ' pt');
-                html += `<div class="inspector-divider"></div>`;
-                html += row('scaleX', d.scaleX);
-                html += row('scaleY', d.scaleY);
-                html += row('skewX', d.skewX);
-                html += row('skewY', d.skewY);
-                html += `<div class="inspector-divider"></div>`;
-                html += row('direction', d.direction);
-                html += row('page', d.page);
-                html += row('raw-font', d.fontName);
 
-                propsObj = {
-                    type: 'text',
-                    text: d.text,
-                    fontFamily: font.family,
-                    fontSize: d.fontSize + ' pt',
-                    fontWeight: font.weight,
-                    fontStyle: font.style,
-                    x: d.posX + ' pt',
-                    y: d.posY + ' pt',
-                    width: d.width + ' pt',
-                    height: d.height + ' pt',
-                    scaleX: d.scaleX,
-                    scaleY: d.scaleY,
-                    skewX: d.skewX,
-                    skewY: d.skewY,
-                    direction: d.direction,
-                    page: d.page,
-                    rawFont: d.fontName
+                // Typography
+                html += sectionLabel('Typography');
+                html += row('font-family', d.fontFamily);
+                html += row('pdf-font', d.fontExact);
+                html += row('font-size', `${d.fontSizePt}pt / ${d.fontSizePx}px`);
+                html += row('font-weight', `${d.fontWeight} (${d.fontWeightCss})`);
+                html += row('font-style', d.fontStyle);
+                html += row('color', `<span class="color-preview" style="background:${d.color}"></span>${d.color}`);
+
+                // Layout
+                html += sectionLabel('Layout');
+                html += row('line-height', `${d.lineHeightPt}pt / ${d.lineHeightPx}px (${d.lineHeightRatio}×)`);
+                html += row('letter-spacing', `${d.letterSpacingPt}pt / ${d.letterSpacingPx}px`);
+                html += row('char-width', `${d.charWidth}pt`);
+                html += row('direction', d.direction);
+
+                // Position & Size
+                html += sectionLabel('Position & Size');
+                html += row('x', `${d.posXPt}pt / ${d.posXPx}px`);
+                html += row('y', `${d.posYPt}pt / ${d.posYPx}px`);
+                html += row('width', `${d.widthPt}pt / ${d.widthPx}px`);
+                html += row('height', `${d.heightPt}pt / ${d.heightPx}px`);
+
+                // Transform (if non-trivial)
+                const rot = parseFloat(d.rotation);
+                if (rot !== 0 || d.scaleX !== '1.0000') {
+                    html += sectionLabel('Transform');
+                    html += row('rotation', d.rotation + '°');
+                    html += row('scaleX / scaleY', `${d.scaleX} / ${d.scaleY}`);
+                }
+
+                // CSS Snippet
+                const cssSnippet = generateTextCSS(d);
+                html += `<div class="css-snippet">${escapeHtml(cssSnippet)}</div>`;
+
+                copyObj = {
+                    type: 'text', text: d.text,
+                    fontFamily: `'${d.fontExact}'`,
+                    pdfFontName: d.fontFamily,
+                    fontSize: `${d.fontSizePx}px`, fontWeight: d.fontWeightCss,
+                    fontStyle: d.fontStyle, color: d.color,
+                    lineHeight: `${d.lineHeightPx}px`, letterSpacing: `${d.letterSpacingPx}px`,
+                    x: `${d.posXPx}px`, y: `${d.posYPx}px`,
+                    width: `${d.widthPx}px`, height: `${d.heightPx}px`,
+                    direction: d.direction, rotation: d.rotation + '°',
+                    page: d.page, css: cssSnippet
                 };
 
             } else if (d.type === 'image') {
@@ -704,81 +858,88 @@
                 inspectorTitle.textContent = 'Image Element';
                 inspectorTitle.className = 'inspector-title img-title';
 
-                html += row('image-name', d.imgName);
-                html += `<div class="inspector-divider"></div>`;
-                html += row('pixel-width', d.pixelWidth + ' px');
-                html += row('pixel-height', d.pixelHeight + ' px');
+                html += sectionLabel('Source');
+                html += row('name', d.imgName);
+                html += row('format', d.format);
+                html += row('color-space', d.colorSpace);
+                html += row('bits/component', d.bitsPerComponent);
+
+                html += sectionLabel('Dimensions');
+                html += row('intrinsic', `${d.pixelWidth} × ${d.pixelHeight} px`);
+                html += row('rendered', `${d.renderedWidthPt}pt × ${d.renderedHeightPt}pt`);
+                html += row('rendered-px', `${d.renderedWidthPx} × ${d.renderedHeightPx} px`);
                 html += row('aspect-ratio', d.aspectRatio);
-                html += `<div class="inspector-divider"></div>`;
-                html += row('rendered-w', d.renderedWidth + ' pt');
-                html += row('rendered-h', d.renderedHeight + ' pt');
-                html += `<div class="inspector-divider"></div>`;
-                html += row('x', d.posX + ' pt');
-                html += row('y', d.posY + ' pt');
+
+                html += sectionLabel('Resolution');
                 html += row('dpi-x', d.dpiX);
                 html += row('dpi-y', d.dpiY);
-                html += `<div class="inspector-divider"></div>`;
+
+                html += sectionLabel('Position');
+                html += row('x / y', `${d.posXPt}pt / ${d.posYPt}pt`);
                 html += row('page', d.page);
 
-                propsObj = {
-                    type: 'image',
-                    imageName: d.imgName,
-                    pixelWidth: d.pixelWidth + ' px',
-                    pixelHeight: d.pixelHeight + ' px',
+                const imgCss = generateImageCSS(d);
+                html += `<div class="css-snippet">${escapeHtml(imgCss)}</div>`;
+
+                copyObj = {
+                    type: 'image', name: d.imgName,
+                    format: d.format, colorSpace: d.colorSpace,
+                    intrinsicSize: `${d.pixelWidth}×${d.pixelHeight}px`,
+                    renderedSize: `${d.renderedWidthPx}×${d.renderedHeightPx}px`,
+                    dpi: `${d.dpiX}×${d.dpiY}`,
                     aspectRatio: d.aspectRatio,
-                    renderedWidth: d.renderedWidth + ' pt',
-                    renderedHeight: d.renderedHeight + ' pt',
-                    x: d.posX + ' pt',
-                    y: d.posY + ' pt',
-                    dpiX: d.dpiX,
-                    dpiY: d.dpiY,
-                    page: d.page
+                    page: d.page, css: imgCss
                 };
             }
 
-            lastInspectedData = propsObj;
+            lastCopyData = copyObj;
             inspectorContent.innerHTML = html;
             inspector.classList.add('visible');
         }
 
         function hideInspector() {
             inspector.classList.remove('visible');
-            lastInspectedData = null;
+            lastCopyData = null;
         }
 
-        function moveInspector(e) {
-            const pad = 16;
-            const rect = inspector.getBoundingClientRect();
-            const vw = window.innerWidth;
-            const vh = window.innerHeight;
-            const pw = rect.width || 320;
-            const ph = rect.height || 300;
-
-            let x = e.clientX + pad;
-            let y = e.clientY + pad;
-
-            if (x + pw > vw - pad) x = e.clientX - pw - pad;
-            if (x < pad) x = pad;
-            if (y + ph > vh - pad) y = e.clientY - ph - pad;
-            if (y < pad) y = pad;
-
-            inspector.style.left = x + 'px';
-            inspector.style.top = y + 'px';
+        // ═══ CSS Generation ═══
+        function generateTextCSS(d) {
+            let css = `/* Text: "${d.text.substring(0, 30)}${d.text.length > 30 ? '...' : ''}" */\n`;
+            css += `font-family: '${d.fontExact}';\n`;
+            css += `font-size: ${d.fontSizePx}px;\n`;
+            css += `font-weight: ${d.fontWeightCss};\n`;
+            if (d.fontStyle !== 'normal') css += `font-style: ${d.fontStyle};\n`;
+            css += `line-height: ${d.lineHeightRatio};\n`;
+            if (parseFloat(d.letterSpacingPt) > 0.1) {
+                css += `letter-spacing: ${d.letterSpacingPx}px;\n`;
+            }
+            css += `color: ${d.color};\n`;
+            if (d.direction === 'rtl') css += `direction: rtl;\n`;
+            const rot = parseFloat(d.rotation);
+            if (rot !== 0) css += `transform: rotate(${d.rotation}deg);\n`;
+            return css;
         }
 
-        // ─── Click to Copy ───
+        function generateImageCSS(d) {
+            let css = `/* Image: ${d.imgName} */\n`;
+            css += `width: ${d.renderedWidthPx}px;\n`;
+            css += `height: ${d.renderedHeightPx}px;\n`;
+            css += `/* Intrinsic: ${d.pixelWidth}×${d.pixelHeight}px */\n`;
+            css += `/* DPI: ${d.dpiX}×${d.dpiY} */\n`;
+            css += `object-fit: contain;\n`;
+            return css;
+        }
+
+        // ═══ Click to Copy ═══
         function copyProperties(e) {
             e.preventDefault();
-            if (!lastInspectedData) return;
+            if (!lastCopyData) return;
 
-            const text = Object.entries(lastInspectedData)
+            const text = Object.entries(lastCopyData)
                 .map(([k, v]) => `${k}: ${v}`)
                 .join('\n');
 
-            navigator.clipboard.writeText(text).then(() => {
-                showToast();
-            }).catch(() => {
-                // Fallback
+            navigator.clipboard.writeText(text).then(showToast).catch(() => {
                 const ta = document.createElement('textarea');
                 ta.value = text;
                 document.body.appendChild(ta);
@@ -794,15 +955,58 @@
             setTimeout(() => toastEl.classList.remove('show'), 1800);
         }
 
+        // ═══ Inspector Movement ═══
+        function moveInspector(e) {
+            const pad = 16;
+            const rect = inspector.getBoundingClientRect();
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            const pw = rect.width || 360;
+            const ph = rect.height || 400;
+
+            let x = e.clientX + pad;
+            let y = e.clientY + pad;
+
+            if (x + pw > vw - pad) x = e.clientX - pw - pad;
+            if (x < pad) x = pad;
+            if (y + ph > vh - pad) y = e.clientY - ph - pad;
+            if (y < pad) y = pad;
+
+            inspector.style.left = x + 'px';
+            inspector.style.top = y + 'px';
+        }
+
+        // ═══ Utilities ═══
+        function multiplyMatrices(m1, m2) {
+            return [
+                m1[0] * m2[0] + m1[2] * m2[1], m1[1] * m2[0] + m1[3] * m2[1],
+                m1[0] * m2[2] + m1[2] * m2[3], m1[1] * m2[2] + m1[3] * m2[3],
+                m1[0] * m2[4] + m1[2] * m2[5] + m1[4], m1[1] * m2[4] + m1[3] * m2[5] + m1[5]
+            ];
+        }
+
+        function transformPoint(m, x, y) {
+            return [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
+        }
+
+        function rgbToHex(r, g, b) {
+            const toHex = v => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, '0');
+            return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+        }
+
         function row(key, val) {
             return `<div class="inspector-row"><span class="inspector-key">${key}</span><span class="inspector-val">${val}</span></div>`;
+        }
+
+        function sectionLabel(text) {
+            return `<div class="inspector-section-label">${text}</div>`;
         }
 
         function escapeHtml(str) {
             return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
 
-        // ─── Zoom ───
+        // ═══ Zoom ═══
         document.getElementById('zoomIn').addEventListener('click', () => {
             currentScale = Math.min(currentScale + 0.25, 4);
             zoomLevelEl.textContent = Math.round(currentScale / 1.5 * 100) + '%';
@@ -815,7 +1019,6 @@
             renderAllPages();
         });
 
-        // ─── Init ───
         loadPDF();
     </script>
 </body>
