@@ -381,6 +381,36 @@
             opacity: 1;
             transform: translateX(-50%) translateY(0);
         }
+
+        /* Download Button */
+        .download-btn {
+            height: 28px;
+            padding: 0 12px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text);
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-family: 'Inter', system-ui, sans-serif;
+            font-size: 11px;
+            font-weight: 500;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+
+        .download-btn:hover {
+            border-color: var(--green);
+            background: var(--green-glow);
+            color: var(--green);
+        }
+
+        .download-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 
@@ -394,6 +424,9 @@
                 <span class="zoom-level" id="zoomLevel">100%</span>
                 <button class="zoom-btn" id="zoomIn">+</button>
             </div>
+            <button class="download-btn" id="downloadBtn" disabled onclick="downloadHBS()">
+                ⬇ Download .hbs
+            </button>
         </div>
     </div>
 
@@ -435,7 +468,7 @@
         let pdfDoc = null;
         let lastCopyData = null;
 
-        const PT_TO_PX = 1.3333; // 1pt = 1.3333px (96/72)
+        const PT_TO_PX = 96 / 72; // only used for rendering scale, NOT for display values
 
         async function loadPDF() {
             try {
@@ -445,6 +478,8 @@
                 loadingEl.style.display = 'none';
                 pdfContainer.style.display = 'flex';
                 await renderAllPages();
+                // Enable download button
+                document.getElementById('downloadBtn').disabled = false;
             } catch (err) {
                 loadingEl.innerHTML = `<div style="color:#ef4444;font-size:14px;">Failed to load PDF: ${err.message}</div>`;
             }
@@ -482,8 +517,8 @@
             textLayer.className = 'text-layer';
             wrapper.appendChild(textLayer);
 
-            // ═══ Get text content WITH styles ═══
-            const textContent = await page.getTextContent();
+            // ═══ Get text content WITH styles and colors ═══
+            const textContent = await page.getTextContent({ includeColor: true });
             const styles = textContent.styles;
 
             // ═══ Resolve REAL font names from PDF.js font objects (async callback API) ═══
@@ -524,14 +559,20 @@
             const lineHeightMap = computeLineHeights(textContent.items);
 
             // ═══ Process text items ═══
+            const seenTextItems = new Set();
             for (let idx = 0; idx < textContent.items.length; idx++) {
                 const item = textContent.items[idx];
                 if (!item.str || item.str.trim() === '') continue;
 
                 const tx = item.transform;
-                const fontSizePt = Math.abs(tx[3]);
-                const fontSizePx = fontSizePt * PT_TO_PX;
-                const fontHeight = fontSizePt * currentScale;
+                const fontSize = Math.abs(tx[3]);
+
+                // De-duplication guard: track (text, x, y, fontSize)
+                const key = `${item.str}|${tx[4].toFixed(2)}|${tx[5].toFixed(2)}|${fontSize.toFixed(2)}`;
+                if (seenTextItems.has(key)) continue;
+                seenTextItems.add(key);
+
+                const fontHeight = fontSize * currentScale;
                 const x = tx[4] * currentScale;
                 const y = viewport.height - (tx[5] * currentScale) - fontHeight;
                 const w = item.width * currentScale;
@@ -541,30 +582,47 @@
                 const fi = fontInfoCache[item.fontName] || { psName: item.fontName, isBold: false, isItalic: false };
                 const fontMeta = resolveFontMeta(fi.psName, fi.isBold, fi.isItalic);
 
-                // ═══ Sample color directly from rendered canvas ═══
-                const sampleX = Math.floor(x + Math.min(fontHeight * 0.4, w * 0.3));
-                const sampleY = Math.floor(y + fontHeight * 0.6);
+                // ═══ Color: PDF.js native item.color (primary), canvas sampling (fallback) ═══
                 let color = '#000000';
-                if (sampleX >= 0 && sampleX < canvas.width && sampleY >= 0 && sampleY < canvas.height) {
-                    const pixel = canvasCtx.getImageData(sampleX, sampleY, 1, 1).data;
-                    // Only use sampled color if it's not the white background
-                    const isBackground = (pixel[0] > 250 && pixel[1] > 250 && pixel[2] > 250);
-                    if (!isBackground) {
-                        color = '#' + pixel[0].toString(16).padStart(2, '0')
-                            + pixel[1].toString(16).padStart(2, '0')
-                            + pixel[2].toString(16).padStart(2, '0');
+                if (item.color && (Array.isArray(item.color) || item.color.buffer)) {
+                    let r = 0, g = 0, b = 0;
+                    if (item.color.length >= 3) {
+                        r = item.color[0]; g = item.color[1]; b = item.color[2];
+                    } else if (item.color.length === 1) {
+                        r = g = b = item.color[0];
+                    }
+                    if (r <= 1 && g <= 1 && b <= 1 && (r > 0 || g > 0 || b > 0)) {
+                        r *= 255; g *= 255; b *= 255;
+                    }
+                    color = '#' + Math.round(r).toString(16).padStart(2, '0')
+                        + Math.round(g).toString(16).padStart(2, '0')
+                        + Math.round(b).toString(16).padStart(2, '0');
+                } else {
+                    // Fallback: canvas pixel sampling
+                    const tmpCtx = canvas.getContext('2d');
+                    const sy = Math.min(Math.max(0, Math.round(y + fontHeight * 0.6)), canvas.height - 1);
+                    const fx = Math.floor(x + Math.min(fontHeight * 0.4, w * 0.3));
+                    if (fx >= 0 && fx < canvas.width && sy >= 0 && sy < canvas.height) {
+                        try {
+                            const px = tmpCtx.getImageData(fx, sy, 1, 1).data;
+                            if (px[3] > 30 && !(px[0] > 250 && px[1] > 250 && px[2] > 250)) {
+                                color = '#' + px[0].toString(16).padStart(2, '0')
+                                    + px[1].toString(16).padStart(2, '0')
+                                    + px[2].toString(16).padStart(2, '0');
+                            }
+                        } catch (e) { }
                     }
                 }
 
                 // Character width & letter spacing estimate
                 const charCount = item.str.length;
-                const avgCharWidthPt = charCount > 0 ? (item.width / charCount) : 0;
-                const expectedCharWidth = fontSizePt * 0.5;
-                const letterSpacingPt = charCount > 1 ? Math.max(0, avgCharWidthPt - expectedCharWidth) : 0;
+                const avgCharWidth = charCount > 0 ? (item.width / charCount) : 0;
+                const expectedCharWidth = fontSize * 0.5;
+                const letterSpacing = charCount > 1 ? Math.max(0, avgCharWidth - expectedCharWidth) : 0;
 
                 // Line height
-                const lineHeightPt = lineHeightMap[idx] || (fontSizePt * 1.2);
-                const lineHeightRatio = fontSizePt > 0 ? (lineHeightPt / fontSizePt).toFixed(2) : '1.20';
+                const lineHeight = lineHeightMap[idx] || (fontSize * 1.2);
+                const lineHeightRatio = fontSize > 0 ? (lineHeight / fontSize).toFixed(2) : '1.20';
 
                 const span = document.createElement('span');
                 span.className = 'text-item';
@@ -577,44 +635,27 @@
 
                 span.dataset.type = 'text';
                 span.dataset.text = item.str;
-                // Font (from actual PDF font descriptor)
                 span.dataset.fontExact = fontMeta.exactName;
                 span.dataset.fontFamily = fontMeta.family;
-                span.dataset.fontSizePt = fontSizePt.toFixed(2);
-                span.dataset.fontSizePx = fontSizePx.toFixed(2);
+                span.dataset.fontSize = fontSize.toFixed(2);
                 span.dataset.fontWeight = fontMeta.weight;
                 span.dataset.fontWeightCss = fontMeta.weightNum;
                 span.dataset.fontStyle = fontMeta.style;
-                // Layout
-                span.dataset.lineHeightPt = lineHeightPt.toFixed(2);
-                span.dataset.lineHeightPx = (lineHeightPt * PT_TO_PX).toFixed(2);
+                span.dataset.lineHeight = lineHeight.toFixed(2);
                 span.dataset.lineHeightRatio = lineHeightRatio;
-                span.dataset.letterSpacingPt = letterSpacingPt.toFixed(2);
-                span.dataset.letterSpacingPx = (letterSpacingPt * PT_TO_PX).toFixed(2);
-                span.dataset.charWidth = avgCharWidthPt.toFixed(2);
-                // Position
-                span.dataset.posXPt = tx[4].toFixed(2);
-                span.dataset.posYPt = tx[5].toFixed(2);
-                span.dataset.posXPx = (tx[4] * PT_TO_PX).toFixed(2);
-                span.dataset.posYPx = (tx[5] * PT_TO_PX).toFixed(2);
-                span.dataset.widthPt = (item.width || 0).toFixed(2);
-                span.dataset.heightPt = (item.height || 0).toFixed(2);
-                span.dataset.widthPx = ((item.width || 0) * PT_TO_PX).toFixed(2);
-                span.dataset.heightPx = ((item.height || 0) * PT_TO_PX).toFixed(2);
-                // Color (sampled from canvas)
+                span.dataset.letterSpacing = letterSpacing.toFixed(2);
+                span.dataset.charWidth = avgCharWidth.toFixed(2);
+
+                // Store raw positions relative to top-down CSS grid (at scale 1.0)
+                span.dataset.left = tx[4].toFixed(2);
+                span.dataset.top = (viewport.viewBox[3] - tx[5] - fontSize).toFixed(2);
+
+                span.dataset.width = (item.width || 0).toFixed(2);
+                span.dataset.height = (item.height || 0).toFixed(2);
                 span.dataset.color = color;
-                // Transform
-                span.dataset.scaleX = tx[0].toFixed(4);
-                span.dataset.scaleY = tx[3].toFixed(4);
-                span.dataset.skewX = tx[2].toFixed(4);
-                span.dataset.skewY = tx[1].toFixed(4);
                 span.dataset.rotation = getRotation(tx).toFixed(1);
-                // Meta
                 span.dataset.direction = item.dir || 'ltr';
                 span.dataset.page = pageNum;
-                span.dataset.rawFont = item.fontName;
-                span.dataset.ascent = (fi.ascent || 0).toFixed(3);
-                span.dataset.descent = (fi.descent || 0).toFixed(3);
 
                 span.addEventListener('mouseenter', showInspector);
                 span.addEventListener('mouseleave', hideInspector);
@@ -691,10 +732,8 @@
                     div.dataset.pixelHeight = pixelHeight;
                     div.dataset.renderedWidthPt = renderedWPt.toFixed(2);
                     div.dataset.renderedHeightPt = renderedHPt.toFixed(2);
-                    div.dataset.renderedWidthPx = (renderedWPt * PT_TO_PX).toFixed(1);
-                    div.dataset.renderedHeightPx = (renderedHPt * PT_TO_PX).toFixed(1);
-                    div.dataset.posXPt = (minX / currentScale).toFixed(2);
-                    div.dataset.posYPt = (minY / currentScale).toFixed(2);
+                    div.dataset.left = (minX / currentScale).toFixed(2);
+                    div.dataset.top = (minY / currentScale).toFixed(2);
                     div.dataset.dpiX = pixelWidth > 0 ? ((pixelWidth / (renderedWPt / 72))).toFixed(0) : 'N/A';
                     div.dataset.dpiY = pixelHeight > 0 ? ((pixelHeight / (renderedHPt / 72))).toFixed(0) : 'N/A';
                     div.dataset.aspectRatio = pixelWidth > 0 && pixelHeight > 0 ? (pixelWidth / pixelHeight).toFixed(3) : 'N/A';
@@ -808,24 +847,24 @@
                 html += sectionLabel('Typography');
                 html += row('font-family', d.fontFamily);
                 html += row('pdf-font', d.fontExact);
-                html += row('font-size', `${d.fontSizePt}pt / ${d.fontSizePx}px`);
+                html += row('font-size', d.fontSize + 'px');
                 html += row('font-weight', `${d.fontWeight} (${d.fontWeightCss})`);
                 html += row('font-style', d.fontStyle);
                 html += row('color', `<span class="color-preview" style="background:${d.color}"></span>${d.color}`);
 
                 // Layout
                 html += sectionLabel('Layout');
-                html += row('line-height', `${d.lineHeightPt}pt / ${d.lineHeightPx}px (${d.lineHeightRatio}×)`);
-                html += row('letter-spacing', `${d.letterSpacingPt}pt / ${d.letterSpacingPx}px`);
-                html += row('char-width', `${d.charWidth}pt`);
+                html += row('line-height', `${d.lineHeight}px (${d.lineHeightRatio}×)`);
+                html += row('letter-spacing', d.letterSpacing + 'px');
+                html += row('char-width', d.charWidth + 'px');
                 html += row('direction', d.direction);
 
                 // Position & Size
                 html += sectionLabel('Position & Size');
-                html += row('x', `${d.posXPt}pt / ${d.posXPx}px`);
-                html += row('y', `${d.posYPt}pt / ${d.posYPx}px`);
-                html += row('width', `${d.widthPt}pt / ${d.widthPx}px`);
-                html += row('height', `${d.heightPt}pt / ${d.heightPx}px`);
+                html += row('x', d.left + 'px');
+                html += row('y', d.top + 'px');
+                html += row('width', d.width + 'px');
+                html += row('height', d.height + 'px');
 
                 // Transform (if non-trivial)
                 const rot = parseFloat(d.rotation);
@@ -843,11 +882,11 @@
                     type: 'text', text: d.text,
                     fontFamily: `'${d.fontExact}'`,
                     pdfFontName: d.fontFamily,
-                    fontSize: `${d.fontSizePx}px`, fontWeight: d.fontWeightCss,
+                    fontSize: d.fontSize, fontWeight: d.fontWeightCss,
                     fontStyle: d.fontStyle, color: d.color,
-                    lineHeight: `${d.lineHeightPx}px`, letterSpacing: `${d.letterSpacingPx}px`,
-                    x: `${d.posXPx}px`, y: `${d.posYPx}px`,
-                    width: `${d.widthPx}px`, height: `${d.heightPx}px`,
+                    lineHeight: d.lineHeight, letterSpacing: d.letterSpacing,
+                    x: d.left, y: d.top,
+                    width: d.width, height: d.height,
                     direction: d.direction, rotation: d.rotation + '°',
                     page: d.page, css: cssSnippet
                 };
@@ -866,8 +905,7 @@
 
                 html += sectionLabel('Dimensions');
                 html += row('intrinsic', `${d.pixelWidth} × ${d.pixelHeight} px`);
-                html += row('rendered', `${d.renderedWidthPt}pt × ${d.renderedHeightPt}pt`);
-                html += row('rendered-px', `${d.renderedWidthPx} × ${d.renderedHeightPx} px`);
+                html += row('rendered', `${d.renderedWidthPt}px × ${d.renderedHeightPt}px`);
                 html += row('aspect-ratio', d.aspectRatio);
 
                 html += sectionLabel('Resolution');
@@ -875,7 +913,8 @@
                 html += row('dpi-y', d.dpiY);
 
                 html += sectionLabel('Position');
-                html += row('x / y', `${d.posXPt}pt / ${d.posYPt}pt`);
+                html += row('x', d.left + 'px');
+                html += row('y', d.top + 'px');
                 html += row('page', d.page);
 
                 const imgCss = generateImageCSS(d);
@@ -885,9 +924,10 @@
                     type: 'image', name: d.imgName,
                     format: d.format, colorSpace: d.colorSpace,
                     intrinsicSize: `${d.pixelWidth}×${d.pixelHeight}px`,
-                    renderedSize: `${d.renderedWidthPx}×${d.renderedHeightPx}px`,
+                    renderedSize: `${d.renderedWidthPt}×${d.renderedHeightPt}px`,
                     dpi: `${d.dpiX}×${d.dpiY}`,
                     aspectRatio: d.aspectRatio,
+                    x: d.left, y: d.top,
                     page: d.page, css: imgCss
                 };
             }
@@ -906,12 +946,12 @@
         function generateTextCSS(d) {
             let css = `/* Text: "${d.text.substring(0, 30)}${d.text.length > 30 ? '...' : ''}" */\n`;
             css += `font-family: '${d.fontExact}';\n`;
-            css += `font-size: ${d.fontSizePx}px;\n`;
+            css += `font-size: ${d.fontSize}px;\n`;
             css += `font-weight: ${d.fontWeightCss};\n`;
             if (d.fontStyle !== 'normal') css += `font-style: ${d.fontStyle};\n`;
             css += `line-height: ${d.lineHeightRatio};\n`;
-            if (parseFloat(d.letterSpacingPt) > 0.1) {
-                css += `letter-spacing: ${d.letterSpacingPx}px;\n`;
+            if (parseFloat(d.letterSpacing) > 0.1) {
+                css += `letter-spacing: ${d.letterSpacing}px;\n`;
             }
             css += `color: ${d.color};\n`;
             if (d.direction === 'rtl') css += `direction: rtl;\n`;
@@ -922,8 +962,8 @@
 
         function generateImageCSS(d) {
             let css = `/* Image: ${d.imgName} */\n`;
-            css += `width: ${d.renderedWidthPx}px;\n`;
-            css += `height: ${d.renderedHeightPx}px;\n`;
+            css += `width: ${d.renderedWidthPt}px;\n`;
+            css += `height: ${d.renderedHeightPt}px;\n`;
             css += `/* Intrinsic: ${d.pixelWidth}×${d.pixelHeight}px */\n`;
             css += `/* DPI: ${d.dpiX}×${d.dpiY} */\n`;
             css += `object-fit: contain;\n`;
@@ -1018,6 +1058,138 @@
             zoomLevelEl.textContent = Math.round(currentScale / 1.5 * 100) + '%';
             renderAllPages();
         });
+
+        // \u2550\u2550\u2550 Download as .hbs \u2550\u2550\u2550
+        async function downloadHBS() {
+            const btn = document.getElementById('downloadBtn');
+            btn.disabled = true;
+            btn.textContent = '\u231b Generating...';
+
+            try {
+                // Get original filename
+                let baseName = 'document';
+                try {
+                    const resp = await fetch('/filename');
+                    const data = await resp.json();
+                    if (data.name) baseName = data.name;
+                } catch (e) { }
+
+                // 1. Capture PDF fonts from document head
+                let embeddedFonts = '';
+                const styleSheets = Array.from(document.styleSheets);
+                for (const sheet of styleSheets) {
+                    try {
+                        const rules = Array.from(sheet.cssRules);
+                        for (const rule of rules) {
+                            if (rule instanceof CSSFontFaceRule) {
+                                embeddedFonts += rule.cssText + '\n';
+                            }
+                        }
+                    } catch (e) { /* ignore cross-origin stylesheet errors */ }
+                }
+
+                const pages = document.querySelectorAll('.page-wrapper');
+                let pagesHtml = '';
+
+                for (let p = 0; p < pages.length; p++) {
+                    const wrapper = pages[p];
+                    const canvas = wrapper.querySelector('canvas');
+                    const textItems = wrapper.querySelectorAll('.text-item');
+
+                    // Actual page dimensions in pt (from viewport)
+                    const pageWidthPt = parseFloat(wrapper.style.width) / currentScale;
+                    const pageHeightPt = parseFloat(wrapper.style.height) / currentScale;
+
+                    // Capture canvas as background for perfect fidelity (shapes, lines, bkgs)
+                    const pageBkg = canvas.toDataURL('image/png');
+
+                    let elementsHtml = '';
+
+                    // Text elements \u2014 use raw dataset values (top/left)
+                    textItems.forEach(el => {
+                        const d = el.dataset;
+                        if (!d.text || !d.text.trim()) return;
+
+                        const styles = [
+                            'position: absolute',
+                            `left: ${d.left}px`,
+                            `top: ${d.top}px`,
+                            `font-family: '${d.fontExact}'`,
+                            `font-size: ${d.fontSize}px`,
+                            `font-weight: ${d.fontWeightCss}`,
+                            d.fontStyle !== 'normal' ? `font-style: ${d.fontStyle}` : '',
+                            'color: transparent', // Selectable but hidden to avoid duplication with background
+                            `line-height: ${d.lineHeightRatio}`,
+                            parseFloat(d.letterSpacing) > 0.1 ? `letter-spacing: ${d.letterSpacing}px` : '',
+                            'white-space: pre',
+                            'margin: 0',
+                            'padding: 0',
+                            'cursor: text'
+                        ].filter(Boolean).join('; ');
+
+                        const escaped = escapeHtml(d.text);
+                        elementsHtml += `    <span style="${styles}">${escaped}</span>\n`;
+                    });
+
+                    pagesHtml += `  <div class="page" style="width: ${pageWidthPt.toFixed(2)}px; height: ${pageHeightPt.toFixed(2)}px; background-image: url(${pageBkg}); background-size: cover;">\n${elementsHtml}  </div>\n`;
+                }
+
+                const fullHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${baseName}</title>
+    <style>
+        @page {
+            size: 8.5in 11in;
+            margin: 0;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: sans-serif;
+            background: #222;
+        }
+        .page {
+            position: relative;
+            background: #fff;
+            overflow: hidden;
+            margin: 20px auto;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        @media print {
+            body { background: transparent; }
+            .page { margin: 0; box-shadow: none; }
+        }
+        /* Captured PDF Fonts */
+        ${embeddedFonts}
+    </style>
+</head>
+<body>
+${pagesHtml}</body>
+</html>`;
+
+                // Trigger download as .hbs
+                const blob = new Blob([fullHtml], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${baseName}.hbs`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                showToast('Downloaded ' + baseName + '.hbs');
+            } catch (err) {
+                console.error('Download error:', err);
+                showToast('Download failed: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '\u2b07 Download .hbs';
+            }
+        }
+        window.downloadHBS = downloadHBS;
 
         loadPDF();
     </script>

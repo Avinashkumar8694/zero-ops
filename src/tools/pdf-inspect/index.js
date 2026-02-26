@@ -57,6 +57,11 @@ export default async function (program, toolName) {
                     });
                     const stream = fs.createReadStream(resolvedPath);
                     stream.pipe(res);
+                } else if (req.url === '/filename') {
+                    // Return original filename for download
+                    const baseName = path.basename(resolvedPath, '.pdf');
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ name: baseName }));
                 } else {
                     res.writeHead(404);
                     res.end('Not found');
