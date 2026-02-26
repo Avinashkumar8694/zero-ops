@@ -97,6 +97,26 @@ zero-ops desktop screenshot window
 zero-ops desktop screenshot window
 ```
 
+### PDF Inspector (`pdf-inspect`)
+Advanced PDF inspection and Handlebars (HBS) template generation tool.
+
+```bash
+# Start the inspector with a specific PDF file
+zero-ops pdf-inspect ~/path/to/your/file.pdf
+```
+
+**Features:**
+- **Visual Inspection**: Hover over any PDF element (text, image, background box) to see its exact properties, types, and CSS.
+- **Content Picker**: Click any element to copy its actual content immediately:
+    - **Text**: Copies the raw text string.
+    - **Images**: Generates and copies a high-quality Base64 Data URL of the specific image.
+    - **Background Blocks**: Copies the hexadecimal color code of detected background sections.
+- **HBS Template Generation**:
+    - Click **"Download .hbs"** to export a pixel-perfect Handlebars template.
+    - **Modular Extraction**: Extracts section backgrounds as individual `div` elements and images as standalone assets.
+    - **Line Reconstruction**: Automatically merges fragmented text segments into logical lines, making the template human-readable and easy to tokensize.
+    - **1:1 Fidelity**: Maintains exact PDF coordinates and embeds all relevant fonts.
+
 ### Telegram Remote Control
 Control `zero-ops` from your Telegram app.
 

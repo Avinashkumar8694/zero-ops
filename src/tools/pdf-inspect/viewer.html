@@ -939,16 +939,19 @@
                 html += `<div class="css-snippet">${escapeHtml(cssSnippet)}</div>`;
 
                 copyObj = {
-                    type: 'text', text: d.text,
-                    fontFamily: `'${d.fontExact}'`,
-                    pdfFontName: d.fontFamily,
-                    fontSize: d.fontSize, fontWeight: d.fontWeightCss,
-                    fontStyle: d.fontStyle, color: d.color,
-                    lineHeight: d.lineHeight, letterSpacing: d.letterSpacing,
-                    x: d.left, y: d.top,
-                    width: d.width, height: d.height,
-                    direction: d.direction, rotation: d.rotation + '°',
-                    page: d.page, css: cssSnippet
+                    type: 'text',
+                    content: d.text,
+                    details: {
+                        fontFamily: `'${d.fontExact}'`,
+                        pdfFontName: d.fontFamily,
+                        fontSize: d.fontSize, fontWeight: d.fontWeightCss,
+                        fontStyle: d.fontStyle, color: d.color,
+                        lineHeight: d.lineHeight, letterSpacing: d.letterSpacing,
+                        x: d.left, y: d.top,
+                        width: d.width, height: d.height,
+                        direction: d.direction, rotation: d.rotation + '°',
+                        page: d.page, css: cssSnippet
+                    }
                 };
 
             } else if (d.type === 'image') {
@@ -980,17 +983,64 @@
                 const imgCss = generateImageCSS(d);
                 html += `<div class="css-snippet">${escapeHtml(imgCss)}</div>`;
 
+                // Calculate base64 on the fly for copying
+                let base64 = '';
+                try {
+                    const pageWrapper = el.closest('.page-wrapper');
+                    const canvas = pageWrapper.querySelector('canvas');
+                    const ix = parseFloat(el.style.left);
+                    const iy = parseFloat(el.style.top);
+                    const iw = parseFloat(el.style.width);
+                    const ih = parseFloat(el.style.height);
+
+                    const tmpCanvas = document.createElement('canvas');
+                    tmpCanvas.width = Math.max(1, Math.round(iw));
+                    tmpCanvas.height = Math.max(1, Math.round(ih));
+                    const tmpCtx = tmpCanvas.getContext('2d');
+                    tmpCtx.drawImage(canvas, ix, iy, iw, ih, 0, 0, tmpCanvas.width, tmpCanvas.height);
+                    base64 = tmpCanvas.toDataURL('image/png');
+                } catch (e) { }
+
                 copyObj = {
-                    type: 'image', name: d.imgName,
-                    format: d.format, colorSpace: d.colorSpace,
-                    intrinsicSize: `${d.pixelWidth}×${d.pixelHeight}px`,
-                    renderedSize: `${d.renderedWidthPt}×${d.renderedHeightPt}px`,
-                    dpi: `${d.dpiX}×${d.dpiY}`,
-                    aspectRatio: d.aspectRatio,
-                    x: d.left, y: d.top,
-                    page: d.page, css: imgCss
+                    type: 'image',
+                    content: base64,
+                    details: {
+                        name: d.imgName,
+                        format: d.format, colorSpace: d.colorSpace,
+                        intrinsicSize: `${d.pixelWidth}×${d.pixelHeight}px`,
+                        renderedSize: `${d.renderedWidthPt}×${d.renderedHeightPt}px`,
+                        dpi: `${d.dpiX}×${d.dpiY}`,
+                        aspectRatio: d.aspectRatio,
+                        x: d.left, y: d.top,
+                        page: d.page, css: imgCss
+                    }
+                };
+            } else if (d.type === 'box') {
+                inspectorIcon.textContent = '⬜';
+                inspectorIcon.className = 'inspector-icon';
+                inspectorTitle.textContent = 'Background Block';
+                inspectorTitle.className = 'inspector-title';
+
+                html += sectionLabel('Box Properties');
+                html += row('color', `<span class="color-preview" style="background:${d.color}"></span>${d.color}`);
+                html += row('x', d.left + 'px');
+                html += row('y', d.top + 'px');
+                html += row('width', d.width + 'px');
+                html += row('height', d.height + 'px');
+                html += row('page', d.page);
+
+                copyObj = {
+                    type: 'box',
+                    content: d.color,
+                    details: {
+                        color: d.color,
+                        x: d.left, y: d.top,
+                        width: d.width, height: d.height,
+                        page: d.page
+                    }
                 };
             }
+
 
             lastCopyData = copyObj;
             inspectorContent.innerHTML = html;
@@ -1031,26 +1081,28 @@
         }
 
         // ═══ Click to Copy ═══
-        function copyProperties(e) {
+                function copyProperties(e) {
             e.preventDefault();
-            if (!lastCopyData) return;
+            if (!lastCopyData || !lastCopyData.content) return;
 
-            const text = Object.entries(lastCopyData)
-                .map(([k, v]) => `${k}: ${v}`)
-                .join('\n');
+            const content = lastCopyData.content;
+            const typeLabels = { 'text': 'text content', 'image': 'image data', 'box': 'color code' };
+            const label = typeLabels[lastCopyData.type] || 'content';
 
-            navigator.clipboard.writeText(text).then(showToast).catch(() => {
+            navigator.clipboard.writeText(content).then(() => showToast(`Copied ${label}`)).catch(() => {
                 const ta = document.createElement('textarea');
-                ta.value = text;
+                ta.value = content;
                 document.body.appendChild(ta);
                 ta.select();
                 document.execCommand('copy');
                 document.body.removeChild(ta);
-                showToast();
+                showToast(`Copied ${label}`);
             });
         }
 
-        function showToast() {
+        function showToast(msg) {
+            if (msg) toastEl.textContent = msg;
+            else toastEl.textContent = 'Copied to clipboard';
             toastEl.classList.add('show');
             setTimeout(() => toastEl.classList.remove('show'), 1800);
         }
