@@ -134,6 +134,17 @@
             outline: 2px solid rgba(52, 211, 153, 0.6);
         }
 
+        .text-layer .box-item {
+            position: absolute;
+            pointer-events: auto;
+            transition: outline 0.15s ease;
+        }
+
+        .text-layer .box-item:hover {
+            outline: 2px solid rgba(245, 158, 11, 0.6);
+            background: rgba(245, 158, 11, 0.1) !important;
+        }
+
         /* Inspector */
         .inspector {
             position: fixed;
@@ -671,6 +682,9 @@
             const OPS = pdfjsLib.OPS;
             const ctmStack = [];
             let ctm = viewport.transform.slice();
+            const seenImageItems = new Set();
+            let currentFillColor = '#000000';
+            let lastRect = null;
 
             for (let i = 0; i < opList.fnArray.length; i++) {
                 const fn = opList.fnArray[i];
@@ -682,8 +696,54 @@
                     ctm = ctmStack.pop() || viewport.transform.slice();
                 } else if (fn === OPS.transform) {
                     ctm = multiplyMatrices(ctm, args);
+                } else if (fn === OPS.setFillRGBColor) {
+                    currentFillColor = '#' + args.map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
+                } else if (fn === OPS.setFillGray) {
+                    const g = Math.round(args[0] * 255).toString(16).padStart(2, '0');
+                    currentFillColor = `#${g}${g}${g}`;
+                } else if (fn === OPS.re) {
+                    const rx = args[0], ry = args[1], rw = args[2], rh = args[3];
+                    const p0 = transformPoint(ctm, rx, ry);
+                    const p1 = transformPoint(ctm, rx + rw, ry + rh);
+                    lastRect = {
+                        x: Math.min(p0[0], p1[0]),
+                        y: Math.min(p0[1], p1[1]),
+                        w: Math.abs(p0[0] - p1[0]),
+                        h: Math.abs(p0[1] - p1[1])
+                    };
+                } else if ((fn === OPS.fill || fn === OPS.eoFill) && lastRect) {
+                    if (lastRect.w > 2 && lastRect.h > 2 && currentFillColor !== '#ffffff') {
+                        const div = document.createElement('div');
+                        div.className = 'box-item';
+                        div.style.left = lastRect.x + 'px';
+                        div.style.top = lastRect.y + 'px';
+                        div.style.width = lastRect.w + 'px';
+                        div.style.height = lastRect.h + 'px';
+                        div.style.backgroundColor = currentFillColor;
+                        div.dataset.type = 'box';
+                        div.dataset.color = currentFillColor;
+                        div.dataset.left = (lastRect.x / currentScale).toFixed(2);
+                        div.dataset.top = (lastRect.y / currentScale).toFixed(2);
+                        div.dataset.width = (lastRect.w / currentScale).toFixed(2);
+                        div.dataset.height = (lastRect.h / currentScale).toFixed(2);
+                        div.dataset.page = pageNum;
+                        div.addEventListener('mouseenter', showInspector);
+                        div.addEventListener('mouseleave', hideInspector);
+                        div.addEventListener('mousemove', moveInspector);
+                        div.addEventListener('click', copyProperties);
+                        textLayer.appendChild(div);
+                    }
+                    lastRect = null;
                 } else if (fn === OPS.paintImageXObject || fn === OPS.paintJpegXObject) {
                     const imgName = args[0];
+
+                    // De-duplication guard: track (imgName, tx, ty)
+                    // We use the CTM translated positions for absolute uniqueness tracking
+                    const p0_raw = transformPoint(ctm, 0, 0);
+                    const imgKey = `${imgName}|${p0_raw[0].toFixed(2)}|${p0_raw[1].toFixed(2)}`;
+                    if (seenImageItems.has(imgKey)) continue;
+                    seenImageItems.add(imgKey);
+
                     let pixelWidth = args[1] || 0;
                     let pixelHeight = args[2] || 0;
                     let bitsPerComponent = 0;
@@ -1094,44 +1154,115 @@
                 for (let p = 0; p < pages.length; p++) {
                     const wrapper = pages[p];
                     const canvas = wrapper.querySelector('canvas');
-                    const textItems = wrapper.querySelectorAll('.text-item');
+                    const textItemEls = Array.from(wrapper.querySelectorAll('.text-item'));
+                    const imgItemEls = Array.from(wrapper.querySelectorAll('.img-item'));
+                    const boxItemEls = Array.from(wrapper.querySelectorAll('.box-item'));
 
-                    // Actual page dimensions in pt (from viewport)
                     const pageWidthPt = parseFloat(wrapper.style.width) / currentScale;
                     const pageHeightPt = parseFloat(wrapper.style.height) / currentScale;
 
-                    // Capture canvas as background for perfect fidelity (shapes, lines, bkgs)
-                    const pageBkg = canvas.toDataURL('image/png');
-
                     let elementsHtml = '';
 
-                    // Text elements \u2014 use raw dataset values (top/left)
-                    textItems.forEach(el => {
+                    // 1. Export Section Backgrounds (Boxes)
+                    boxItemEls.forEach(el => {
                         const d = el.dataset;
-                        if (!d.text || !d.text.trim()) return;
-
                         const styles = [
                             'position: absolute',
                             `left: ${d.left}px`,
                             `top: ${d.top}px`,
-                            `font-family: '${d.fontExact}'`,
-                            `font-size: ${d.fontSize}px`,
-                            `font-weight: ${d.fontWeightCss}`,
-                            d.fontStyle !== 'normal' ? `font-style: ${d.fontStyle}` : '',
-                            'color: transparent', // Selectable but hidden to avoid duplication with background
-                            `line-height: ${d.lineHeightRatio}`,
-                            parseFloat(d.letterSpacing) > 0.1 ? `letter-spacing: ${d.letterSpacing}px` : '',
+                            `width: ${d.width}px`,
+                            `height: ${d.height}px`,
+                            `background-color: ${d.color}`
+                        ].join('; ');
+                        elementsHtml += `    <div style="${styles}"></div>\n`;
+                    });
+
+                    // 2. Export Images
+                    imgItemEls.forEach(el => {
+                        const d = el.dataset;
+                        const ix = parseFloat(el.style.left);
+                        const iy = parseFloat(el.style.top);
+                        const iw = parseFloat(el.style.width);
+                        const ih = parseFloat(el.style.height);
+
+                        let imgSrc = '';
+                        try {
+                            const tmpCanvas = document.createElement('canvas');
+                            tmpCanvas.width = Math.max(1, Math.round(iw));
+                            tmpCanvas.height = Math.max(1, Math.round(ih));
+                            const tmpCtx = tmpCanvas.getContext('2d');
+                            tmpCtx.drawImage(canvas, ix, iy, iw, ih, 0, 0, tmpCanvas.width, tmpCanvas.height);
+                            imgSrc = tmpCanvas.toDataURL('image/png');
+                        } catch (e) { }
+
+                        if (imgSrc) {
+                            elementsHtml += `    <img src="${imgSrc}" style="position: absolute; left: ${d.left}px; top: ${d.top}px; width: ${d.renderedWidthPt}px; height: ${d.renderedHeightPt}px;" />\n`;
+                        }
+                    });
+
+                    // 3. Horizontal Text Grouping (Line Reconstruction)
+                    const items = textItemEls.map(el => ({
+                        text: el.dataset.text,
+                        left: parseFloat(el.dataset.left),
+                        top: parseFloat(el.dataset.top),
+                        width: parseFloat(el.dataset.width),
+                        fontSize: parseFloat(el.dataset.fontSize),
+                        fontExact: el.dataset.fontExact,
+                        fontWeight: el.dataset.fontWeightCss,
+                        fontStyle: el.dataset.fontStyle,
+                        color: el.dataset.color,
+                        lineHeightRatio: el.dataset.lineHeightRatio,
+                        letterSpacing: el.dataset.letterSpacing
+                    })).filter(it => it.text && it.text.trim() !== '');
+
+                    // Sort: Top-down, then Left-to-right
+                    items.sort((a, b) => (Math.abs(a.top - b.top) > 1) ? (a.top - b.top) : (a.left - b.left));
+
+                    const lines = [];
+                    if (items.length > 0) {
+                        let currentLine = [items[0]];
+                        for (let i = 1; i < items.length; i++) {
+                            const prev = currentLine[currentLine.length - 1];
+                            const curr = items[i];
+                            const sameRow = Math.abs(curr.top - prev.top) < 2;
+                            const sameFont = curr.fontExact === prev.fontExact && curr.fontSize === prev.fontSize && curr.color === prev.color;
+                            const gap = curr.left - (prev.left + prev.width);
+                            const smallGap = gap < (curr.fontSize * 0.4) || gap < 4;
+
+                            if (sameRow && sameFont && smallGap) {
+                                currentLine.push(curr);
+                            } else {
+                                lines.push(currentLine);
+                                currentLine = [curr];
+                            }
+                        }
+                        lines.push(currentLine);
+                    }
+
+                    lines.forEach(lineGroup => {
+                        const first = lineGroup[0];
+                        const mergedText = lineGroup.map(it => it.text).join('');
+                        const styles = [
+                            'position: absolute',
+                            `left: ${first.left.toFixed(2)}px`,
+                            `top: ${first.top.toFixed(2)}px`,
+                            `font-family: '${first.fontExact}'`,
+                            `font-size: ${first.fontSize}px`,
+                            `font-weight: ${first.fontWeight}`,
+                            first.fontStyle !== 'normal' ? `font-style: ${first.fontStyle}` : '',
+                            `color: ${first.color}`,
+                            `line-height: ${first.lineHeightRatio}`,
+                            parseFloat(first.letterSpacing) > 0.1 ? `letter-spacing: ${first.letterSpacing}px` : '',
                             'white-space: pre',
                             'margin: 0',
-                            'padding: 0',
-                            'cursor: text'
+                            'padding: 0'
                         ].filter(Boolean).join('; ');
 
-                        const escaped = escapeHtml(d.text);
+                        const escaped = escapeHtml(mergedText);
                         elementsHtml += `    <span style="${styles}">${escaped}</span>\n`;
                     });
 
-                    pagesHtml += `  <div class="page" style="width: ${pageWidthPt.toFixed(2)}px; height: ${pageHeightPt.toFixed(2)}px; background-image: url(${pageBkg}); background-size: cover;">\n${elementsHtml}  </div>\n`;
+                    pagesHtml += `  <div class="page" style="width: ${pageWidthPt.toFixed(2)}px; height: ${pageHeightPt.toFixed(2)}px; background: #fff;">\n${elementsHtml}  </div>\n`;
                 }
 
                 const fullHtml = `<!DOCTYPE html>
