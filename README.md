@@ -97,6 +97,74 @@ zero-ops desktop screenshot window
 zero-ops desktop screenshot window
 ```
 
+### System Security Monitor (`monitor`)
+A professional-grade security auditing and network monitoring suite built for `zero-ops`. This tool provides deep visibility into system-level network activity, identifies unauthorized remote access patterns (reverse shells), and offers active response capabilities.
+
+#### **Key Security Features**
+- **Deep Cross-Platform Auditing**:
+    - **macOS & Linux**: Native integration with `lsof` (list open files) to provide exact process-to-port mapping.
+    - **Windows**: Robust support via `netstat -ano` and `tasklist`, providing a unified experience across all environments.
+- **Intelligent Reverse Shell Detection**:
+    - Monitors for shell binaries (`bash`, `zsh`, `cmd.exe`, `powershell.exe`) and scripting interpreters (`python`, `node`, `ruby`) that have established external connections.
+    - Filters out `localhost` (127.0.0.1) and standard development ports to minimize noise.
+- **Behavioral Baselining (Anomaly Detection)**:
+    - Allows you to capture a "Safe State" of your system. 
+    - Subsequent scans automatically highlight **`[NEW]`** connections that were not present in your baseline.
+- **Active Threat Response**:
+    - Integrated **`kill <PID>`** functionality for immediate termination of unauthorized processes identified during auditing.
+- **Detached Daemon Monitoring**:
+    - Run the security monitor as a persistent background service. 
+    - Automated logging to `~/.zero-ops/monitor.log` and remote Telegram alerting.
+- **Remote Telegram Integration**:
+    - Receive real-time security alerts on your mobile device. Pairs with the `telegram` tool for autonomous system defense.
+
+#### **Command Reference**
+
+| Command | Description | Security Use Case |
+| :--- | :--- | :--- |
+| `network` | List all active TCP/UDP sockets | General connectivity audit and baseline check. |
+| `reverse-shell` | Focused heuristic threat scan | Detecting persistent remote access or shells. |
+| `listeners` | Audit all listening ports | Finding hidden services or exposed public ports. |
+| `snapshot` | High-level security summary | Rapid health check to identify anomalies. |
+| `baseline` | Capture current system "Safe State" | Establish a norm to detect future intrusions. |
+| `inspect <PID>`| Deep process forensics | Analyze PPID, full Command Line Args, and lineage. |
+| `kill <PID>` | Immediate process termination | Active response to identified threats. |
+| `ignore <proc>` | Whitelist trusted processes | Cleaning up logs by ignoring safe dev tools. |
+| `start` | Initialize background daemon | 24/7 autonomous monitoring. |
+| `logs` | Tail real-time security events | Monitoring the daemon's auditing loop. |
+
+#### **Technical Deep-Dive**
+- **Heuristic Engine**:
+    - The `reverse-shell` command specifically analyzes the intersection of process binary names (e.g., `bash`, `python`) and "ESTABLISHED" network sockets that point to external IP addresses.
+    - **Note**: Development-related `localhost` traffic is intentionally omitted to prevent false-positives during local debugging.
+- **Persistence & Daemon Archetecture**:
+    - **PID Tracking**: `~/.zero-ops/monitor.pid`
+    - **Audit Logs**: `~/.zero-ops/monitor.log` (Rotated manually or tailed via `monitor logs`).
+    - **Polling Interval**: The background daemon polls every 10 seconds, while the `watch` command supports a custom millisecond interval.
+- **Configuration Keys**:
+    - `telegram.token`: Your Bot API token.
+    - `telegram.chat_id`: Your personal Telegram ID for secure alerts.
+    - `monitor.baseline`: Encrypted array of "Known Safe" socket signatures.
+    - `monitor.ignore`: Process whitelist for noise reduction.
+
+#### **Example Scenarios**
+```bash
+# Audit for new public interface exposure
+zero-ops monitor listeners
+
+# Deep-dive into a suspicious PID to see how it was launched
+zero-ops monitor inspect 94398
+
+# Terminate an unauthorized shell connection
+zero-ops monitor kill 94398
+
+# Setup a new baseline after installing trusted software
+zero-ops monitor baseline
+```
+
+> [!TIP]
+> Use the [simulationandtestScanner.md](file:///Users/avinashgupta/Documents/ART/testingenv/snippent/simulationandtestScanner.md) guide to verify your setup with controlled, safe security simulations.
+
 ### PDF Inspector (`pdf-inspect`)
 Advanced PDF inspection and Handlebars (HBS) template generation tool.
 
@@ -143,6 +211,8 @@ Control `zero-ops` from your Telegram app.
 
 5. **Usage**
    - Send `desktop screenshot` to take a screenshot (the bot will upload the image back to you!).
+   - Send `monitor snapshot` to get a remote security health check.
+   - New suspicious connections detected by `monitor watch` or the daemon will be automatically messaged to you!
 
 ### Supported Telegram Commands
 You can send almost any `zero-ops` command to the bot. Here are the most useful ones:
@@ -170,6 +240,14 @@ You can send almost any `zero-ops` command to the bot. Here are the most useful 
 - `camera capture [name]`: Take a photo using the webcam.
     - Requires system dependencies (`imagesnap` on macOS, `fswebcam` on Linux).
     - Photos are saved to `~/.zero-ops/camera/` and auto-uploaded to Telegram if requested via bot.
+
+**System Monitor** (`monitor`)
+- `monitor snapshot`: Get a remote security health check report.
+- `monitor network`: List all active network connections.
+- `monitor reverse-shell`: Check for suspicious shell-to-socket correlations.
+- `monitor start`: Engage background monitoring daemon.
+- `monitor stop`: Disengage background monitoring daemon.
+- `monitor status`: Check if the monitor is currently heartbeat active.
 
 ---
 

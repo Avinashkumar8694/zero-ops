@@ -1,6 +1,6 @@
 {
   "name": "zero-ops",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "description": "CLI utility for managing named paths (bigbang flow)",
   "main": "zero-ops.js",
   "bin": {
