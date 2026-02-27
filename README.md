@@ -163,7 +163,7 @@ zero-ops monitor baseline
 ```
 
 > [!TIP]
-> Use the [simulationandtestScanner.md](file:///Users/avinashgupta/Documents/ART/testingenv/snippent/simulationandtestScanner.md) guide to verify your setup with controlled, safe security simulations.
+> Use the [simulationandtestScanner.md](file:///Users/avinashgupta/Documents/ART/testingenv/snippent/src/tools/monitor/simulationandtestScanner.md) guide to verify your setup with controlled, safe security simulations.
 
 ### PDF Inspector (`pdf-inspect`)
 Advanced PDF inspection and Handlebars (HBS) template generation tool.
