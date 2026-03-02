@@ -8,7 +8,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { detectReverseShells, getListeners, sendTelegramAlert } from './scanner.js';
+import { detectReverseShells, getListeners, sendTelegramAlert, getWifiStatus, scanWifiNetworks } from './scanner.js';
 
 const logFile = path.join(os.homedir(), '.zero-ops', 'monitor.log');
 const POLL_INTERVAL = 10000; // Continuous scan interval (10 seconds)
@@ -27,6 +27,8 @@ function log(msg) {
 // Internal state to track previously alerted entities and prevent notification spam.
 let seenShells = new Set();
 let seenListeners = new Set();
+let lastBssid = null;
+let lastSsid = null;
 
 /**
  * Orchestrates a complete security audit cycle.
@@ -71,6 +73,14 @@ async function scan() {
         const currentListenerIds = new Set(publicListeners.map(l => `${l.pid}-${l.name}`));
         seenListeners = new Set([...seenListeners].filter(id => currentListenerIds.has(id)));
 
+        // --- 3. Wireless Security Audit ---
+        const wifi = await getWifiStatus();
+        const nearby = await scanWifiNetworks();
+
+        if (wifi) {
+            lastBssid = wifi.bssid;
+            lastSsid = wifi.ssid;
+        }
     } catch (e) {
         log(`System Scan Fatal Error: ${e.message}`);
     }

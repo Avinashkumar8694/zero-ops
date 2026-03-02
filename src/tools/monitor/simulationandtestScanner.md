@@ -284,12 +284,80 @@ Most hackers *must* talk to the outside world eventually to get instructions (C2
 
 ---
 
+## 📶 Wireless Security Simulations (Wireless Guard)
+
+Verified detection of Wi-Fi based attacks using native system capabilities.
+
+### **Scenario 16: The Evil Twin (SSID Cloning)**
+**Concept:** A hacker uses a high-powered antenna to broadcast a Wi-Fi network with the *exact same name* (SSID) as yours to trick your devices into connecting to them.
+
+1.  **Step A (The Setup):** Use your mobile phone to create a Hotspot with the **exact same name** as your current Wi-Fi network.
+2.  **Step B (Detection):**
+    ```bash
+    zero-ops monitor wifi list
+    # OR
+    zero-ops monitor wifi audit
+    ```
+3.  **Result:** The tool will identify multiple access points for the same SSID and flag it with a **`⚠️ SECURITY WARNING: EVIL TWIN DETECTED`** alert (in audit mode).
+
+### **Scenario 17: Signal Jamming Detection**
+**Concept:** A hacker floods your frequency with noise (jamming). This results in a sudden, sharp drop in Signal (RSSI).
+
+1.  **Step A (The Simulation):** Move your laptop far away from your router or place a physical barrier (like a grounded metal object) near the antenna to "drop" the signal significantly.
+2.  **Step B (Detection):**
+    ```bash
+    # Use watch mode to see the live fluctuation
+    zero-ops monitor wifi watch
+    ```
+3.  **Result:** Under the "Wireless Guard" section, you will see a low RSSI value (e.g., -85dBm or 10%). If monitored via the background daemon, a sudden drop is a signature of jamming.
+
+### **Scenario 18: BSSID Jumping (Man-in-the-Middle)**
+**Concept:** You are connected to a trusted AP. A hacker's "Evil Twin" becomes stronger, and your OS automatically "jumps" to it.
+
+1.  **Step A (Setup):** Ensure the background daemon is running:
+    ```bash
+    zero-ops monitor start
+    ```
+2.  **Step B (The Jump):** Manually switch your connection to a different AP that shares the same SSID (like switching from your 5GHz to 2.4GHz band if they share names).
+3.  **Step C (Verification):** Check your Telegram or the logs:
+    ```bash
+    zero-ops monitor logs
+    ```
+4.  **Result:** You will see a `⚠️ WIRELESS ALERT: BSSID CHANGED!` alert, indicating your device has associated with a new physical hardware address (BSSID).
+
+### **Scenario 19: Beacon Spam Identification (Fake SSID Flood)**
+**Concept:** An ESP8266 Deauther can broadcast hundreds of "Beacon" frames with random SSIDs (e.g., "HACKED", "FREE_WIFI", "MCDONALDS") to clutter the Wi-Fi list.
+
+1.  **Step A (The Discovery):** Scan a very crowded public area (like an airport or tech conference).
+2.  **Step B (Detection):**
+    ```bash
+    zero-ops monitor wifi list
+    ```
+3.  **Result:** If the tool sees an abnormal influx of unique SSIDs with the same signal strength, it indicates a hardware-based flood in the vicinity.
+
+### **Scenario 20: Connection Health & Awareness**
+**Concept:** Identifying the hardware behind your connections to ensure you aren't linked to a suspicious "Unknown" manufacturer.
+
+1.  **Step A (Audit):**
+    ```bash
+    zero-ops monitor wifi list
+    ```
+2.  **Step B (Identification):** Look at the **Manufacturer** column.
+3.  **Security Insight:** Identifying that your AP is a "Cisco" or "Apple" device adds a layer of verification that you are connected to the intended hardware.
+
+---
+
+> [!TIP]
+> **Ethical Note**: The `monitor` tool is strictly for **defensive security auditing** and **self-defense monitoring**. It does not include tools for packet injection or disrupting other networks.
+
+---
+
 ## 🕵️ Forensic Checklist for Identifying Hackers
 If you see a suspicious alert, follow this "Hacker Response" flow:
 1.  **Identify**: Use `monitor network` or `monitor reverse-shell` to see who is connected.
 2.  **Verify**: Use `monitor inspect <PID>` to see the **Parent PID**.
     - *Suspicious*: If a web server (like `nginx`, `node`, `apache`) is the parent of a `bash` shell.
     - *Suspicious*: If a process has a parent PID of `1` (init/launchd) but has a weird name.
-3.  **Contain**: Use `monitor kill <PID>` to sever the connection immediately.
+3.  **Contain**: Use `monitor kill <PID>` to sever the connection immediately. Use `wifi` to check if your network is being spoofed.
 4.  **Audit**: Check your **Telegram logs** via `zero-ops monitor logs` or your phone to see when the intrusion first began.
 5.  **Update Baseline**: Once you've cleaned the threat, run `baseline` again to reset your "Safe State".

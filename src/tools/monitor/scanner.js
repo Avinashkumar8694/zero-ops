@@ -305,3 +305,219 @@ export async function getListeners() {
             isPublic: c.name.startsWith('*') || c.name.includes('0.0.0.0') || c.name.includes('[::]')
         }));
 }
+
+const manufacturers = {
+    '00:03:7F': 'Atheros',
+    '00:05:00': 'Cisco',
+    '00:0A:95': 'Apple',
+    '00:13:10': 'Linksys',
+    '00:14:6C': 'Netgear',
+    '00:14:BF': 'Cisco-Linksys',
+    '00:16:01': 'TP-Link',
+    '00:17:F2': 'Apple',
+    '00:1D:63': 'Netgear',
+    '00:1D:7E': 'Cisco',
+    '10:FEED': 'Apple',
+    '28:CF:E9': 'Apple',
+    '34:A8:EB': 'TP-Link',
+    '3C:07:54': 'Apple',
+    '40:A6:D9': 'Apple',
+    '50:C7:BF': 'TP-Link',
+    '64:66:B3': 'TP-Link',
+    '84:16:F9': 'TP-Link',
+    '8C:85:90': 'Apple',
+    '90:72:40': 'Apple',
+    'B0:C5:54': 'TP-Link',
+    'C0:4A:00': 'TP-Link',
+    'D8:47:32': 'Apple',
+    'E8:94:F6': 'TP-Link',
+    'F8:1A:67': 'TP-Link'
+};
+
+function getManufacturer(bssid) {
+    if (!bssid || bssid === 'N/A') return 'Unknown';
+    const prefix = bssid.toUpperCase().split(':').slice(0, 3).join(':');
+    return manufacturers[prefix] || 'Generic/Other';
+}
+
+/**
+ * Wireless Auditing Logic (Phase 8)
+ * Using native system tools only (no external tool installation required).
+ */
+
+
+export async function getWifiStatus() {
+    if (platform === 'darwin') {
+        try {
+            // Dual-source: ipconfig for BSSID/SSID, system_profiler for Signal/Channel
+            const [ipOut, spOut] = await Promise.all([
+                execAsync('ipconfig getsummary en0').then(res => res.stdout).catch(() => ''),
+                execAsync('system_profiler SPAirPortDataType').then(res => res.stdout).catch(() => '')
+            ]);
+
+            let ssid = 'Disconnected', bssid = 'N/A', rssi = 'N/A', channel = 'N/A';
+
+            // 1. Parse ipconfig for SSID and BSSID
+            if (ipOut.includes('BSSID') && !ipOut.includes('not associated')) {
+                const bssidMatch = ipOut.match(/BSSID\s+:\s+(.*)/);
+                if (bssidMatch) bssid = bssidMatch[1].trim();
+                const ssidMatch = ipOut.match(/SSID\s+:\s+(.*)/);
+                if (ssidMatch) ssid = ssidMatch[1].trim();
+            }
+
+            // If ipconfig says we are disconnected, treat as disconnected
+            if (ssid === 'Disconnected' || bssid === 'N/A') {
+                return { ssid: 'Disconnected', bssid: 'N/A', rssi: 'N/A', channel: 'N/A', manufacturer: 'Unknown' };
+            }
+
+            // 2. Parse system_profiler for Signal and Channel 
+            const lines = spOut.split('\n');
+            let inCurrentNetwork = false;
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (line.includes('Current Network Information:')) inCurrentNetwork = true;
+                if (inCurrentNetwork) {
+                    if (line.startsWith('Signal / Noise:')) rssi = line.split(': ')[1].split(' / ')[0];
+                    if (line.startsWith('Channel:')) channel = line.split(': ')[1];
+                    // Exit section on next main header
+                    if (line === '' && i > 0 && lines[i - 1].trim() !== '') inCurrentNetwork = false;
+                }
+            }
+
+            return { ssid, bssid, rssi, channel, manufacturer: getManufacturer(bssid) };
+        } catch (e) { return null; }
+    } else if (platform === 'win32') {
+        try {
+            const { stdout } = await execAsync('netsh wlan show interfaces');
+            const ssidMatch = stdout.match(/ SSID\s+: (.*)/);
+            const bssidMatch = stdout.match(/ BSSID\s+: (.*)/);
+            const signalMatch = stdout.match(/ Signal\s+: (.*)%/);
+            const channelMatch = stdout.match(/ Channel\s+: (.*)/);
+            const bssid = bssidMatch ? bssidMatch[1].trim() : 'N/A';
+            return {
+                ssid: ssidMatch ? ssidMatch[1].trim() : 'Disconnected',
+                bssid: bssid,
+                rssi: signalMatch ? `${signalMatch[1].trim()}%` : 'N/A',
+                channel: channelMatch ? channelMatch[1].trim() : 'N/A',
+                manufacturer: getManufacturer(bssid)
+            };
+        } catch (e) { return null; }
+    } else {
+        // Linux
+        try {
+            const { stdout } = await execAsync('nmcli -t -f active,ssid,bssid,signal,chan dev wifi');
+            const lines = stdout.split('\n');
+            const activeLine = lines.find(l => l.startsWith('yes'));
+            if (!activeLine) return { ssid: 'Disconnected', bssid: 'N/A', rssi: 'N/A', channel: 'N/A', manufacturer: 'Unknown' };
+            const parts = activeLine.split(':');
+            const bssid = parts[2] + ':' + parts[3] + ':' + parts[4] + ':' + parts[5] + ':' + parts[6] + ':' + parts[7];
+            return {
+                ssid: parts[1],
+                bssid: bssid,
+                rssi: parts[8],
+                channel: parts[9],
+                manufacturer: getManufacturer(bssid)
+            };
+        } catch (e) { return null; }
+    }
+}
+
+export async function scanWifiNetworks() {
+    if (platform === 'darwin') {
+        try {
+            // First attempt: airport utility (provides BSSIDs)
+            const airportCmd = '/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -s';
+            const { stdout } = await execAsync(airportCmd).catch(() => ({ stdout: '' }));
+
+            if (stdout.trim() && stdout.includes('SSID BSSID')) {
+                const lines = stdout.trim().split('\n').slice(1);
+                return lines.map(line => {
+                    const parts = line.trim().split(/\s+/);
+                    const bssid = parts[1];
+                    return { ssid: parts[0], bssid: bssid, rssi: parts[2], manufacturer: getManufacturer(bssid) };
+                });
+            }
+
+            // Fallback: system_profiler JSON (provides SSIDs even if airport fails/Location Services off)
+            const { stdout: jsonOut } = await execAsync('system_profiler -json SPAirPortDataType').catch(() => ({ stdout: '{}' }));
+            const data = JSON.parse(jsonOut);
+            const airPortData = data.SPAirPortDataType || [];
+            const networks = [];
+
+            airPortData.forEach(item => {
+                const interfaces = item.spairport_airport_interfaces || [];
+                interfaces.forEach(iface => {
+                    // Try both known field names for visible networks
+                    const visible = iface.spairport_airport_other_local_wireless_networks ||
+                        iface.spairport_visible_networks || [];
+                    visible.forEach(n => {
+                        networks.push({
+                            ssid: n._name || '<Hidden>',
+                            bssid: 'N/A', // Restricted by system_profiler
+                            rssi: n.spairport_signal_noise ? n.spairport_signal_noise.split(' / ')[0] : 'N/A',
+                            manufacturer: 'Unknown'
+                        });
+                    });
+                });
+            });
+
+            return networks;
+        } catch (e) { return []; }
+    } else if (platform === 'win32') {
+        // ... (existing win32 logic)
+        try {
+            const { stdout } = await execAsync('netsh wlan show networks mode=bssid');
+            const networks = [];
+            const blocks = stdout.split(/\r?\n\r?\n/);
+            blocks.forEach(block => {
+                const ssidMatch = block.match(/SSID \d+ : (.*)/);
+                const bssidMatches = block.match(/BSSID \d+ : (.*)/g);
+                if (ssidMatch && bssidMatches) {
+                    bssidMatches.forEach(b => {
+                        const bssid = b.split(': ')[1].trim();
+                        networks.push({
+                            ssid: ssidMatch[1].trim(),
+                            bssid: bssid,
+                            rssi: 'N/A',
+                            manufacturer: getManufacturer(bssid)
+                        });
+                    });
+                }
+            });
+            return networks;
+        } catch (e) { return []; }
+    } else {
+        // ... (existing linux logic)
+        try {
+            const { stdout } = await execAsync('nmcli -t -f ssid,bssid,signal dev wifi');
+            return stdout.trim().split('\n').map(l => {
+                const p = l.split(':');
+                const bssid = p[1] + ':' + p[2] + ':' + p[3] + ':' + p[4] + ':' + p[5] + ':' + p[6];
+                return {
+                    ssid: p[0],
+                    bssid: bssid,
+                    rssi: p[7],
+                    manufacturer: getManufacturer(bssid)
+                };
+            });
+        } catch (e) { return []; }
+    }
+}
+
+export async function attemptWifiReconnect(ssid) {
+    if (!ssid || ssid === 'Disconnected') return false;
+
+    try {
+        if (platform === 'darwin') {
+            await execAsync(`networksetup -setairportnetwork en0 "${ssid}"`);
+        } else if (platform === 'win32') {
+            await execAsync(`netsh wlan connect name="${ssid}"`);
+        } else {
+            await execAsync(`nmcli dev wifi connect "${ssid}"`);
+        }
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+

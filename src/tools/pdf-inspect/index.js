@@ -45,7 +45,12 @@ export default async function (program, toolName) {
                 if (req.url === '/' || req.url === '/index.html') {
                     // Serve the viewer HTML
                     const html = fs.readFileSync(viewerHtmlPath, 'utf-8');
-                    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                    res.writeHead(200, {
+                        'Content-Type': 'text/html; charset=utf-8',
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache',
+                        'Expires': '0'
+                    });
                     res.end(html);
                 } else if (req.url === '/pdf') {
                     // Serve the PDF file

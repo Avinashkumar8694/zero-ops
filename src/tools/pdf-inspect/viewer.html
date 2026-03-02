@@ -422,6 +422,56 @@
             opacity: 0.4;
             cursor: not-allowed;
         }
+
+        /* Crop Tool */
+        .crop-btn {
+            height: 28px;
+            padding: 0 12px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text);
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-family: 'Inter', system-ui, sans-serif;
+            font-size: 11px;
+            font-weight: 500;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+
+        .crop-btn:hover {
+            border-color: #f59e0b;
+            background: rgba(245, 158, 11, 0.1);
+            color: #f59e0b;
+        }
+
+        .crop-btn.active {
+            border-color: #f59e0b;
+            background: rgba(245, 158, 11, 0.15);
+            color: #f59e0b;
+            box-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
+        }
+
+        body.crop-mode .page-wrapper {
+            cursor: crosshair;
+        }
+
+        body.crop-mode .text-item,
+        body.crop-mode .img-item,
+        body.crop-mode .box-item {
+            pointer-events: none;
+        }
+
+        .crop-selection {
+            position: absolute;
+            border: 2px dashed #f59e0b;
+            background: rgba(245, 158, 11, 0.1);
+            pointer-events: none;
+            z-index: 1000;
+        }
     </style>
 </head>
 
@@ -435,6 +485,7 @@
                 <span class="zoom-level" id="zoomLevel">100%</span>
                 <button class="zoom-btn" id="zoomIn">+</button>
             </div>
+            <button class="crop-btn" id="cropBtn" title="Select a region to capture as an image">✂ Crop</button>
             <button class="download-btn" id="downloadBtn" disabled onclick="downloadHBS()">
                 ⬇ Download .hbs
             </button>
@@ -478,6 +529,8 @@
         let currentScale = 1.5;
         let pdfDoc = null;
         let lastCopyData = null;
+        const pageRefs = {};  // Store page refs for direct image extraction
+        const inlineImageCache = {};  // Store pre-extracted base64 for inline images
 
         const PT_TO_PX = 96 / 72; // only used for rendering scale, NOT for display values
 
@@ -505,10 +558,12 @@
 
         async function renderPage(pageNum) {
             const page = await pdfDoc.getPage(pageNum);
+            pageRefs[pageNum] = page; // Cache for image extraction
             const viewport = page.getViewport({ scale: currentScale });
 
             const wrapper = document.createElement('div');
             wrapper.className = 'page-wrapper';
+            wrapper.dataset.page = pageNum;
             wrapper.style.width = viewport.width + 'px';
             wrapper.style.height = viewport.height + 'px';
 
@@ -686,6 +741,19 @@
             let currentFillColor = '#000000';
             let lastRect = null;
 
+
+            // ═══ DIAGNOSTIC: Log all image-related ops in this page ═══
+            const opsReverseLookup = {};
+            for (const [name, code] of Object.entries(OPS)) opsReverseLookup[code] = name;
+            const imgOpsFound = {};
+            for (let di = 0; di < opList.fnArray.length; di++) {
+                const opName = opsReverseLookup[opList.fnArray[di]] || `unknown(${opList.fnArray[di]})`;
+                if (opName.toLowerCase().includes('paint') || opName.toLowerCase().includes('image')) {
+                    imgOpsFound[opName] = (imgOpsFound[opName] || 0) + 1;
+                }
+            }
+            console.log(`[PDF Inspector] Page ${pageNum} image-related ops:`, JSON.stringify(imgOpsFound));
+
             for (let i = 0; i < opList.fnArray.length; i++) {
                 const fn = opList.fnArray[i];
                 const args = opList.argsArray[i];
@@ -696,6 +764,12 @@
                     ctm = ctmStack.pop() || viewport.transform.slice();
                 } else if (fn === OPS.transform) {
                     ctm = multiplyMatrices(ctm, args);
+                } else if (fn === OPS.paintFormXObjectBegin) {
+                    // Form XObject — only track CTM (save + transform)
+                    ctmStack.push(ctm.slice());
+                    if (args[0]) ctm = multiplyMatrices(ctm, args[0]);
+                } else if (fn === OPS.paintFormXObjectEnd) {
+                    ctm = ctmStack.pop() || viewport.transform.slice();
                 } else if (fn === OPS.setFillRGBColor) {
                     currentFillColor = '#' + args.map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
                 } else if (fn === OPS.setFillGray) {
@@ -734,33 +808,58 @@
                         textLayer.appendChild(div);
                     }
                     lastRect = null;
-                } else if (fn === OPS.paintImageXObject || fn === OPS.paintJpegXObject) {
-                    const imgName = args[0];
+                } else if (fn === OPS.paintImageXObject || fn === OPS.paintJpegXObject ||
+                    fn === OPS.paintInlineImageXObject || fn === OPS.paintInlineImageXObjectGroup ||
+                    fn === OPS.paintImageMaskXObject) {
+
+                    // Determine image name and pixel dimensions based on operator type
+                    let imgName, pixelWidth = 0, pixelHeight = 0;
+                    let bitsPerComponent = 0, colorSpace = 'unknown';
+                    let formatLabel = 'Inline/PNG';
+                    let inlineData = null; // raw data for inline images
+
+                    if (fn === OPS.paintImageXObject || fn === OPS.paintJpegXObject) {
+                        // Named XObject — lookup from page.objs
+                        imgName = args[0];
+                        pixelWidth = args[1] || 0;
+                        pixelHeight = args[2] || 0;
+                        formatLabel = fn === OPS.paintJpegXObject ? 'JPEG' : 'XObject/PNG';
+
+                        try {
+                            const imgData = page.objs.get(imgName);
+                            if (imgData) {
+                                pixelWidth = imgData.width || pixelWidth;
+                                pixelHeight = imgData.height || pixelHeight;
+                                bitsPerComponent = imgData.bitsPerComponent || 8;
+                                if (imgData.data) {
+                                    const channels = imgData.data.length / (pixelWidth * pixelHeight);
+                                    colorSpace = channels >= 4 ? 'RGBA' : channels === 3 ? 'RGB' : channels === 1 ? 'Grayscale' : 'unknown';
+                                }
+                            }
+                        } catch (e) { console.warn(`[PDF Inspector] Could not get obj for ${imgName}:`, e.message); }
+
+                    } else {
+                        // Inline image or image mask — data is in args directly
+                        inlineData = args[0];
+                        if (inlineData) {
+                            pixelWidth = inlineData.width || 0;
+                            pixelHeight = inlineData.height || 0;
+                            bitsPerComponent = inlineData.bitsPerComponent || 8;
+                            if (inlineData.data && pixelWidth > 0 && pixelHeight > 0) {
+                                const channels = inlineData.data.length / (pixelWidth * pixelHeight);
+                                colorSpace = channels >= 4 ? 'RGBA' : channels === 3 ? 'RGB' : channels === 1 ? 'Grayscale' : 'unknown';
+                            }
+                        }
+                        formatLabel = fn === OPS.paintImageMaskXObject ? 'Mask' : 'Inline';
+                        // Generate synthetic name for inline images
+                        imgName = `__inline_p${pageNum}_${i}`;
+                    }
 
                     // De-duplication guard: track (imgName, tx, ty)
-                    // We use the CTM translated positions for absolute uniqueness tracking
                     const p0_raw = transformPoint(ctm, 0, 0);
                     const imgKey = `${imgName}|${p0_raw[0].toFixed(2)}|${p0_raw[1].toFixed(2)}`;
                     if (seenImageItems.has(imgKey)) continue;
                     seenImageItems.add(imgKey);
-
-                    let pixelWidth = args[1] || 0;
-                    let pixelHeight = args[2] || 0;
-                    let bitsPerComponent = 0;
-                    let colorSpace = 'unknown';
-
-                    try {
-                        const imgData = page.objs.get(imgName);
-                        if (imgData) {
-                            pixelWidth = imgData.width || pixelWidth;
-                            pixelHeight = imgData.height || pixelHeight;
-                            bitsPerComponent = imgData.bitsPerComponent || 8;
-                            if (imgData.data) {
-                                const channels = imgData.data.length / (pixelWidth * pixelHeight);
-                                colorSpace = channels >= 4 ? 'RGBA' : channels === 3 ? 'RGB' : channels === 1 ? 'Grayscale' : 'unknown';
-                            }
-                        }
-                    } catch (e) { /* ignore */ }
 
                     const p0 = transformPoint(ctm, 0, 0);
                     const p1 = transformPoint(ctm, 1, 0);
@@ -774,10 +873,49 @@
 
                     const drawW = maxX - minX;
                     const drawH = maxY - minY;
-                    if (drawW < 5 || drawH < 5) continue;
+                    if (drawW < 2 || drawH < 2) continue; // relaxed from 5 to 2
 
                     const renderedWPt = drawW / currentScale;
                     const renderedHPt = drawH / currentScale;
+
+                    // Pre-extract inline image data to base64 cache
+                    if (inlineData && inlineData.data && pixelWidth > 0 && pixelHeight > 0) {
+                        try {
+                            const tmpCanvas = document.createElement('canvas');
+                            tmpCanvas.width = pixelWidth;
+                            tmpCanvas.height = pixelHeight;
+                            const tmpCtx = tmpCanvas.getContext('2d');
+                            const pixelCount = pixelWidth * pixelHeight;
+                            const channels = inlineData.data.length / pixelCount;
+                            let rgba;
+                            if (channels >= 4) {
+                                rgba = new Uint8ClampedArray(inlineData.data);
+                            } else if (channels >= 3) {
+                                rgba = new Uint8ClampedArray(pixelCount * 4);
+                                for (let j = 0; j < pixelCount; j++) {
+                                    rgba[j * 4] = inlineData.data[j * 3];
+                                    rgba[j * 4 + 1] = inlineData.data[j * 3 + 1];
+                                    rgba[j * 4 + 2] = inlineData.data[j * 3 + 2];
+                                    rgba[j * 4 + 3] = 255;
+                                }
+                            } else if (channels >= 1) {
+                                rgba = new Uint8ClampedArray(pixelCount * 4);
+                                for (let j = 0; j < pixelCount; j++) {
+                                    rgba[j * 4] = inlineData.data[j];
+                                    rgba[j * 4 + 1] = inlineData.data[j];
+                                    rgba[j * 4 + 2] = inlineData.data[j];
+                                    rgba[j * 4 + 3] = 255;
+                                }
+                            }
+                            if (rgba) {
+                                const imgDataObj = new ImageData(rgba, pixelWidth, pixelHeight);
+                                tmpCtx.putImageData(imgDataObj, 0, 0);
+                                inlineImageCache[imgName] = tmpCanvas.toDataURL('image/png');
+                            }
+                        } catch (e) {
+                            console.warn(`[PDF Inspector] Failed to pre-cache inline image ${imgName}:`, e.message);
+                        }
+                    }
 
                     const div = document.createElement('div');
                     div.className = 'img-item';
@@ -799,7 +937,7 @@
                     div.dataset.aspectRatio = pixelWidth > 0 && pixelHeight > 0 ? (pixelWidth / pixelHeight).toFixed(3) : 'N/A';
                     div.dataset.colorSpace = colorSpace;
                     div.dataset.bitsPerComponent = bitsPerComponent;
-                    div.dataset.format = fn === OPS.paintJpegXObject ? 'JPEG' : 'Inline/PNG';
+                    div.dataset.format = formatLabel;
                     div.dataset.page = pageNum;
 
                     div.addEventListener('mouseenter', showInspector);
@@ -810,6 +948,8 @@
                     textLayer.appendChild(div);
                 }
             }
+
+            console.log(`[PDF Inspector] Page ${pageNum}: detected ${seenImageItems.size} image elements`);
 
             pdfContainer.appendChild(wrapper);
         }
@@ -886,6 +1026,94 @@
 
         function getRotation(matrix) {
             return Math.atan2(matrix[1], matrix[0]) * (180 / Math.PI);
+        }
+
+        // ═══ Extract image base64 from PDF.js page objects (primary) or canvas crop (fallback) ═══
+        function extractImageBase64(pageNum, imgName, fallbackCanvas, ix, iy, iw, ih) {
+            // Check inline image cache first (for paintInlineImageXObject / paintImageMaskXObject)
+            if (inlineImageCache[imgName]) {
+                return inlineImageCache[imgName];
+            }
+
+            // Primary: extract from PDF.js page objects (full resolution, scale-independent)
+            try {
+                const page = pageRefs[pageNum];
+                if (page) {
+                    const imgData = page.objs.get(imgName);
+                    if (imgData) {
+                        const w = imgData.width;
+                        const h = imgData.height;
+                        if (w && h && imgData.data) {
+                            const tmpCanvas = document.createElement('canvas');
+                            tmpCanvas.width = w;
+                            tmpCanvas.height = h;
+                            const tmpCtx = tmpCanvas.getContext('2d');
+
+                            const pixelCount = w * h;
+                            const channels = imgData.data.length / pixelCount;
+                            let rgba;
+
+                            if (channels >= 4) {
+                                // RGBA data — use directly
+                                rgba = new Uint8ClampedArray(imgData.data);
+                            } else if (channels >= 3) {
+                                // RGB → RGBA
+                                rgba = new Uint8ClampedArray(pixelCount * 4);
+                                for (let i = 0; i < pixelCount; i++) {
+                                    rgba[i * 4] = imgData.data[i * 3];
+                                    rgba[i * 4 + 1] = imgData.data[i * 3 + 1];
+                                    rgba[i * 4 + 2] = imgData.data[i * 3 + 2];
+                                    rgba[i * 4 + 3] = 255;
+                                }
+                            } else if (channels >= 1) {
+                                // Grayscale → RGBA
+                                rgba = new Uint8ClampedArray(pixelCount * 4);
+                                for (let i = 0; i < pixelCount; i++) {
+                                    rgba[i * 4] = imgData.data[i];
+                                    rgba[i * 4 + 1] = imgData.data[i];
+                                    rgba[i * 4 + 2] = imgData.data[i];
+                                    rgba[i * 4 + 3] = 255;
+                                }
+                            }
+
+                            if (rgba) {
+                                const imageDataObj = new ImageData(rgba, w, h);
+                                tmpCtx.putImageData(imageDataObj, 0, 0);
+                                return tmpCanvas.toDataURL('image/png');
+                            }
+                        }
+
+                        // Handle HTMLImageElement or ImageBitmap (JPEG objects in some PDF.js versions)
+                        if (imgData instanceof HTMLImageElement || imgData instanceof ImageBitmap) {
+                            const tmpCanvas = document.createElement('canvas');
+                            tmpCanvas.width = imgData.width || imgData.naturalWidth;
+                            tmpCanvas.height = imgData.height || imgData.naturalHeight;
+                            const tmpCtx = tmpCanvas.getContext('2d');
+                            tmpCtx.drawImage(imgData, 0, 0);
+                            return tmpCanvas.toDataURL('image/png');
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn(`[PDF Inspector] page.objs extraction failed for "${imgName}" on page ${pageNum}:`, e.message);
+            }
+
+            // Fallback: canvas region cropping (original method)
+            if (fallbackCanvas) {
+                try {
+                    const tmpCanvas = document.createElement('canvas');
+                    tmpCanvas.width = Math.max(1, Math.round(iw));
+                    tmpCanvas.height = Math.max(1, Math.round(ih));
+                    const tmpCtx = tmpCanvas.getContext('2d');
+                    tmpCtx.drawImage(fallbackCanvas, ix, iy, iw, ih, 0, 0, tmpCanvas.width, tmpCanvas.height);
+                    return tmpCanvas.toDataURL('image/png');
+                } catch (e) {
+                    console.warn(`[PDF Inspector] Canvas fallback failed for "${imgName}":`, e.message);
+                }
+            }
+
+            console.warn(`[PDF Inspector] Could not extract image "${imgName}" on page ${pageNum} by any method`);
+            return '';
         }
 
         // ═══ Inspector ═══
@@ -983,23 +1211,14 @@
                 const imgCss = generateImageCSS(d);
                 html += `<div class="css-snippet">${escapeHtml(imgCss)}</div>`;
 
-                // Calculate base64 on the fly for copying
-                let base64 = '';
-                try {
-                    const pageWrapper = el.closest('.page-wrapper');
-                    const canvas = pageWrapper.querySelector('canvas');
-                    const ix = parseFloat(el.style.left);
-                    const iy = parseFloat(el.style.top);
-                    const iw = parseFloat(el.style.width);
-                    const ih = parseFloat(el.style.height);
-
-                    const tmpCanvas = document.createElement('canvas');
-                    tmpCanvas.width = Math.max(1, Math.round(iw));
-                    tmpCanvas.height = Math.max(1, Math.round(ih));
-                    const tmpCtx = tmpCanvas.getContext('2d');
-                    tmpCtx.drawImage(canvas, ix, iy, iw, ih, 0, 0, tmpCanvas.width, tmpCanvas.height);
-                    base64 = tmpCanvas.toDataURL('image/png');
-                } catch (e) { }
+                // Extract image via PDF.js page objects (primary) or canvas crop (fallback)
+                const pageWrapper = el.closest('.page-wrapper');
+                const fallbackCanvas = pageWrapper ? pageWrapper.querySelector('canvas') : null;
+                const ix = parseFloat(el.style.left);
+                const iy = parseFloat(el.style.top);
+                const iw = parseFloat(el.style.width);
+                const ih = parseFloat(el.style.height);
+                const base64 = extractImageBase64(parseInt(d.page), d.imgName, fallbackCanvas, ix, iy, iw, ih);
 
                 copyObj = {
                     type: 'image',
@@ -1081,7 +1300,7 @@
         }
 
         // ═══ Click to Copy ═══
-                function copyProperties(e) {
+        function copyProperties(e) {
             e.preventDefault();
             if (!lastCopyData || !lastCopyData.content) return;
 
@@ -1171,7 +1390,151 @@
             renderAllPages();
         });
 
-        // \u2550\u2550\u2550 Download as .hbs \u2550\u2550\u2550
+        // ═══ Crop Tool ═══
+        let cropMode = false;
+        let cropState = null; // { wrapper, canvas, textLayer, startX, startY, selDiv }
+        const cropBtn = document.getElementById('cropBtn');
+        let cropCounter = 0;
+
+        cropBtn.addEventListener('click', () => {
+            cropMode = !cropMode;
+            cropBtn.classList.toggle('active', cropMode);
+            document.body.classList.toggle('crop-mode', cropMode);
+        });
+
+        document.getElementById('pdfContainer').addEventListener('mousedown', (e) => {
+            if (!cropMode) return;
+            const wrapper = e.target.closest('.page-wrapper');
+            if (!wrapper) return;
+            const canvas = wrapper.querySelector('canvas');
+            const textLayer = wrapper.querySelector('.text-layer');
+            if (!canvas || !textLayer) return;
+
+            const rect = wrapper.getBoundingClientRect();
+            const startX = e.clientX - rect.left + wrapper.scrollLeft;
+            const startY = e.clientY - rect.top + wrapper.scrollTop;
+
+            const selDiv = document.createElement('div');
+            selDiv.className = 'crop-selection';
+            selDiv.style.left = startX + 'px';
+            selDiv.style.top = startY + 'px';
+            selDiv.style.width = '0px';
+            selDiv.style.height = '0px';
+            wrapper.appendChild(selDiv);
+
+            cropState = { wrapper, canvas, textLayer, startX, startY, selDiv, rect };
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!cropState) return;
+            const { wrapper, startX, startY, selDiv, rect } = cropState;
+            const curX = e.clientX - rect.left + wrapper.scrollLeft;
+            const curY = e.clientY - rect.top + wrapper.scrollTop;
+
+            const x = Math.min(startX, curX);
+            const y = Math.min(startY, curY);
+            const w = Math.abs(curX - startX);
+            const h = Math.abs(curY - startY);
+
+            selDiv.style.left = x + 'px';
+            selDiv.style.top = y + 'px';
+            selDiv.style.width = w + 'px';
+            selDiv.style.height = h + 'px';
+        });
+
+        document.addEventListener('mouseup', (e) => {
+            if (!cropState) return;
+            const { wrapper, canvas, textLayer, startX, startY, selDiv, rect } = cropState;
+            const endX = e.clientX - rect.left + wrapper.scrollLeft;
+            const endY = e.clientY - rect.top + wrapper.scrollTop;
+            cropState = null;
+
+            // Remove selection rectangle
+            selDiv.remove();
+
+            const x = Math.min(startX, endX);
+            const y = Math.min(startY, endY);
+            const w = Math.abs(endX - startX);
+            const h = Math.abs(endY - startY);
+
+            if (w < 5 || h < 5) return; // Too small, ignore
+
+            // Find page number from wrapper
+            const pageNum = parseInt(wrapper.dataset.page || '1');
+
+            // Crop from canvas
+            const cropName = `__crop_p${pageNum}_${++cropCounter}`;
+            try {
+                const tmpCanvas = document.createElement('canvas');
+                tmpCanvas.width = Math.round(w);
+                tmpCanvas.height = Math.round(h);
+                const tmpCtx = tmpCanvas.getContext('2d');
+                tmpCtx.drawImage(canvas, x, y, w, h, 0, 0, tmpCanvas.width, tmpCanvas.height);
+                inlineImageCache[cropName] = tmpCanvas.toDataURL('image/png');
+            } catch (err) {
+                console.warn('[PDF Inspector] Crop failed:', err.message);
+                return;
+            }
+
+            const renderedWPt = w / currentScale;
+            const renderedHPt = h / currentScale;
+
+            // Create inspectable overlay div
+            const div = document.createElement('div');
+            div.className = 'img-item';
+            div.style.left = x + 'px';
+            div.style.top = y + 'px';
+            div.style.width = w + 'px';
+            div.style.height = h + 'px';
+            div.style.borderColor = '#f59e0b'; // amber border for cropped items
+
+            div.dataset.type = 'image';
+            div.dataset.imgName = cropName;
+            div.dataset.pixelWidth = Math.round(w);
+            div.dataset.pixelHeight = Math.round(h);
+            div.dataset.renderedWidthPt = renderedWPt.toFixed(2);
+            div.dataset.renderedHeightPt = renderedHPt.toFixed(2);
+            div.dataset.left = (x / currentScale).toFixed(2);
+            div.dataset.top = (y / currentScale).toFixed(2);
+            div.dataset.dpiX = 'N/A';
+            div.dataset.dpiY = 'N/A';
+            div.dataset.aspectRatio = (w / h).toFixed(3);
+            div.dataset.colorSpace = 'Cropped';
+            div.dataset.bitsPerComponent = 'N/A';
+            div.dataset.format = 'Crop (User Selection)';
+            div.dataset.page = pageNum;
+
+            div.addEventListener('mouseenter', showInspector);
+            div.addEventListener('mouseleave', hideInspector);
+            div.addEventListener('mousemove', moveInspector);
+            div.addEventListener('click', (e) => {
+                e.preventDefault();
+                const b64 = inlineImageCache[cropName];
+                if (!b64) { showToast('Crop data not found'); return; }
+                navigator.clipboard.writeText(b64).then(() => showToast('Copied cropped image data')).catch(() => {
+                    const ta = document.createElement('textarea');
+                    ta.value = b64;
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    showToast('Copied cropped image data');
+                });
+            });
+
+            textLayer.appendChild(div);
+
+            // Exit crop mode after successful crop
+            cropMode = false;
+            cropBtn.classList.remove('active');
+            document.body.classList.remove('crop-mode');
+
+            // Show toast
+            showToast('Region captured! Hover to inspect, click to copy base64.');
+        });
+
+        // ═══ Download as .hbs ═══
         async function downloadHBS() {
             const btn = document.getElementById('downloadBtn');
             btn.disabled = true;
@@ -1229,28 +1592,23 @@
                         elementsHtml += `    <div style="${styles}"></div>\n`;
                     });
 
-                    // 2. Export Images
-                    imgItemEls.forEach(el => {
+                    // 2. Export Images (via PDF.js page objects for full-resolution, scale-independent extraction)
+                    const pageNum = p + 1; // pages are 1-indexed
+                    for (const el of imgItemEls) {
                         const d = el.dataset;
                         const ix = parseFloat(el.style.left);
                         const iy = parseFloat(el.style.top);
                         const iw = parseFloat(el.style.width);
                         const ih = parseFloat(el.style.height);
 
-                        let imgSrc = '';
-                        try {
-                            const tmpCanvas = document.createElement('canvas');
-                            tmpCanvas.width = Math.max(1, Math.round(iw));
-                            tmpCanvas.height = Math.max(1, Math.round(ih));
-                            const tmpCtx = tmpCanvas.getContext('2d');
-                            tmpCtx.drawImage(canvas, ix, iy, iw, ih, 0, 0, tmpCanvas.width, tmpCanvas.height);
-                            imgSrc = tmpCanvas.toDataURL('image/png');
-                        } catch (e) { }
+                        const imgSrc = extractImageBase64(parseInt(d.page || pageNum), d.imgName, canvas, ix, iy, iw, ih);
 
                         if (imgSrc) {
                             elementsHtml += `    <img src="${imgSrc}" style="position: absolute; left: ${d.left}px; top: ${d.top}px; width: ${d.renderedWidthPt}px; height: ${d.renderedHeightPt}px;" />\n`;
+                        } else {
+                            console.warn(`[PDF Inspector HBS] Skipped image "${d.imgName}" on page ${d.page} — extraction returned empty`);
                         }
-                    });
+                    }
 
                     // 3. Horizontal Text Grouping (Line Reconstruction)
                     const items = textItemEls.map(el => ({

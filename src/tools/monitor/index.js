@@ -3,7 +3,7 @@ import path from 'path';
 import os from 'os';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
-import { getConnections, detectReverseShells, getListeners, sendTelegramAlert, getProcessDetails, killProcess, saveBaseline, addToIgnore } from './scanner.js';
+import { getConnections, detectReverseShells, getListeners, sendTelegramAlert, getProcessDetails, killProcess, saveBaseline, addToIgnore, getWifiStatus, scanWifiNetworks } from './scanner.js';
 import { loadConfig } from '../../utils/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -107,24 +107,34 @@ export default function (program, toolName) {
         .command('snapshot')
         .description('Generate a high-level security health report summarizing connections, listeners, and suspicious activity.')
         .action(async () => {
-            const config = loadConfig();
-            const baseline = new Set(config['monitor']?.baseline || []);
-
             process.stdout.write('\n📊 Compiling System Security Snapshot...\n');
-            const [conns, shells, listeners] = await Promise.all([
+            const [conns, shells, listeners, wifi] = await Promise.all([
                 getConnections(),
                 detectReverseShells(),
-                getListeners()
+                getListeners(),
+                getWifiStatus()
             ]);
 
+            const config = loadConfig();
+            const baseline = new Set(config['monitor']?.baseline || []);
             const newConns = conns.filter(c => baseline.size > 0 && !baseline.has(c.name));
 
             console.log('-'.repeat(45));
+            console.log(`\x1b[1m[ Network Guard ]\x1b[0m`);
             console.log(`Total Active Connections: ${conns.length}`);
             console.log(`Anomalous (New) Conns:    ${newConns.length === 0 ? '0' : '\x1b[31m' + newConns.length + '\x1b[0m'}`);
             console.log(`Potential Threat Shells:  ${shells.length === 0 ? '\x1b[32m0 (Clean)\x1b[0m' : '\x1b[31m' + shells.length + ' (Detected!)\x1b[0m'}`);
             console.log(`Total Listening Ports:    ${listeners.length}`);
             console.log(`Publicly Exposed Ports:   ${listeners.filter(l => l.isPublic).length}`);
+
+            console.log(`\n\x1b[1m[ Wireless Guard ]\x1b[0m`);
+            if (wifi && wifi.ssid !== 'Disconnected') {
+                console.log(`SSID:    ${wifi.ssid}`);
+                console.log(`BSSID:   ${wifi.bssid}`);
+                console.log(`Signal:  ${wifi.rssi}`);
+            } else {
+                console.log(`Status:  Disconnected/Disabled`);
+            }
             console.log('-'.repeat(45));
 
             if (shells.length > 0) {
@@ -311,6 +321,193 @@ export default function (program, toolName) {
             spawn(cmd, args, { stdio: 'inherit' });
         });
 
+    const wifi = program.command('wifi')
+        .description('[PRO] Wireless security suite (Audit, List, Watch, Diagnostic)');
+
+    const getSignalColor = (rssi) => {
+        const val = parseInt(rssi);
+        if (isNaN(val)) return '\x1b[0m'; // Reset
+        if (val >= -55) return '\x1b[32m'; // Green (Strong)
+        if (val >= -75) return '\x1b[33m'; // Yellow (Moderate)
+        return '\x1b[31m'; // Red (Weak)
+    };
+
+    const printWifiTable = (networks, currentStatus) => {
+        console.log('-'.repeat(100));
+        console.log(`${'SSID'.padEnd(25)} ${'BSSID'.padEnd(20)} ${'Signal'.padEnd(10)} ${'Manufacturer'.padEnd(20)} ${'Status'}`);
+        console.log('-'.repeat(100));
+
+        let connectedFlag = false;
+        networks.sort((a, b) => {
+            const valA = parseInt(a.rssi) || -100;
+            const valB = parseInt(b.rssi) || -100;
+            return valB - valA;
+        }).forEach(n => {
+            // macOS BSSID Patching: If BSSID is restricted but matches current SSID, 
+            // we patch ONLY the strongest match to prevent mesh-network confusion.
+            let displayBssid = n.bssid;
+            const isMatch = currentStatus && n.ssid === currentStatus.ssid;
+
+            let isCurrent = false;
+
+            // 1. Precise Match Check & Redaction Detection
+            const isRedacted = displayBssid === 'N/A' || displayBssid.includes('redacted') || displayBssid === '00:00:00:00:00:00';
+            const statusRedacted = !currentStatus || currentStatus.bssid === 'N/A' || currentStatus.bssid.includes('redacted') || currentStatus.bssid === '00:00:00:00:00:00';
+
+            if (!connectedFlag && !isRedacted && !statusRedacted && displayBssid === currentStatus.bssid) {
+                isCurrent = true;
+                connectedFlag = true;
+            }
+            // 2. Fallback: Patching for the active SSID (Strongest match only)
+            else if (!connectedFlag && currentStatus && n.ssid === currentStatus.ssid) {
+                if (!statusRedacted) displayBssid = currentStatus.bssid;
+                isCurrent = true;
+                connectedFlag = true;
+            }
+
+            const isClone = !isCurrent && currentStatus && n.ssid === currentStatus.ssid &&
+                !isRedacted && !statusRedacted &&
+                displayBssid !== currentStatus.bssid ? '\x1b[31m[CLONE]\x1b[0m' : '';
+
+            const color = getSignalColor(n.rssi);
+            const label = (isCurrent ? '\x1b[32m[CONNECTED]\x1b[0m' : '') || isClone || '';
+            const manufacturer = (n.manufacturer || 'Unknown').substring(0, 18);
+
+            process.stdout.write(`${(n.ssid || '<Hidden>').substring(0, 23).padEnd(25)} `);
+            process.stdout.write(`${displayBssid.padEnd(20)} `);
+            process.stdout.write(`${color}${n.rssi.padEnd(10)}\x1b[0m `);
+            process.stdout.write(`${manufacturer.padEnd(20)} `);
+            process.stdout.write(`${label}\n`);
+        });
+        console.log('-'.repeat(100));
+    };
+
+    wifi.command('list')
+        .description('Discover all nearby Wi-Fi networks with manufacturer identification.')
+        .action(async () => {
+            process.stdout.write('\n🔍 Scanning for all nearby wireless access points...\n');
+            const nearby = await scanWifiNetworks();
+            const status = await getWifiStatus();
+
+            if (nearby.length === 0) {
+                console.log('No networks found. Ensure Wi-Fi is enabled and permissions are granted.');
+                return;
+            }
+
+            console.log('\nWireless Environment Map:');
+            printWifiTable(nearby, status);
+
+            if (nearby.some(n => n.bssid === 'N/A')) {
+                console.log('\n[Tip] BSSIDs are hidden? MacOS requires "Location Services" enabled for Terminal.');
+            }
+            console.log('');
+        });
+
+    wifi.command('watch')
+        .description('Live-updating dashboard for wireless signal monitoring.')
+        .action(async () => {
+            console.log('\n🚀 Starting Live Wireless Guard Dashboard... (Ctrl+C to exit)');
+
+            const run = async () => {
+                const status = await getWifiStatus();
+                const nearby = await scanWifiNetworks();
+
+                // Clear screen (ANSI escape)
+                process.stdout.write('\x1Bc');
+                console.log('\x1b[1m🛰  Wireless Security Dashboard (Live)\x1b[0m');
+                console.log(`Last Updated: ${new Date().toLocaleTimeString()}`);
+
+                if (status && status.ssid !== 'Disconnected') {
+                    const color = getSignalColor(status.rssi);
+                    console.log(`\nConnected to: \x1b[32m${status.ssid}\x1b[0m [${status.bssid}]`);
+                    console.log(`Signal: ${color}${status.rssi}\x1b[0m | Channel: ${status.channel} | Vendor: ${status.manufacturer}`);
+                } else {
+                    console.log('\nStatus: \x1b[31mDisconnected\x1b[0m');
+                }
+
+                console.log('\nNearby Networks:');
+                printWifiTable(nearby, status);
+                console.log('\n[Tip] Monitor for [CLONE] tags to identify potential Evil Twin attacks.');
+            };
+
+            await run();
+            const interval = setInterval(run, 5000);
+
+            process.on('SIGINT', () => {
+                clearInterval(interval);
+                process.exit();
+            });
+        });
+
+    wifi.command('diagnostic')
+        .description('Run a Wi-Fi diagnostic check to resolve BSSID / Permission issues on macOS.')
+        .action(async () => {
+            console.log('\n🩺 Running Wireless Diagnostic Suite...\n');
+            const status = await getWifiStatus();
+
+            console.log('1. Radio Check:');
+            if (status && status.ssid !== 'Disconnected') {
+                console.log('   ✅ Wi-Fi Radio is ON and associated.');
+            } else {
+                console.log('   ❌ Wi-Fi is either OFF or not connected.');
+            }
+
+            console.log('\n2. Permission Analysis (macOS):');
+            if (status && status.bssid !== 'N/A' && status.bssid !== '00:00:00:00:00:00') {
+                console.log('   ✅ Connected BSSID retrieved successfully.');
+            } else {
+                console.log('   ⚠️  BSSID is being MASKED by the OS.');
+                console.log('      Resolution: Enable "Networking & Wireless" in Location Services.');
+            }
+
+            console.log('\n3. Location Services Troubleshooting:');
+            console.log('   - Step A: Go to System Settings > Privacy & Security > Location Services.');
+            console.log('   - Step B: Click "Details..." next to System Services (at the bottom).');
+            console.log('   - Step C: Ensure "Networking & Wireless" is toggled ON.');
+            console.log('   - Step D: Ensure your Terminal app is allowed to use Location Services.');
+
+            console.log('\n4. Native UI Hint:');
+            console.log('   - Hold Option (Alt) and click the Wi-Fi icon in your menu bar.');
+            console.log('   - The "BSSID" listed there is what this tool needs to audit.');
+            console.log('');
+        });
+
+    wifi.command('audit')
+        .description('Perform a comprehensive wireless security audit (SSID clones, Signal stability).')
+        .action(async () => {
+            process.stdout.write('\n📡 Initializing Wireless Guard audit...\n');
+            const status = await getWifiStatus();
+
+            if (!status || status.ssid === 'Disconnected') {
+                console.log('Wi-Fi is currently disabled or not associated with a network.');
+                return;
+            }
+
+            console.log('\n--- Current Connection ---');
+            console.log(`${'SSID:'.padEnd(12)} ${status.ssid}`);
+            console.log(`${'BSSID:'.padEnd(12)} ${status.bssid}`);
+            console.log(`${'Signal:'.padEnd(12)} ${status.rssi}`);
+            console.log(`${'Channel:'.padEnd(12)} ${status.channel}`);
+
+            process.stdout.write('\n🔍 Scanning for "Evil Twin" clones and nearby interference...\n');
+            const nearby = await scanWifiNetworks();
+
+            const duplicates = nearby.filter(n => n.ssid === status.ssid && n.bssid !== status.bssid);
+
+            if (duplicates.length > 0) {
+                console.log('\n⚠️  SECURITY WARNING: EVIL TWIN DETECTED');
+                console.log(`Multiple access points found sharing the SSID: "${status.ssid}"`);
+                duplicates.forEach(d => {
+                    console.log(`[!] Alien BSSID: ${d.bssid} (Signal: ${d.rssi})`);
+                });
+                console.log('\nRemediation: Avoid connecting to this network if the Alien BSSID has a stronger signal than your trusted AP.');
+            } else {
+                console.log('\n✅ Signal check complete: No SSID clones or active jamming signatures detected in your immediate vicinity.');
+            }
+            console.log('');
+        });
+
+
     // Tool Help Text
     program.addHelpText('after', `
 Detailed Monitor tool examples:
@@ -326,11 +523,11 @@ Detailed Monitor tool examples:
   Run comprehensive security check:
     $ zero-ops monitor snapshot
 
-  Advanced Utilities (PRO):
-    $ zero-ops monitor inspect <PID>    # Deep process inspection
-    $ zero-ops monitor kill <PID>       # Active threat termination
-    $ zero-ops monitor baseline         # Mark current state as safe
-    $ zero-ops monitor ignore <name>    # Whitelist a process
+  Wireless Security (PRO):
+    $ zero-ops monitor wifi list       # List nearby SSIDs, BSSIDs, and Manufacturers
+    $ zero-ops monitor wifi watch      # Live wireless signal dashboard
+    $ zero-ops monitor wifi audit      # Scan for SSIDs and clones
+    $ zero-ops monitor wifi diagnostic # Resolve macOS permission issues
 
   Enable persistent background monitoring:
     $ zero-ops monitor start

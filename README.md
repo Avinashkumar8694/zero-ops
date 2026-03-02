@@ -132,6 +132,10 @@ A professional-grade security auditing and network monitoring suite built for `z
 | `ignore <proc>` | Whitelist trusted processes | Cleaning up logs by ignoring safe dev tools. |
 | `start` | Initialize background daemon | 24/7 autonomous monitoring. |
 | `logs` | Tail real-time security events | Monitoring the daemon's auditing loop. |
+| `wifi list` | Scan and identify nearby networks | Discover and profile local hardware (OUI). |
+| `wifi watch` | Real-time signal dashboard | Monitor fluctuations and RF environment health. |
+| `wifi audit` | SSID Clone (Evil Twin) detection | Detect malicious spoofs and signal interference. |
+| `wifi diagnostic`| Resolve permission/BSSID issues | Unlock full visibility on macOS (Location Services). |
 
 #### **Technical Deep-Dive**
 - **Heuristic Engine**:
@@ -245,6 +249,8 @@ You can send almost any `zero-ops` command to the bot. Here are the most useful 
 - `monitor snapshot`: Get a remote security health check report.
 - `monitor network`: List all active network connections.
 - `monitor reverse-shell`: Check for suspicious shell-to-socket correlations.
+- `monitor wifi list`: Identify all nearby hardware manufacturers (OUI).
+- `monitor wifi audit`: Remotely check for SSID clones/evil twins.
 - `monitor start`: Engage background monitoring daemon.
 - `monitor stop`: Disengage background monitoring daemon.
 - `monitor status`: Check if the monitor is currently heartbeat active.
