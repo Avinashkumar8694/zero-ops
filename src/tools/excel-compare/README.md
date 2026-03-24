@@ -53,14 +53,22 @@ Manage these via `zero-ops excel-compare config set <key> <value>`.
 | `openAiKey` | `null` | Your OpenAI secret key. |
 | `ollamaUrl` | `http://localhost:11434/api/generate` | The endpoint for your local LLM. |
 | `ollamaModel` | `llama3` | The targeted local model. |
-| `defaultPrimaryKey` | `null` | Automatically sets the text box in the UI so rows are aligned by this column (e.g. `USER_ID`) rather than their row index. |
+| `defaultPrimaryKey` | `null` | Maps rows by unique ID. Fallbacks to Heuristic Lookahead if left empty. |
+| `lookaheadDistance` | `50` | How many rows to scan ahead to automatically align added/deleted rows when no PK is used. |
+| `similarityThreshold` | `0.5` | Minimum match ratio (0.0 to 1.0) needed to treat misaligned rows as Modified instead of Deleted/Added. |
 | `ignoreCase` | `false` | If set to `true`, changes like "Active" vs "active" are ignored. |
 
 ## Feature Breakdown
 
-*   **Primary Key Matching**: Rows are aligned by their unique ID, so sorting or deleting a row halfway through the document won't break the comparison for the rest of the sheet.
+*   **Primary Key Matching**: Rows are aligned by their unique ID, perfectly isolating changes regardless of list sorting.
+*   **Heuristic Row Alignment (No PK Required)**: Uses a Sliding Window Lookahead and fuzzy similarity thresholds to automatically track inserted or deleted rows seamlessly. 
+*   **Synchronized Side-by-Side View**: A true dual-pane diff interface allowing locked vertical scrolling between two files.
+*   **Interactive Reconciliation**: 
+    *   Row-Level: Accept (`✅ Target`) or Reject (`❌ Base`) whole newly added or deleted rows directly from the application.
+    *   Cell-Level: Click on any modified cell to instantly pick between the `V1` payload or `V2` payload.
+*   **Merged Master Export**: Export a pristine, V3 workbook containing all of your interactive merge decisions.
+*   **AI Executive Summary**: Generates beautiful, perfectly formatted Markdown summaries explaining the exact differences using `marked.js` inside the UI.
 *   **Action Badges**: Diffs are labeled identically to Git:
     *   🟢 **+ New** (Added Rows/Sheets)
     *   🔴 **- Del** (Deleted Rows/Sheets)
     *   🟠 **~ Mod** (Specific Cells Modified)
-*   **Reconcilation Export**: The "Export Report" button generates a new Excel file containing **only the differences**, with explicit `[OLD] -> [NEW]` text markers.

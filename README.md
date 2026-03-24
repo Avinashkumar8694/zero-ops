@@ -198,12 +198,14 @@ zero-ops excel-compare
 ```
 
 **Key Features:**
-- **Primary-Key Aware Diff Engine**: Highlights exact rows added, removed, or modified, right down to the specific cell change (`[OLD] -> [NEW]`).
-- **Data Privacy**: All Excel processing happens completely locally in your browser using Web Workers and SheetJS.
+- **Intelligent Diff Engine**: Compares rows using strict Primary Keys, or automatically dynamically aligns misaligned rows using an advanced **Sliding Window Heuristic** and fuzzy cell similarity when no key is provided.
+- **Synchronized Side-by-Side View**: A dual-pane interface with locked horizontal/vertical scrolling to easily visually cross-reference Base (V1) and Target (V2) data.
+- **Interactive Merging**: Toggle cell-level or row-level `Accept / Reject` decisions to cherry-pick which data to keep directly from the UI, then export a fully merged V3 master document.
+- **Data Privacy**: All heavy parsing and diffing runs securely and locally inside your browser using Web Workers.
 - **Enterprise AI Insights**: 
-    - Configure to use **OpenAI** or completely private, local **Ollama** models.
-    - Generates natural-language business summaries of the exact financial or metric impact of changes.
-- **Export Ready**: Click "Export Report" to download a clean, color-coded `.xlsx` file summarizing only the differences.
+    - Configure to use **OpenAI** or private, local **Ollama** models.
+    - Automatically renders Executive Summaries in beautiful Markdown, detailing the exact financial or structural impact of data modifications.
+- **Export Ready**: Download actionable `.xlsx` diff sheets strictly highlighting deviations.
 
 **Configuration Setup:**
 ```bash
