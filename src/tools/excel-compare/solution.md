@@ -25,7 +25,19 @@ A comprehensive, visually premium tool to compare two Excel files (Base vs. Targ
 *   **Formula vs. Value Detection**: Distinguishes between a cell that contains a hardcoded value vs. a calculated formula. It highlights if a static value was replaced by a formula (or vice versa), and can show the actual formula difference (e.g., `=SUM(A1:A5)` vs `=SUM(A1:A6)`).
 *   **Visual/Styling Change Detection**: Flags changes in cell background colors, font weights (bolding), or borders, which is often critical in financial models or heavily formatted reports.
 *   **Smart Column Mapping**: If column headers changed names between versions (e.g., "Client ID" -> "Customer ID"), the tool allows users to manually map them so the data is still accurately compared without throwing false positives.
-*   **Interactive Reconciliation/Merging**: Instead of just viewing the diff, users can click on a changed row or cell and select "Keep Base" or "Keep Target". Once all conflicts are resolved, they can export a clean, merged "Master" file.
+
+### Interactive Reconciliation & Merge Resolution (New Feature Phase)
+A complete visual Git-style merge conflict resolution workflow for Excel data.
+*   **Row-Level Acceptance**:
+    *   **Accept Deleted Row**: If the Target file deleted a row, you can choose to **"Restore"** it from the Base file.
+    *   **Accept/Reject Added Row**: If the Target file added a new row, you can choose to **"Reject"** it, keeping it out of the final merge.
+*   **Column & Cell Level Acceptance**:
+    *   **Accept Updated Columns**: If a specific column (e.g., "Q3 Revenue") was updated across 50 rows, the UI provides a bulk "Accept Target Column" or "Revert to Base Column" action.
+    *   **Granular Cell Reversion**: Click on any amber modified cell `[Old_Value] -> [New_Value]` and specifically toggle whether to keep the Base value or take the Target value.
+*   **Merge Review UI**:
+    *   The Data Grid will feature interactive checkboxes or toggle switches (Base ↔ Target) on every highlighted row and cell.
+    *   A "Resolve All" bulk-action toolbar to instantly accept all Target changes or revert all changes to Base.
+    *   Once all conflicts are resolved, clicking **"Export Merged Master"** constructs and writes a flawless `.xlsx` file containing the precise mix of accepted variations.
 *   **Macro/VBA Detection**: Alerts the user if the underlying VBA macros or scripts have been modified or removed between the `.xlsm` files.
 *   **Duplicate Key Detection**: Analyzes the selected Primary Key and warns the user if duplicates exist in either file, preventing ambiguous comparisons.
 *   **Numeric Delta Summaries**: For numerical columns, automatically calculate the total variance (e.g., "Total Revenue changed by +$5,000 across 30 modified rows").

@@ -343,8 +343,22 @@
             background-color: var(--diff-modified);
             border: 1px solid var(--diff-modified-border);
             position: relative;
+            padding: 4px; /* Less padding to accommodate buttons */
         }
         
+        /* Interactive Merge Button Styles */
+        .btn-resolve { font-size:0.75rem; padding: 4px 8px; border-radius:4px; border:1px solid var(--border-color); background:rgba(255,255,255,0.05); color:var(--text-main); cursor:pointer; transition:0.2s; white-space: normal; }
+        .btn-resolve:hover { background:var(--border-color); }
+        .btn-resolve.accepted { background:var(--accent-blue); color:#fff; border-color:var(--accent-blue); }
+        .btn-resolve.rejected { background:#ef4444; color:#fff; border-color:#ef4444; }
+
+        .btn-cell-merge { display:block; width:100%; text-align:left; font-size:0.8rem; padding:4px; margin:2px 0; border:1px solid transparent; border-radius:4px; background:rgba(0,0,0,0.05); cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .dark-mode .btn-cell-merge { background:rgba(255,255,255,0.05); color:var(--text-main); }
+        .btn-cell-merge span { opacity:0.6; font-size:0.7rem; font-weight:600; margin-right:4px; }
+        .btn-cell-merge:hover { border-color:var(--border-color); }
+        .btn-cell-merge.active-base { background:rgba(239, 68, 68, 0.2); border-color:#ef4444; }
+        .btn-cell-merge.active-target { background:rgba(16, 185, 129, 0.2); border-color:#10b981; }
+
         .cell-old-val {
             font-size: 0.7rem;
             color: #ef4444;
@@ -479,7 +493,8 @@
                 <label style="display:flex;align-items:center;gap:8px;font-size:0.875rem;cursor:pointer;">
                     <input type="checkbox" id="chkShowOnlyDiff" /> Show Only Differences
                 </label>
-                <button class="btn" id="btnSummarize" style="margin-left:auto;border-color:#a78bfa;color:#a78bfa;">✨ AI Summary</button>
+                <button class="btn" id="btnExportMerge" style="margin-left:auto;border-color:#10b981;color:#10b981;font-weight:600;">⬇️ Export Merged Master</button>
+                <button class="btn" id="btnSummarize" style="border-color:#a78bfa;color:#a78bfa;display:none;">✨ AI Summary</button>
             </div>
 
             <!-- AI Summary Result -->
@@ -659,7 +674,10 @@
                     }
                 }
             }
-            if (hasData) rows.push(rowObj);
+            if (hasData) {
+                rowObj['__rowNum'] = R + 1;
+                rows.push(rowObj);
+            }
         }
         return rows;
     }
@@ -679,18 +697,22 @@
             const inTarget = targetSheets.includes(sheetName);
 
             if (inBase && !inTarget) {
-                results.push({ name: sheetName, status: 'removed', rows: [], headers: [] });
+                const data = extractSheetData(wbBase.Sheets[sheetName]);
+                const headers = getHeaders(data);
+                const rows = data.map(r => ({ status: 'removed', mergeState: 'rejected', data: r, diffs: {} }));
+                results.push({ name: sheetName, status: 'removed', rows, headers: headers.filter(h => h !== '__rowNum') });
             } else if (!inBase && inTarget) {
                 const data = extractSheetData(wbTarget.Sheets[sheetName]);
                 const headers = getHeaders(data);
-                const rows = data.map(r => ({ status: 'added', data: r, diffs: {} }));
-                results.push({ name: sheetName, status: 'added', rows, headers });
+                const rows = data.map(r => ({ status: 'added', mergeState: 'accepted', data: r, diffs: {} }));
+                results.push({ name: sheetName, status: 'added', rows, headers: headers.filter(h => h !== '__rowNum') });
             } else {
                 // Determine if identical or modified
                 const baseData = extractSheetData(wbBase.Sheets[sheetName]);
                 const targetData = extractSheetData(wbTarget.Sheets[sheetName]);
                 
                 const headers = new Set([...getHeaders(baseData), ...getHeaders(targetData)]);
+                headers.delete('__rowNum'); // Prevents row num column from showing as data diff
                 const { rows, isModified } = diffRows(baseData, targetData, pk, Array.from(headers), config);
                 
                 results.push({ 
@@ -804,7 +826,8 @@
                 const val = String(tRow[pk]);
                 seenKeys.add(val);
                 if (!baseMap.has(val)) {
-                    combinedRows.push({ status: 'added', data: tRow, diffs: {} });
+                    // Added row inside a modified sheet is kept by V2 default (accepted)
+                    combinedRows.push({ status: 'added', mergeState: 'accepted', data: tRow, diffs: {} });
                     isModified = true;
                 } else {
                     const bRow = baseMap.get(val);
@@ -814,13 +837,13 @@
                         const bVal = bRow[h] ?? "";
                         const tVal = tRow[h] ?? "";
                         if (!compareVals(bVal, tVal)) {
-                            // Track explicit change
-                            diffs[h] = { old: bVal, new: tVal };
+                            // Default to target value logic ('target')
+                            diffs[h] = { old: bVal, new: tVal, mergeState: 'target' };
                             rowMod = true;
                             isModified = true;
                         }
                     });
-                    combinedRows.push({ status: rowMod ? 'modified' : 'identical', data: tRow, diffs });
+                    combinedRows.push({ status: rowMod ? 'modified' : 'identical', data: tRow, baseRowNum: bRow.__rowNum, diffs });
                 }
             });
 
@@ -828,7 +851,8 @@
             baseData.forEach(bRow => {
                 const val = String(bRow[pk]);
                 if (!seenKeys.has(val)) {
-                    combinedRows.push({ status: 'removed', data: bRow, diffs: {} });
+                    // Removed rows default to strictly dropped (rejected V1, kept V2's deletion)
+                    combinedRows.push({ status: 'removed', mergeState: 'rejected', data: bRow, diffs: {} });
                     isModified = true;
                 }
             });
@@ -839,10 +863,10 @@
                 const bRow = baseData[i];
                 const tRow = targetData[i];
                 if (bRow && !tRow) {
-                    combinedRows.push({ status: 'removed', data: bRow, diffs: {} });
+                    combinedRows.push({ status: 'removed', mergeState: 'rejected', data: bRow, diffs: {} });
                     isModified = true;
                 } else if (!bRow && tRow) {
-                    combinedRows.push({ status: 'added', data: tRow, diffs: {} });
+                    combinedRows.push({ status: 'added', mergeState: 'accepted', data: tRow, diffs: {} });
                     isModified = true;
                 } else {
                     const diffs = {};
@@ -851,12 +875,12 @@
                         const bVal = bRow[h] ?? "";
                         const tVal = tRow[h] ?? "";
                         if (!compareVals(bVal, tVal)) {
-                            diffs[h] = { old: bVal, new: tVal };
+                            diffs[h] = { old: bVal, new: tVal, mergeState: 'target' };
                             rowMod = true;
                             isModified = true;
                         }
                     });
-                    combinedRows.push({ status: rowMod ? 'modified' : 'identical', data: tRow, diffs });
+                    combinedRows.push({ status: rowMod ? 'modified' : 'identical', data: tRow, baseRowNum: bRow.__rowNum, diffs });
                 }
             }
         }
@@ -915,10 +939,17 @@
         const theadTr = document.createElement('tr');
         
         const actionTh = document.createElement('th');
-        actionTh.textContent = 'Action';
-        actionTh.style.width = '60px';
+        actionTh.textContent = 'Merge Action';
+        actionTh.style.width = '120px';
         actionTh.style.textAlign = 'center';
         theadTr.appendChild(actionTh);
+
+        const rowNumTh = document.createElement('th');
+        rowNumTh.textContent = 'Excel #';
+        rowNumTh.style.width = '60px';
+        rowNumTh.style.textAlign = 'center';
+        rowNumTh.style.color = 'var(--text-muted)';
+        theadTr.appendChild(rowNumTh);
 
         headers.forEach(h => {
             const th = document.createElement('th');
@@ -941,23 +972,19 @@
 
             const actionTd = document.createElement('td');
             actionTd.style.textAlign = 'center';
+            actionTd.style.minWidth = '140px';
+            
             const copyBtn = document.createElement('button');
             copyBtn.textContent = '📋';
             copyBtn.title = 'Copy row to clipboard (Excel compatible)';
-            copyBtn.style.cssText = 'background:none; border:none; cursor:pointer; font-size:1.1rem; opacity:0.7; transition:opacity 0.2s;';
+            copyBtn.style.cssText = 'background:none; border:none; cursor:pointer; font-size:1.1rem; opacity:0.7; transition:opacity 0.2s; margin-right:8px; display:inline-block; vertical-align:middle;';
             copyBtn.onmouseover = () => copyBtn.style.opacity = '1';
             copyBtn.onmouseout = () => copyBtn.style.opacity = '0.7';
             copyBtn.onclick = () => {
                 const rowText = headers.map(h => {
                     let val = String(r.data[h] ?? "");
-                    
-                    // If the diff engine flagged this as a formula, e.g. `[ƒ =SUM(A1:B1)] 100`
-                    // Extract just the `=SUM(A1:B1)` part so it actually calculates when pasted!
                     const formulaMatch = val.match(/^\[ƒ =([^\]]+)\]/);
-                    if (formulaMatch) {
-                        val = '=' + formulaMatch[1];
-                    }
-
+                    if (formulaMatch) val = '=' + formulaMatch[1];
                     if (val.includes('\t') || val.includes('\n') || val.includes('"')) {
                         return '"' + val.replace(/"/g, '""') + '"';
                     }
@@ -970,20 +997,56 @@
                 }).catch(err => alert("Copy failed: " + err));
             };
             actionTd.appendChild(copyBtn);
+
+            if (r.status === 'added' || r.status === 'removed') {
+                const resolveBtn = document.createElement('button');
+                resolveBtn.className = 'btn-resolve ' + (r.mergeState === 'accepted' ? 'accepted' : 'rejected');
+                resolveBtn.style.display = 'inline-block';
+                resolveBtn.style.verticalAlign = 'middle';
+                resolveBtn.textContent = r.mergeState === 'accepted' ? '✅ Target (V2)' : '❌ Base (V1)';
+                resolveBtn.onclick = () => {
+                    r.mergeState = r.mergeState === 'accepted' ? 'rejected' : 'accepted';
+                    renderTable();
+                };
+                actionTd.appendChild(resolveBtn);
+            }
             tr.appendChild(actionTd);
+
+            const rowNumTd = document.createElement('td');
+            rowNumTd.style.textAlign = 'center';
+            rowNumTd.style.color = 'var(--text-muted)';
+            rowNumTd.style.fontWeight = '600';
+            rowNumTd.style.fontSize = '0.75rem';
+            if (r.status === 'added') rowNumTd.textContent = 'T:' + r.data.__rowNum;
+            else if (r.status === 'removed') rowNumTd.textContent = 'B:' + r.data.__rowNum;
+            else if (r.status === 'modified') rowNumTd.textContent = 'B:' + r.baseRowNum + ' / T:' + r.data.__rowNum;
+            else rowNumTd.textContent = r.data.__rowNum;
+            tr.appendChild(rowNumTd);
 
             headers.forEach(h => {
                 const td = document.createElement('td');
                 if (r.status === 'modified' && r.diffs[h]) {
                     td.className = 'cell-modified';
-                    const oldSpan = document.createElement('span');
-                    oldSpan.className = 'cell-old-val';
-                    oldSpan.textContent = r.diffs[h].old || '- (empty)';
-                    const newSpan = document.createElement('span');
-                    newSpan.className = 'cell-new-val';
-                    newSpan.textContent = r.diffs[h].new || '- (empty)';
-                    td.appendChild(oldSpan);
-                    td.appendChild(newSpan);
+                    const state = r.diffs[h].mergeState;
+                    
+                    const baseBtn = document.createElement('button');
+                    baseBtn.className = 'btn-cell-merge ' + (state === 'base' ? 'active-base' : '');
+                    baseBtn.innerHTML = `<span>V1:</span> ${r.diffs[h].old || '-'}`;
+                    baseBtn.onclick = () => {
+                        r.diffs[h].mergeState = 'base';
+                        renderTable();
+                    };
+
+                    const targetBtn = document.createElement('button');
+                    targetBtn.className = 'btn-cell-merge ' + (state === 'target' ? 'active-target' : '');
+                    targetBtn.innerHTML = `<span>V2:</span> ${r.diffs[h].new || '-'}`;
+                    targetBtn.onclick = () => {
+                        r.diffs[h].mergeState = 'target';
+                        renderTable();
+                    };
+
+                    td.appendChild(baseBtn);
+                    td.appendChild(targetBtn);
                 } else {
                     td.textContent = r.data[h] ?? "";
                 }
@@ -999,15 +1062,13 @@
         }
     }
 
-    // --- Export Reconciled Report ---
+    // --- Export Reconciled Report (Diffs only) ---
     document.getElementById('btnExport').addEventListener('click', () => {
         if (!diffResult) return;
         const wb = XLSX.utils.book_new();
         
         diffResult.forEach(sheet => {
             const wsData = [];
-            
-            // Header row with 'Action Status'
             const headers = ['Action Status', ...sheet.headers];
             wsData.push(headers);
             
@@ -1024,10 +1085,52 @@
             });
             
             const ws = XLSX.utils.aoa_to_sheet(wsData);
-            XLSX.utils.book_append_sheet(wb, ws, sheet.name.substring(0, 31)); // Max 31 chars for sheet name
+            XLSX.utils.book_append_sheet(wb, ws, sheet.name.substring(0, 31));
         });
         
         XLSX.writeFile(wb, "Excel_Reconciliation_Diff.xlsx");
+    });
+
+    // --- Export Merged Master (V3) ---
+    document.getElementById('btnExportMerge').addEventListener('click', () => {
+        if (!diffResult) return;
+        const wb = XLSX.utils.book_new();
+        
+        diffResult.forEach(sheet => {
+            const wsData = [];
+            const headers = sheet.headers;
+            wsData.push(headers);
+            
+            sheet.rows.forEach(r => {
+                // Determine if we should include this row based on its merge state
+                if (r.status === 'added' && r.mergeState !== 'accepted') return; // Target added it, we rejected it
+                if (r.status === 'removed' && r.mergeState === 'accepted') return; // Target deleted it, we accepted that deletion
+                
+                const rowData = [];
+                headers.forEach(h => {
+                    let val = r.data[h] ?? "";
+                    
+                    if (r.status === 'modified' && r.diffs[h]) {
+                        // Keep 'target' value if specified, else keep 'base'
+                        val = r.diffs[h].mergeState === 'target' ? (r.diffs[h].new ?? "") : (r.diffs[h].old ?? "");
+                    }
+                    
+                    const formulaMatch = String(val).match(/^\[ƒ =([^\]]+)\]/);
+                    if (formulaMatch) {
+                        // Insert native formula back for export
+                        rowData.push({ t: 'n', f: formulaMatch[1] });
+                    } else {
+                        rowData.push(val);
+                    }
+                });
+                wsData.push(rowData);
+            });
+            
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            XLSX.utils.book_append_sheet(wb, ws, sheet.name.substring(0, 31));
+        });
+        
+        XLSX.writeFile(wb, "Merged_Master.xlsx");
     });
 
     // --- AI Executive Summary ---
