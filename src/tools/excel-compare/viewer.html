@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel Data Comparator - Premium</title>
+    <!-- SheetJS for parsing -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            /* Clean, modern dark theme base */
+            --bg-color: #0f1115;
+            --surface-color: rgba(30, 33, 40, 0.7);
+            --border-color: rgba(255, 255, 255, 0.1);
+            --text-primary: #e2e8f0;
+            --text-muted: #94a3b8;
+            --accent-blue: #3b82f6;
+            --diff-added: rgba(34, 197, 94, 0.15);
+            --diff-added-border: rgba(34, 197, 94, 0.5);
+            --diff-removed: rgba(239, 68, 68, 0.15);
+            --diff-removed-border: rgba(239, 68, 68, 0.5);
+            --diff-modified: rgba(245, 158, 11, 0.15);
+            --diff-modified-border: rgba(245, 158, 11, 0.5);
+            
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Glassmorphism Header */
+        header {
+            background: rgba(15, 17, 21, 0.8);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;    
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.25rem;
+            font-weight: 600;
+            background: linear-gradient(to right, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .btn {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-primary {
+            background: var(--accent-blue);
+            border-color: #2563eb;
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #2563eb;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Dropzones setup */
+        .workspace {
+            display: flex;
+            flex: 1;
+            padding: 24px;
+            gap: 24px;
+            overflow: hidden;
+        }
+
+        .upload-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .dropzone-wrapper {
+            display: flex;
+            gap: 24px;
+            width: 100%;
+            max-width: 900px;
+            height: 300px;
+        }
+
+        .dropzone {
+            flex: 1;
+            background: var(--surface-color);
+            border: 2px dashed var(--border-color);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .dropzone.dragover {
+            border-color: var(--accent-blue);
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        .dropzone.loaded {
+            border-style: solid;
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .drop-icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+            opacity: 0.7;
+        }
+
+        .drop-title {
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-bottom: 8px;
+        }
+
+        .drop-desc {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            text-align: center;
+            padding: 0 20px;
+        }
+
+        .file-input {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .file-details {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .dropzone.loaded .file-details {
+            display: flex;
+        }
+        .dropzone.loaded .initial-content {
+            display: none;
+        }
+
+        /* Compare Controls */
+        .compare-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            background: var(--surface-color);
+            padding: 16px 24px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            width: 100%;
+            max-width: 900px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            flex: 1;
+        }
+        
+        .control-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .control-input {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-family: inherit;
+        }
+        
+        .control-input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+
+        /* Results / Viewer */
+        .viewer {
+            display: none;
+            flex: 1;
+            width: 100%;
+            height: 100%;
+        }
+
+        .viewer.active {
+            display: flex;
+        }
+
+        .sidebar {
+            width: 250px;
+            background: var(--surface-color);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .sheet-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .sheet-item {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .sheet-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .sheet-item.active {
+            background: rgba(59, 130, 246, 0.15);
+            border-left: 3px solid var(--accent-blue);
+        }
+
+        .badge {
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+
+        .badge.modified { background: var(--diff-modified); color: #fcd34d; border: 1px solid var(--diff-modified-border); }
+        .badge.added { background: var(--diff-added); color: #86efac; border: 1px solid var(--diff-added-border); }
+        .badge.removed { background: var(--diff-removed); color: #fca5a5; border: 1px solid var(--diff-removed-border); }
+        .badge.identical { background: rgba(255,255,255,0.1); color: var(--text-muted); }
+
+        .data-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: #0b0d10; /* Slightly darker for the data grid */
+        }
+        
+        .toolbar {
+            padding: 12px 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            gap: 16px;
+            background: var(--surface-color);
+        }
+
+        .table-wrapper {
+            flex: 1;
+            overflow: auto;
+            position: relative;
+        }
+
+        table {
+            border-collapse: collapse;
+            font-size: 0.875rem;
+            white-space: nowrap;
+            min-width: 100%;
+        }
+
+        th, td {
+            padding: 8px 16px;
+            border: 1px solid var(--border-color);
+            text-align: left;
+        }
+        
+        th {
+            background: #1e2128;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        /* Row Level Formatting */
+        tr.row-added { background-color: var(--diff-added); }
+        tr.row-removed { background-color: var(--diff-removed); opacity: 0.7; }
+        
+        /* Cell Level Formatting */
+        td.cell-modified {
+            background-color: var(--diff-modified);
+            border: 1px solid var(--diff-modified-border);
+            position: relative;
+        }
+        
+        .cell-old-val {
+            font-size: 0.7rem;
+            color: #ef4444;
+            text-decoration: line-through;
+            display: block;
+            margin-bottom: 2px;
+        }
+        .cell-new-val {
+            color: #10b981;
+            font-weight: 600;
+        }
+
+        /* AI Summary Panel */
+        .ai-panel {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(167, 139, 250, 0.1));
+            border-top: 1px solid rgba(167, 139, 250, 0.3);
+            padding: 16px 24px;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+            position: relative;
+        }
+        .ai-panel.active {
+            display: block;
+        }
+        .ai-header {
+            font-weight: 600;
+            color: #a78bfa;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        /* Loading overlay */
+        .loader-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(15, 17, 21, 0.9);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .loader-overlay.active { display: flex; }
+        
+        .spinner {
+            width: 40px; height: 40px;
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1><span style="font-size:1.5rem;">📊</span> Excel Data Comparator</h1>
+        <div class="header-controls">
+            <button class="btn" id="btnSettings" onclick="toggleSettings()">⚙ Settings</button>
+            <button class="btn" id="btnNew" onclick="location.reload()" style="display:none;">🔄 New Comparison</button>
+            <button class="btn btn-primary" id="btnExport" style="display:none;">⬇ Export Report</button>
+        </div>
+    </header>
+
+    <div class="loader-overlay" id="globalLoader">
+        <div class="spinner"></div>
+        <div id="loaderText">Processing Workbooks...</div>
+    </div>
+
+    <!-- UPLOAD LAYER -->
+    <div class="workspace" id="uploadLayer">
+        <div class="upload-container">
+            <div class="dropzone-wrapper">
+                
+                <div class="dropzone" id="dropBase">
+                    <input type="file" id="fileBase" class="file-input" accept=".xlsx,.xls,.csv" />
+                    <div class="initial-content">
+                        <div class="drop-icon">📄</div>
+                        <div class="drop-title">Base File (V1)</div>
+                        <div class="drop-desc">Drag & drop your original Excel file here, or click to browse.</div>
+                    </div>
+                    <div class="file-details" id="detailsBase">
+                        <div class="drop-icon">✅</div>
+                        <div class="drop-title" id="nameBase">filename.xlsx</div>
+                        <div class="drop-desc" id="infoBase">Size: 0KB</div>
+                    </div>
+                </div>
+
+                <div class="dropzone" id="dropTarget">
+                    <input type="file" id="fileTarget" class="file-input" accept=".xlsx,.xls,.csv" />
+                    <div class="initial-content">
+                        <div class="drop-icon">📋</div>
+                        <div class="drop-title">Target File (V2)</div>
+                        <div class="drop-desc">Drag & drop your modified Excel file here, or click to browse.</div>
+                    </div>
+                    <div class="file-details" id="detailsTarget">
+                        <div class="drop-icon">✅</div>
+                        <div class="drop-title" id="nameTarget">filename_v2.xlsx</div>
+                        <div class="drop-desc" id="infoTarget">Size: 0KB</div>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="compare-controls">
+                <div class="control-group">
+                    <label class="control-label">Primary Key (Optional)</label>
+                    <input type="text" id="primaryKey" class="control-input" placeholder="e.g. ID, Email, Part_Number" title="Column name used to track rows even if sorted differently">
+                </div>
+                <button class="btn btn-primary" id="btnCompare" disabled style="padding: 0 32px; height: 38px; font-weight: 600;">Run Comparison ▶</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEWER LAYER -->
+    <div class="viewer" id="viewerLayer">
+        <div class="sidebar">
+            <ul class="sheet-list" id="sheetList">
+                <!-- Dynamically populated -->
+            </ul>
+        </div>
+        
+        <div class="data-panel">
+            <div class="toolbar">
+                <label style="display:flex;align-items:center;gap:8px;font-size:0.875rem;cursor:pointer;">
+                    <input type="checkbox" id="chkShowOnlyDiff" /> Show Only Differences
+                </label>
+                <button class="btn" id="btnSummarize" style="margin-left:auto;border-color:#a78bfa;color:#a78bfa;">✨ AI Summary</button>
+            </div>
+
+            <!-- AI Summary Result -->
+            <div class="ai-panel" id="aiSummaryPanel">
+                <div class="ai-header">🤖 Executive Summary</div>
+                <div id="aiSummaryContent" style="font-size:0.9rem;line-height:1.5;">Generating summary...</div>
+            </div>
+
+            <div class="table-wrapper">
+                <table id="dataTable">
+                    <thead id="dataHead"></thead>
+                    <tbody id="dataBody">
+                        <!-- Dynamically populated -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- SETTINGS MODAL -->
+    <div class="loader-overlay" id="settingsModal" style="background: rgba(15,17,21,0.8); backdrop-filter: blur(5px);">
+        <div style="background: var(--surface-color); border: 1px solid var(--border-color); padding: 24px; border-radius: 12px; width: 450px; max-width: 90vw; display: flex; flex-direction: column; gap: 16px;">
+            <h2 style="margin: 0; font-size: 1.25rem;">⚙️ Configuration</h2>
+            
+            <div class="control-group">
+                <label class="control-label">AI Provider</label>
+                <select id="cfgProvider" class="control-input" style="appearance: auto; padding-right: 24px;">
+                    <option value="openai">OpenAI (Cloud)</option>
+                    <option value="ollama">Ollama (Local Private)</option>
+                </select>
+            </div>
+            
+            <div id="cfgOpenAiBox" style="display: flex; flex-direction: column; gap: 8px;">
+                <div class="control-group">
+                    <label class="control-label">OpenAI API Key</label>
+                    <input type="password" id="cfgApiKey" class="control-input" placeholder="sk-...">
+                </div>
+            </div>
+            
+            <div id="cfgOllamaBox" style="display: none; flex-direction: column; gap: 16px;">
+                <div class="control-group">
+                    <label class="control-label">Ollama URL</label>
+                    <input type="text" id="cfgOllamaUrl" class="control-input" placeholder="http://localhost:11434/api/generate">
+                </div>
+                <div class="control-group">
+                    <label class="control-label">Ollama Model</label>
+                    <input type="text" id="cfgOllamaModel" class="control-input" placeholder="llama3">
+                </div>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid var(--border-color); width: 100%; margin: 4px 0;">
+
+            <div class="control-group">
+                <label class="control-label">Default Primary Key</label>
+                <input type="text" id="cfgPrimaryKey" class="control-input" placeholder="e.g. ID, Email, Part_Number">
+            </div>
+
+            <label style="display:flex;align-items:center;gap:8px;font-size:0.875rem;cursor:pointer;">
+                <input type="checkbox" id="cfgIgnoreCase" /> Ignore String Casing in Diffs
+            </label>
+
+            <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px;">
+                <button class="btn" onclick="document.getElementById('settingsModal').classList.remove('active')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveSettings()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // Config fetching
+    let systemConfig = {};
+    fetch('/api/config').then(r => r.json()).then(c => {
+        systemConfig = c;
+        if(c.defaultPrimaryKey) document.getElementById('primaryKey').value = c.defaultPrimaryKey;
+    });
+
+    // File Drop & Select Logic
+    const files = { base: null, target: null };
+    const btnCompare = document.getElementById('btnCompare');
+
+    function setupDropzone(type, dropId, fileId, detailsId, nameId, infoId) {
+        const drop = document.getElementById(dropId);
+        const input = document.getElementById(fileId);
+
+        drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('dragover'); });
+        drop.addEventListener('dragleave', (e) => { e.preventDefault(); drop.classList.remove('dragover'); });
+        drop.addEventListener('drop', (e) => {
+            e.preventDefault();
+            drop.classList.remove('dragover');
+            if (e.dataTransfer.files.length) handleFile(type, e.dataTransfer.files[0]);
+        });
+        
+        input.addEventListener('change', (e) => {
+            if (e.target.files.length) handleFile(type, e.target.files[0]);
+        });
+
+        function handleFile(type, file) {
+            files[type] = file;
+            drop.classList.add('loaded');
+            document.getElementById(nameId).textContent = file.name;
+            document.getElementById(infoId).textContent = `Size: ${(file.size / 1024).toFixed(1)} KB`;
+            checkReady();
+        }
+    }
+
+    setupDropzone('base', 'dropBase', 'fileBase', 'detailsBase', 'nameBase', 'infoBase');
+    setupDropzone('target', 'dropTarget', 'fileTarget', 'detailsTarget', 'nameTarget', 'infoTarget');
+
+    function checkReady() {
+        if (files.base && files.target) btnCompare.disabled = false;
+    }
+
+    // Process Workbooks
+    let diffResult = null;
+    let currentSheetName = null;
+
+    btnCompare.addEventListener('click', async () => {
+        const primaryKey = document.getElementById('primaryKey').value.trim();
+        document.getElementById('globalLoader').classList.add('active');
+        
+        try {
+            const baseBuf = await files.base.arrayBuffer();
+            const targetBuf = await files.target.arrayBuffer();
+
+            // Small delay to let loader render
+            setTimeout(() => {
+                try {
+                    diffResult = performDiff(baseBuf, targetBuf, primaryKey, systemConfig);
+                    
+                    document.getElementById('globalLoader').classList.remove('active');
+                    document.getElementById('uploadLayer').style.display = 'none';
+                    document.getElementById('viewerLayer').classList.add('active');
+                    document.getElementById('btnNew').style.display = 'flex';
+                    document.getElementById('btnExport').style.display = 'flex';
+
+                    renderSidebar(diffResult);
+                    if(diffResult.length > 0) {
+                        selectSheet(diffResult[0].name);
+                    }
+                } catch(err) {
+                    alert('Error performing diff: ' + err.message);
+                    document.getElementById('globalLoader').classList.remove('active');
+                }
+            }, 100);
+        } catch (e) {
+            alert('Error reading files: ' + e.message);
+            document.getElementById('globalLoader').classList.remove('active');
+        }
+    });
+
+    function performDiff(baseBuf, targetBuf, pk, config) {
+        const wbBase = XLSX.read(baseBuf, { type: 'array' });
+        const wbTarget = XLSX.read(targetBuf, { type: 'array' });
+
+        const baseSheets = wbBase.SheetNames;
+        const targetSheets = wbTarget.SheetNames;
+        const allSheets = new Set([...baseSheets, ...targetSheets]);
+        
+        const results = [];
+
+        allSheets.forEach(sheetName => {
+            const inBase = baseSheets.includes(sheetName);
+            const inTarget = targetSheets.includes(sheetName);
+
+            if (inBase && !inTarget) {
+                results.push({ name: sheetName, status: 'removed', rows: [], headers: [] });
+            } else if (!inBase && inTarget) {
+                const data = XLSX.utils.sheet_to_json(wbTarget.Sheets[sheetName], { defval: "" });
+                const headers = getHeaders(data);
+                const rows = data.map(r => ({ status: 'added', data: r, diffs: {} }));
+                results.push({ name: sheetName, status: 'added', rows, headers });
+            } else {
+                // Determine if identical or modified
+                const baseData = XLSX.utils.sheet_to_json(wbBase.Sheets[sheetName], { defval: "" });
+                const targetData = XLSX.utils.sheet_to_json(wbTarget.Sheets[sheetName], { defval: "" });
+                
+                const headers = new Set([...getHeaders(baseData), ...getHeaders(targetData)]);
+                const { rows, isModified } = diffRows(baseData, targetData, pk, Array.from(headers), config);
+                
+                results.push({ 
+                    name: sheetName, 
+                    status: isModified ? 'modified' : 'identical', 
+                    rows, 
+                    headers: Array.from(headers) 
+                });
+            }
+        });
+
+        // Priority Sort: Modified -> Added -> Removed -> Identical
+        const p = { 'modified': 1, 'added': 2, 'removed': 3, 'identical': 4 };
+        results.sort((a,b) => p[a.status] - p[b.status]);
+        
+        return results;
+    }
+
+    function getHeaders(dataArray) {
+        const h = new Set();
+        dataArray.forEach(row => Object.keys(row).forEach(k => h.add(k)));
+        return Array.from(h);
+    }
+    
+    // --- Settings Modal Logic ---
+    const modalSettings = document.getElementById('settingsModal');
+    const selProv = document.getElementById('cfgProvider');
+    const boxOai = document.getElementById('cfgOpenAiBox');
+    const boxOllama = document.getElementById('cfgOllamaBox');
+    
+    selProv.addEventListener('change', () => {
+        if (selProv.value === 'openai') { 
+            boxOai.style.display = 'flex'; 
+            boxOllama.style.display = 'none'; 
+        } else { 
+            boxOai.style.display = 'none'; 
+            boxOllama.style.display = 'flex'; 
+        }
+    });
+
+    function toggleSettings() {
+        selProv.value = systemConfig.aiProvider || 'openai';
+        document.getElementById('cfgApiKey').value = systemConfig.openAiKey || '';
+        document.getElementById('cfgOllamaUrl').value = systemConfig.ollamaUrl || 'http://localhost:11434/api/generate';
+        document.getElementById('cfgOllamaModel').value = systemConfig.ollamaModel || 'llama3';
+        document.getElementById('cfgPrimaryKey').value = systemConfig.defaultPrimaryKey || '';
+        document.getElementById('cfgIgnoreCase').checked = systemConfig.ignoreCase === true || systemConfig.ignoreCase === 'true';
+        selProv.dispatchEvent(new Event('change'));
+        
+        modalSettings.classList.add('active');
+    }
+
+    async function saveSettings() {
+        const btn = document.querySelector('#settingsModal .btn-primary');
+        const originalText = btn.textContent;
+        btn.textContent = 'Saving...';
+        btn.disabled = true;
+
+        const newConf = {
+            aiProvider: selProv.value,
+            openAiKey: document.getElementById('cfgApiKey').value,
+            ollamaUrl: document.getElementById('cfgOllamaUrl').value,
+            ollamaModel: document.getElementById('cfgOllamaModel').value,
+            defaultPrimaryKey: document.getElementById('cfgPrimaryKey').value.trim() || null,
+            ignoreCase: document.getElementById('cfgIgnoreCase').checked
+        };
+
+        try {
+            const res = await fetch('/api/config', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newConf) 
+            });
+            if (!res.ok) throw new Error("Server rejected config");
+            Object.assign(systemConfig, newConf);
+            
+            // Auto update UI text box if PK changed
+            if (systemConfig.defaultPrimaryKey) {
+                document.getElementById('primaryKey').value = systemConfig.defaultPrimaryKey;
+            }
+
+            modalSettings.classList.remove('active');
+        } catch(e) {
+            alert("Failed to save config: " + e.message);
+        } finally {
+            btn.textContent = originalText;
+            btn.disabled = false;
+        }
+    }
+    // ----------------------------
+
+    function diffRows(baseData, targetData, pk, headers, config) {
+        const ignoreCase = config.ignoreCase === true || config.ignoreCase === 'true';
+        let isModified = false;
+        const combinedRows = [];
+
+        const compareVals = (v1, v2) => {
+            let s1 = String(v1).trim();
+            let s2 = String(v2).trim();
+            if (ignoreCase) { s1 = s1.toLowerCase(); s2 = s2.toLowerCase(); }
+            return s1 === s2;
+        };
+
+        if (pk && headers.includes(pk)) {
+            // Using Primary Key tracking
+            const baseMap = new Map(baseData.map(r => [String(r[pk]), r]));
+            const targetMap = new Map(targetData.map(r => [String(r[pk]), r]));
+            const seenKeys = new Set();
+
+            targetData.forEach(tRow => {
+                const val = String(tRow[pk]);
+                seenKeys.add(val);
+                if (!baseMap.has(val)) {
+                    combinedRows.push({ status: 'added', data: tRow, diffs: {} });
+                    isModified = true;
+                } else {
+                    const bRow = baseMap.get(val);
+                    const diffs = {};
+                    let rowMod = false;
+                    headers.forEach(h => {
+                        const bVal = bRow[h] ?? "";
+                        const tVal = tRow[h] ?? "";
+                        if (!compareVals(bVal, tVal)) {
+                            // Track explicit change
+                            diffs[h] = { old: bVal, new: tVal };
+                            rowMod = true;
+                            isModified = true;
+                        }
+                    });
+                    combinedRows.push({ status: rowMod ? 'modified' : 'identical', data: tRow, diffs });
+                }
+            });
+
+            // Find rows existing only in base
+            baseData.forEach(bRow => {
+                const val = String(bRow[pk]);
+                if (!seenKeys.has(val)) {
+                    combinedRows.push({ status: 'removed', data: bRow, diffs: {} });
+                    isModified = true;
+                }
+            });
+        } else {
+            // Raw index based diffing (fallback)
+            const maxLen = Math.max(baseData.length, targetData.length);
+            for(let i = 0; i < maxLen; i++) {
+                const bRow = baseData[i];
+                const tRow = targetData[i];
+                if (bRow && !tRow) {
+                    combinedRows.push({ status: 'removed', data: bRow, diffs: {} });
+                    isModified = true;
+                } else if (!bRow && tRow) {
+                    combinedRows.push({ status: 'added', data: tRow, diffs: {} });
+                    isModified = true;
+                } else {
+                    const diffs = {};
+                    let rowMod = false;
+                    headers.forEach(h => {
+                        const bVal = bRow[h] ?? "";
+                        const tVal = tRow[h] ?? "";
+                        if (!compareVals(bVal, tVal)) {
+                            diffs[h] = { old: bVal, new: tVal };
+                            rowMod = true;
+                            isModified = true;
+                        }
+                    });
+                    combinedRows.push({ status: rowMod ? 'modified' : 'identical', data: tRow, diffs });
+                }
+            }
+        }
+        return { rows: combinedRows, isModified };
+    }
+
+    function renderSidebar(results) {
+        const list = document.getElementById('sheetList');
+        list.innerHTML = '';
+        const badges = {
+            'modified': '<span class="badge modified">~ Mod</span>',
+            'added': '<span class="badge added">+ New</span>',
+            'removed': '<span class="badge removed">- Del</span>',
+            'identical': '<span class="badge identical">Identical</span>'
+        };
+
+        results.forEach(res => {
+            const li = document.createElement('li');
+            li.className = 'sheet-item';
+            li.innerHTML = `<span>${document.createTextNode(res.name).textContent}</span> ${badges[res.status]}`;
+            li.onclick = () => selectSheet(res.name);
+            list.appendChild(li);
+        });
+    }
+
+    function selectSheet(name) {
+        currentSheetName = name;
+        const items = document.querySelectorAll('.sheet-item');
+        items.forEach(el => el.classList.remove('active'));
+        const activeNode = Array.from(items).find(el => el.querySelector('span').textContent === name);
+        if (activeNode) activeNode.classList.add('active');
+        renderTable();
+    }
+
+    document.getElementById('chkShowOnlyDiff').addEventListener('change', () => {
+        renderTable();
+    });
+
+    function renderTable() {
+        if (!diffResult || !currentSheetName) return;
+        const sheet = diffResult.find(s => s.name === currentSheetName);
+        if (!sheet) return;
+
+        const thead = document.getElementById('dataHead');
+        const tbody = document.getElementById('dataBody');
+        
+        thead.innerHTML = '';
+        tbody.innerHTML = '';
+
+        if(sheet.status === 'removed') {
+            tbody.innerHTML = '<tr><td style="color:#ef4444;text-align:center;padding:24px;">This entire sheet was removed in the Target file.</td></tr>';
+            return;
+        }
+
+        const headers = sheet.headers;
+        const theadTr = document.createElement('tr');
+        headers.forEach(h => {
+            const th = document.createElement('th');
+            th.textContent = h;
+            theadTr.appendChild(th);
+        });
+        thead.appendChild(theadTr);
+
+        const showOnlyDiff = document.getElementById('chkShowOnlyDiff').checked;
+        const frag = document.createDocumentFragment();
+        let renderedCount = 0;
+
+        sheet.rows.forEach(r => {
+            if (showOnlyDiff && r.status === 'identical') return;
+            renderedCount++;
+
+            const tr = document.createElement('tr');
+            if (r.status === 'added') tr.className = 'row-added';
+            if (r.status === 'removed') tr.className = 'row-removed';
+
+            headers.forEach(h => {
+                const td = document.createElement('td');
+                if (r.status === 'modified' && r.diffs[h]) {
+                    td.className = 'cell-modified';
+                    const oldSpan = document.createElement('span');
+                    oldSpan.className = 'cell-old-val';
+                    oldSpan.textContent = r.diffs[h].old || '- (empty)';
+                    const newSpan = document.createElement('span');
+                    newSpan.className = 'cell-new-val';
+                    newSpan.textContent = r.diffs[h].new || '- (empty)';
+                    td.appendChild(oldSpan);
+                    td.appendChild(newSpan);
+                } else {
+                    td.textContent = r.data[h] ?? "";
+                }
+                tr.appendChild(td);
+            });
+            frag.appendChild(tr);
+        });
+
+        if (renderedCount === 0 && showOnlyDiff) {
+            tbody.innerHTML = '<tr><td colspan="100%" style="text-align:center;color:var(--text-muted);padding:24px;">No differences found.</td></tr>';
+        } else {
+            tbody.appendChild(frag);
+        }
+    }
+
+    // --- Export Reconciled Report ---
+    document.getElementById('btnExport').addEventListener('click', () => {
+        if (!diffResult) return;
+        const wb = XLSX.utils.book_new();
+        
+        diffResult.forEach(sheet => {
+            const wsData = [];
+            
+            // Header row with 'Action Status'
+            const headers = ['Action Status', ...sheet.headers];
+            wsData.push(headers);
+            
+            sheet.rows.forEach(r => {
+                const rowData = [r.status.toUpperCase()];
+                sheet.headers.forEach(h => {
+                    if (r.status === 'modified' && r.diffs[h]) {
+                        rowData.push(`[OLD] ${r.diffs[h].old}  ->  [NEW] ${r.diffs[h].new}`);
+                    } else {
+                        rowData.push(r.data[h] ?? "");
+                    }
+                });
+                wsData.push(rowData);
+            });
+            
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            XLSX.utils.book_append_sheet(wb, ws, sheet.name.substring(0, 31)); // Max 31 chars for sheet name
+        });
+        
+        XLSX.writeFile(wb, "Excel_Reconciliation_Diff.xlsx");
+    });
+
+    // --- AI Executive Summary ---
+    document.getElementById('btnSummarize').addEventListener('click', async () => {
+        if (!diffResult) return;
+        const panel = document.getElementById('aiSummaryPanel');
+        const content = document.getElementById('aiSummaryContent');
+        
+        panel.classList.add('active');
+        content.innerHTML = '<span style="color:var(--text-muted);">Generating executive summary with AI (this may take 10-20 seconds)...</span>';
+        
+        // Compress diff for the LLM prompt
+        const payload = diffResult.filter(s => s.status !== 'identical').map(s => {
+            return {
+                sheet: s.name,
+                status: s.status,
+                modifications: s.rows.filter(r => r.status !== 'identical').map(r => {
+                    const obj = { type: r.status };
+                    const pk = document.getElementById('primaryKey').value.trim();
+                    if (pk && r.data[pk]) {
+                        obj[pk] = r.data[pk];
+                    } else {
+                        // Extract first couple of keys as identifier if no PK
+                        const keys = Object.keys(r.data);
+                        if (keys.length > 0) obj['identifier'] = String(r.data[keys[0]]).substring(0, 30);
+                    }
+                    if (r.status === 'modified') obj.changes = r.diffs;
+                    return obj;
+                })
+            }
+        });
+
+        if (payload.length === 0) {
+            content.innerHTML = '<span style="color:#10b981;font-weight:600;">✅ The files are perfectly identical. There are no changes to summarize.</span>';
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/ai-summary', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ diff: payload })
+            });
+            const data = await res.json();
+            if (data.error) {
+                content.innerHTML = `<span style="color:#ef4444;">🚨 Error: ${data.error}</span><br><br><span style="font-size:0.8rem;color:var(--text-muted);">Did you set your API key? Run: \`zero-ops excel-compare config set openAiKey sk-...\` in your terminal.</span>`;
+            } else {
+                // Simple markdown to HTML conversion for the output
+                let html = data.summary
+                    .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+                    .replace(/\*(.*?)\*/g, '<i>$1</i>')
+                    .replace(/\n\n/g, '<br><br>')
+                    .replace(/\n- /g, '<br>• ');
+                content.innerHTML = html;
+            }
+        } catch (e) {
+            content.innerHTML = `<span style="color:#ef4444;">Exception: ${e.message}</span>`;
+        }
+    });
+</script>
+</body>
+</html>

@@ -189,6 +189,36 @@ zero-ops pdf-inspect ~/path/to/your/file.pdf
     - **Line Reconstruction**: Automatically merges fragmented text segments into logical lines, making the template human-readable and easy to tokensize.
     - **1:1 Fidelity**: Maintains exact PDF coordinates and embeds all relevant fonts.
 
+### Excel Compare (`excel-compare`)
+A Premium data reconciliation tool to intelligently compare large `.xlsx, .xls, and .csv` files. It features a modern Glassmorphism browser interface, client-side SheetJS parsing, and both private and cloud AI integrations for executive summaries.
+
+```bash
+# Start the local server and open the browser interface
+zero-ops excel-compare
+```
+
+**Key Features:**
+- **Primary-Key Aware Diff Engine**: Highlights exact rows added, removed, or modified, right down to the specific cell change (`[OLD] -> [NEW]`).
+- **Data Privacy**: All Excel processing happens completely locally in your browser using Web Workers and SheetJS.
+- **Enterprise AI Insights**: 
+    - Configure to use **OpenAI** or completely private, local **Ollama** models.
+    - Generates natural-language business summaries of the exact financial or metric impact of changes.
+- **Export Ready**: Click "Export Report" to download a clean, color-coded `.xlsx` file summarizing only the differences.
+
+**Configuration Setup:**
+```bash
+# Set up your AI Provider (default is openai)
+zero-ops excel-compare config set aiProvider ollama
+zero-ops excel-compare config set ollamaModel phi3
+
+# If using OpenAI
+zero-ops excel-compare config set openAiKey "sk-your-key-here"
+
+# View current settings
+zero-ops excel-compare config get
+```
+> 📚 **Detailed Documentation**: See the [Full Excel Compare README](./src/tools/excel-compare/README.md) for advanced usage and CLI architecture.
+
 ### Telegram Remote Control
 Control `zero-ops` from your Telegram app.
 
