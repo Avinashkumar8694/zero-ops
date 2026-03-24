@@ -1331,6 +1331,9 @@
         const numHb = document.createElement('th'); numHb.textContent = '#'; numHb.style.width='40px'; trHb.appendChild(numHb);
         const numHt = document.createElement('th'); numHt.textContent = '#'; numHt.style.width='40px'; trHt.appendChild(numHt);
 
+        const actHb = document.createElement('th'); actHb.textContent = 'Action'; actHb.style.width='80px'; trHb.appendChild(actHb);
+        const actHt = document.createElement('th'); actHt.textContent = 'Action'; actHt.style.width='80px'; trHt.appendChild(actHt);
+
         headers.forEach(h => {
             const thb = document.createElement('th'); thb.textContent = h; trHb.appendChild(thb);
             const tht = document.createElement('th'); tht.textContent = h; trHt.appendChild(tht);
@@ -1354,11 +1357,30 @@
             const tdbNum = document.createElement('td'); tdbNum.style.color='var(--text-muted)';
             const tdtNum = document.createElement('td'); tdtNum.style.color='var(--text-muted)';
 
+            const tdbAct = document.createElement('td');
+            const tdtAct = document.createElement('td');
+
+            const createResolveBtn = () => {
+                const resolveBtn = document.createElement('button');
+                resolveBtn.className = 'btn-resolve ' + (r.mergeState === 'accepted' ? 'accepted' : 'rejected');
+                resolveBtn.textContent = r.mergeState === 'accepted' ? '✅ Target' : '❌ Base';
+                resolveBtn.style.width = '100%';
+                resolveBtn.onclick = () => {
+                    r.mergeState = r.mergeState === 'accepted' ? 'rejected' : 'accepted';
+                    renderTable();
+                };
+                return resolveBtn;
+            };
+
             if (r.status === 'added') {
                 trB.className = 'ghost-row';
                 trT.className = 'row-added';
                 tdbNum.textContent = '-'; tdtNum.textContent = r.data.__rowNum;
-                trB.appendChild(tdbNum); trT.appendChild(tdtNum);
+
+                tdtAct.appendChild(createResolveBtn());
+
+                trB.appendChild(tdbNum); trB.appendChild(tdbAct);
+                trT.appendChild(tdtNum); trT.appendChild(tdtAct);
 
                 headers.forEach(h => {
                     const tdb = document.createElement('td'); tdb.innerHTML = '&nbsp;'; trB.appendChild(tdb);
@@ -1368,7 +1390,11 @@
                 trB.className = 'row-removed';
                 trT.className = 'ghost-row';
                 tdbNum.textContent = r.data.__rowNum; tdtNum.textContent = '-';
-                trB.appendChild(tdbNum); trT.appendChild(tdtNum);
+
+                tdbAct.appendChild(createResolveBtn());
+
+                trB.appendChild(tdbNum); trB.appendChild(tdbAct);
+                trT.appendChild(tdtNum); trT.appendChild(tdtAct);
 
                 headers.forEach(h => {
                     const tdb = document.createElement('td'); tdb.textContent = r.data[h] ?? ""; trB.appendChild(tdb);
@@ -1377,14 +1403,29 @@
             } else {
                 tdbNum.textContent = r.baseRowNum || r.data.__rowNum; 
                 tdtNum.textContent = r.data.__rowNum;
-                trB.appendChild(tdbNum); trT.appendChild(tdtNum);
+                trB.appendChild(tdbNum); trB.appendChild(tdbAct);
+                trT.appendChild(tdtNum); trT.appendChild(tdtAct);
 
                 headers.forEach(h => {
                     const tdb = document.createElement('td');
                     const tdt = document.createElement('td');
                     if (r.status === 'modified' && r.diffs[h]) {
-                        tdb.className = 'cell-modified'; tdb.style.color = '#ef4444'; tdb.textContent = r.diffs[h].old || '-';
-                        tdt.className = 'cell-modified'; tdt.style.color = '#10b981'; tdt.textContent = r.diffs[h].new || '-';
+                        const state = r.diffs[h].mergeState;
+                        tdb.className = 'cell-modified'; 
+                        tdt.className = 'cell-modified'; 
+
+                        const baseBtn = document.createElement('button');
+                        baseBtn.className = 'btn-cell-merge ' + (state === 'base' ? 'active-base' : '');
+                        baseBtn.innerHTML = `<span>V1:</span> ${r.diffs[h].old || '-'}`;
+                        baseBtn.onclick = () => { r.diffs[h].mergeState = 'base'; renderTable(); };
+
+                        const targetBtn = document.createElement('button');
+                        targetBtn.className = 'btn-cell-merge ' + (state === 'target' ? 'active-target' : '');
+                        targetBtn.innerHTML = `<span>V2:</span> ${r.diffs[h].new || '-'}`;
+                        targetBtn.onclick = () => { r.diffs[h].mergeState = 'target'; renderTable(); };
+
+                        tdb.appendChild(baseBtn);
+                        tdt.appendChild(targetBtn);
                     } else {
                         tdb.textContent = r.data[h] ?? "";
                         tdt.textContent = r.data[h] ?? "";
