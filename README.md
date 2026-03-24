@@ -246,6 +246,7 @@ Control `zero-ops` from your Telegram app.
    ```
 
 5. **Usage**
+   - Send `menu` to the bot to immediately bring up a fully interactive **Quick Actions** keyboard (Take Photo, Display Security Snapshot, Minimized Desktop, etc.).
    - Send `desktop screenshot` to take a screenshot (the bot will upload the image back to you!).
    - Send `monitor snapshot` to get a remote security health check.
    - New suspicious connections detected by `monitor watch` or the daemon will be automatically messaged to you!

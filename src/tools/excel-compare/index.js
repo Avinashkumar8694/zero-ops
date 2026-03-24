@@ -242,3 +242,16 @@ Examples:
         });
     });
 }
+
+/**
+ * Telegram UI Hook: Provides instructional prompts for multi-parameter commands.
+ */
+export async function getTelegramInterceptor(cmdText, executeCommand) {
+    if (cmdText === 'excel-compare config set') {
+        return { 
+            message: `⚠️ 'excel-compare config set' requires custom parameters (Key and Value) that cannot be intuitively selected via buttons.\n\nPlease copy and edit the following command directly into the chat:\n\n\`zero-ops excel-compare config set <key> <value>\``, 
+            buttons: [] 
+        };
+    }
+    return null;
+}

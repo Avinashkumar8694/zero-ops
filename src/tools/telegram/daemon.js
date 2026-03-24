@@ -1,4 +1,4 @@
-import { Telegraf } from 'telegraf';
+import { Telegraf, Markup } from 'telegraf';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -124,26 +124,51 @@ bot.hears(['commands', 'help', 'list'], async (ctx) => {
     }
 });
 
+// Quick Action Menu
+function getMainMenu() {
+    return Markup.inlineKeyboard([
+        [Markup.button.callback('📸 Take Photo', 'cmd_camera capture')],
+        [Markup.button.callback('🖥️ Screenshot', 'cmd_desktop screenshot'), Markup.button.callback('📉 Minimize All', 'cmd_desktop minimize-all')],
+        [Markup.button.callback('🛡️ Security Snapshot', 'cmd_monitor snapshot'), Markup.button.callback('🌐 Active Network', 'cmd_monitor network')],
+        [Markup.button.callback('🚨 Check Reverse Shells', 'cmd_monitor reverse-shell')],
+        [Markup.button.callback('❓ Explore All Tools & Commands', 'cmd_tools')]
+    ]);
+}
+
 // Start command
 bot.start((ctx) => {
-    const tools = getAvailableTools();
-    ctx.reply(`Welcome to zero-ops remote!\nAvailable tools:\n${tools.map(t => `- ${t}`).join('\n')}\n\nSend "commands" to see all examples.\nSend a tool name to see specific commands.`);
+    ctx.reply('Welcome to zero-ops remote! Select a quick action below or type a command:', getMainMenu());
 });
 
-// Handle text messages
-bot.on('text', async (ctx) => {
-    const text = ctx.message.text.trim();
-    const tools = getAvailableTools();
+// Handle button clicks
+bot.action(/cmd_(.+)/, async (ctx) => {
+    const cmd = ctx.match[1].trim();
+    
+    // Acknowledge the button click to remove the loading state on the button
+    await ctx.answerCbQuery();
+    
+    if (cmd === 'menu') {
+        await ctx.reply('Select a quick action:', getMainMenu());
+        return;
+    }
+    
+    // Level 1: List all tools
+    if (cmd === 'tools') {
+        const tools = getAvailableTools();
+        const buttons = tools.map(t => [Markup.button.callback(`🛠️ ${t}`, `cmd_tool_${t}`)]);
+        buttons.push([Markup.button.callback('🔙 Main Menu', 'cmd_menu')]);
+        
+        await ctx.reply('Select a tool to view its interactive commands:', Markup.inlineKeyboard(buttons));
+        return;
+    }
 
-    // 1. Check if text is just a tool name
-    if (tools.includes(text)) {
-        // Discovery: try to get help for tool
-        // Run: zero-ops <tool> --help
-        const helpOutput = await executeCommand(`${text} --help`);
-
-        // Parse commands from help output (simple regex/parsing)
-        // Usually "Commands:\n  cmd1 ...\n  cmd2 ..."
-        // This is a rough parser
+    // Level 2: List commands for a specific tool
+    if (cmd.startsWith('tool_')) {
+        const toolName = cmd.replace('tool_', '');
+        
+        await ctx.reply(`Fetching commands for ${toolName}...`);
+        const helpOutput = await executeCommand(`${toolName} --help`);
+        
         const lines = helpOutput.split('\n');
         const commands = [];
         let inCommandsSection = false;
@@ -153,18 +178,71 @@ bot.on('text', async (ctx) => {
                 inCommandsSection = true;
                 continue;
             }
-            if (inCommandsSection && line.trim() === '') break; // End of section?
+            if (inCommandsSection && line.trim() === '') break;
             if (inCommandsSection && line.trim().startsWith('Examples:')) break;
 
             if (inCommandsSection) {
-                const match = line.match(/^\s+([\w-]+)/);
-                if (match) commands.push(match[1]);
+                const match = line.match(/^ {2,4}([a-zA-Z0-9_-]+)(?:\s+|$)/);
+                if (match && match[1] !== 'help') {
+                    commands.push(match[1]);
+                }
             }
         }
 
         if (commands.length > 0) {
-            // Reply with buttons or list
-            // Using keyboard for quick access
+            const buttons = [];
+            for (let i = 0; i < commands.length; i += 2) {
+                const row = [];
+                const c1 = commands[i];
+                row.push(Markup.button.callback(`▶️ ${c1}`, `cmd_${toolName} ${c1}`));
+                if (i + 1 < commands.length) {
+                    const c2 = commands[i+1];
+                    row.push(Markup.button.callback(`▶️ ${c2}`, `cmd_${toolName} ${c2}`));
+                }
+                buttons.push(row);
+            }
+            buttons.push([Markup.button.callback(`🔙 Back to Tools`, `cmd_tools`), Markup.button.callback(`🏠 Main Menu`, `cmd_menu`)]);
+
+            await ctx.reply(`**${toolName}** Commands:`, Markup.inlineKeyboard(buttons));
+        } else {
+            await ctx.reply(`No sub-commands found for ${toolName}.`, getMainMenu());
+        }
+        return;
+    }
+
+    // Level 3: Execute the specific command
+    await executeAndReply(ctx, cmd);
+});
+
+async function executeAndReply(ctx, text) {
+    const tools = getAvailableTools();
+
+    // 1. Check if text is just a tool name
+    if (tools.includes(text)) {
+        // Discovery: try to get help for tool
+        const helpOutput = await executeCommand(`${text} --help`);
+
+        const lines = helpOutput.split('\n');
+        const commands = [];
+        let inCommandsSection = false;
+
+        for (const line of lines) {
+            if (line.trim().startsWith('Commands:')) {
+                inCommandsSection = true;
+                continue;
+            }
+            if (inCommandsSection && line.trim() === '') break;
+            if (inCommandsSection && line.trim().startsWith('Examples:')) break;
+
+            if (inCommandsSection) {
+                const match = line.match(/^ {2,4}([a-zA-Z0-9_-]+)(?:\s+|$)/);
+                if (match && match[1] !== 'help') {
+                    commands.push(match[1]);
+                }
+            }
+        }
+
+        if (commands.length > 0) {
             ctx.reply(`Tool: ${text}\nAvailable commands:`, {
                 reply_markup: {
                     keyboard: commands.map(c => [`${text} ${c}`]),
@@ -173,21 +251,47 @@ bot.on('text', async (ctx) => {
                 }
             });
         } else {
-            ctx.reply(helpOutput); // Fallback to raw help
+            ctx.reply(helpOutput);
         }
         return;
     }
 
-    // 2. Otherwise treat as full command execution
-    ctx.reply(`Executing: ${text}...`);
+    const toolName = text.split(' ')[0];
+    const toolPath = path.join(projectRoot, 'src', 'tools', toolName, 'index.js');
+    let toolModule = null;
+
+    try {
+        if (fs.existsSync(toolPath)) {
+            // Convert to file:// URL for dynamic ESM import on Windows compatibility
+            const fileUrl = 'file://' + toolPath;
+            toolModule = await import(fileUrl);
+        }
+    } catch (err) {
+        console.error(`Failed to load tool hook for ${toolName}: ${err.message}`);
+    }
+
+    // 2. Interactive Interceptors for commands requiring missing parameters
+    if (toolModule && toolModule.getTelegramInterceptor) {
+        const interceptionOptions = await toolModule.getTelegramInterceptor(text, executeCommand);
+        if (interceptionOptions && interceptionOptions.buttons) {
+            const buttons = interceptionOptions.buttons.map(row => 
+                row.map(btn => Markup.button.callback(btn.text, btn.callback))
+            );
+            
+            buttons.push([Markup.button.callback('🔙 Back to Tools', 'cmd_tools'), Markup.button.callback('🏠 Main Menu', 'cmd_menu')]);
+            await ctx.reply(interceptionOptions.message, Markup.inlineKeyboard(buttons));
+            return;
+        }
+    }
+
+    // 3. Otherwise treat as full command execution
+    await ctx.reply(`Executing: ${text}...`);
     const output = await executeCommand(text);
 
     // Check if output contains a file path that looks like an artifact (e.g. screenshot or photo)
-    // "Screenshot saved to /path/to/file.png" or "Photo saved to /path/to/file.jpg"
     const fileMatch = output.match(/(Screenshot|Photo|Image) saved to (.*?)(\s|$)/);
     if (fileMatch && fileMatch[2]) {
         const filePath = fileMatch[2].trim();
-        // Remove trailing period if present (often in sentences)
         const cleanPath = filePath.replace(/\.$/, '');
 
         if (fs.existsSync(cleanPath)) {
@@ -195,12 +299,40 @@ bot.on('text', async (ctx) => {
         }
     }
 
+    // 4. Extract Post-Processing Context Buttons
+    let finalMarkup = getMainMenu();
+    const dynamicButtons = [];
+
+    if (toolModule && toolModule.getTelegramPostProcessor) {
+        const postOps = await toolModule.getTelegramPostProcessor(text, output);
+        if (postOps && postOps.buttons) {
+            postOps.buttons.forEach(row => {
+                dynamicButtons.push(row.map(btn => Markup.button.callback(btn.text, btn.callback)));
+            });
+        }
+    }
+
+    if (dynamicButtons.length > 0) {
+        dynamicButtons.push([Markup.button.callback('🔙 Main Menu', 'cmd_menu')]);
+        finalMarkup = Markup.inlineKeyboard(dynamicButtons);
+    }
+
     // Send text output (truncate if too long)
     if (output.length > 4000) {
-        ctx.reply(output.substring(0, 4000) + '... (truncated)');
+        await ctx.reply(output.substring(0, 4000) + '... (truncated)', finalMarkup);
     } else {
-        ctx.reply(output);
+        await ctx.reply(output, finalMarkup);
     }
+}
+
+// Handle text messages
+bot.on('text', async (ctx) => {
+    const text = ctx.message.text.trim();
+    if (text.toLowerCase() === 'menu') {
+        await ctx.reply('Select a quick action:', getMainMenu());
+        return;
+    }
+    await executeAndReply(ctx, text);
 });
 
 // Error Handling

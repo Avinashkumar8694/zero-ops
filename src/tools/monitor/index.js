@@ -536,3 +536,89 @@ Detailed Monitor tool examples:
     $ zero-ops monitor stop
 `);
 }
+
+/**
+ * Telegram UI Hook: Provides dynamic interactive buttons for parameterless commands.
+ */
+export async function getTelegramInterceptor(cmdText, executeCommand) {
+    if (cmdText === 'monitor kill' || cmdText === 'monitor inspect') {
+        const action = cmdText.split(' ')[1];
+        
+        const networkOutput = await executeCommand('monitor network');
+        const pidMatches = [...networkOutput.matchAll(/PID:\s*(\d+)/gi)];
+        const pids = [...new Set(pidMatches.map(m => m[1]))].slice(0, 30);
+        
+        if (pids.length === 0) {
+            return { message: `No active network processes found to ${action}.`, buttons: [] };
+        }
+
+        const buttons = [];
+        for (let i = 0; i < pids.length; i += 3) {
+            const row = [];
+            for (let j = 0; j < 3; j++) {
+                if (i + j < pids.length) {
+                    const pid = pids[i + j];
+                    const icon = action === 'kill' ? '💀' : '🔍';
+                    row.push({ text: `${icon} ${pid}`, callback: `cmd_monitor ${action} ${pid}` });
+                }
+            }
+            buttons.push(row);
+        }
+
+        return { message: `Select a process to ${action}:`, buttons };
+    }
+
+    if (cmdText === 'monitor ignore') {
+        const networkOutput = await executeCommand('monitor network');
+        const lines = networkOutput.split('\n');
+        
+        const procNames = new Set();
+        lines.forEach(line => {
+            // Match typical line format: [NEW]  node   72932  avi  ESTABLISHED  127.0.0.1:...
+            const match = line.match(/^\s*(?:\[NEW\])?\s+([a-zA-Z0-9_-]+)\s+(\d+)\s+/);
+            if (match && match[1] && match[1] !== 'COMMAND') {
+                procNames.add(match[1]);
+            }
+        });
+
+        const names = [...procNames].slice(0, 15);
+        if (names.length === 0) {
+            return { message: `No active network processes found to ignore.`, buttons: [] };
+        }
+
+        const buttons = [];
+        for (let i = 0; i < names.length; i += 2) {
+            const row = [];
+            for (let j = 0; j < 2; j++) {
+                if (i + j < names.length) {
+                    const name = names[i + j];
+                    row.push({ text: `🙈 Ignore ${name}`, callback: `cmd_monitor ignore ${name}` });
+                }
+            }
+            buttons.push(row);
+        }
+        return { message: `Select an active process name to unconditionally ignore in security scans:`, buttons };
+    }
+
+    return null;
+}
+
+/**
+ * Telegram UI Hook: Appends dynamic context buttons to string outputs.
+ */
+export async function getTelegramPostProcessor(cmdText, outputText) {
+    if (!outputText.includes('PID:')) return null;
+
+    const dynamicButtons = [];
+    const pidMatches = [...outputText.matchAll(/PID:\s*(\d+)/gi)];
+    const pids = [...new Set(pidMatches.map(m => m[1]))].slice(0, 30);
+    
+    pids.forEach(pid => {
+        dynamicButtons.push([
+            { text: `🔍 Inspect PID ${pid}`, callback: `cmd_monitor inspect ${pid}` },
+            { text: `💀 Kill PID ${pid}`, callback: `cmd_monitor kill ${pid}` }
+        ]);
+    });
+
+    return { buttons: dynamicButtons };
+}

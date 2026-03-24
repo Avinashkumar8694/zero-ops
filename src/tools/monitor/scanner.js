@@ -172,11 +172,27 @@ export async function sendTelegramAlert(message) {
 
     const { token, chat_id } = telegram;
     const url = `https://api.telegram.org/bot${token}/sendMessage`;
-    const data = JSON.stringify({
+    const payload = {
         chat_id: chat_id,
         text: `🚨 [zero-ops Security Alert]\n\n${message}`,
         parse_mode: 'HTML'
-    });
+    };
+
+    // Extract PID to dynamically generate Inspect/Kill buttons for alerts
+    const pidMatch = message.match(/PID:\s*(\d+)/i);
+    if (pidMatch && pidMatch[1]) {
+        const pid = pidMatch[1];
+        payload.reply_markup = {
+            inline_keyboard: [
+                [
+                    { text: `🔍 Inspect PID ${pid}`, callback_data: `cmd_monitor inspect ${pid}` },
+                    { text: `💀 Kill PID ${pid}`, callback_data: `cmd_monitor kill ${pid}` }
+                ]
+            ]
+        };
+    }
+
+    const data = JSON.stringify(payload);
 
     return new Promise((resolve) => {
         const req = https.request(url, {

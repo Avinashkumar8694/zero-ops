@@ -156,7 +156,58 @@ Examples:
   Take screenshot (Full Screen):
     $ zero-ops desktop screenshot
 
-  Take screenshot (Named Window):
+    Take screenshot (Named Window):
     $ zero-ops desktop screenshot window "Google Chrome"
     `);
+}
+
+/**
+ * Telegram UI Hook: Provides dynamic interactive buttons for parameterless commands.
+ */
+export async function getTelegramInterceptor(cmdText, executeCommand) {
+    if (cmdText === 'desktop close' || cmdText === 'desktop minimize') {
+        const action = cmdText.split(' ')[1];
+        
+        const desktopOutput = await executeCommand('desktop list');
+        const appMatches = [...desktopOutput.matchAll(/^\s*-\s+(.+)$/gm)];
+        const apps = [...new Set(appMatches.map(m => m[1].trim()))].slice(0, 15);
+        
+        if (apps.length === 0) {
+            return { message: `No active applications found to ${action}.`, buttons: [] };
+        }
+
+        const buttons = [];
+        apps.forEach(app => {
+            const shortApp = app.length > 25 ? app.substring(0, 25) + '...' : app;
+            const callbackApp = app.length > 35 ? app.substring(0, 35) : app;
+            const icon = action === 'close' ? '❌' : '📉';
+            buttons.push([{ text: `${icon} ${shortApp}`, callback: `cmd_desktop ${action} "${callbackApp}"` }]);
+        });
+        
+        return { message: `Select an application to ${action}:`, buttons };
+    }
+    return null;
+}
+
+/**
+ * Telegram UI Hook: Appends dynamic context buttons to string outputs.
+ */
+export async function getTelegramPostProcessor(cmdText, outputText) {
+    if (cmdText.trim().startsWith('desktop list')) {
+        const dynamicButtons = [];
+        const appMatches = [...outputText.matchAll(/^\s*-\s+(.+)$/gm)];
+        const apps = [...new Set(appMatches.map(m => m[1].trim()))].slice(0, 6);
+        
+        apps.forEach(app => {
+            const shortApp = app.length > 25 ? app.substring(0, 25) + '...' : app;
+            const callbackApp = app.length > 35 ? app.substring(0, 35) : app;
+            dynamicButtons.push([
+                { text: `📉 Min ${shortApp}`, callback: `cmd_desktop minimize "${callbackApp}"` },
+                { text: `❌ Close ${shortApp}`, callback: `cmd_desktop close "${callbackApp}"` }
+            ]);
+        });
+        
+        return { buttons: dynamicButtons };
+    }
+    return null;
 }

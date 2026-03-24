@@ -169,5 +169,31 @@ Examples:
 
   Follow logs:
     $ zero-ops telegram logs
+
+  Usage in Telegram:
+    Send "menu" to the bot to get a list of interactive quick action buttons!
     `);
+}
+
+/**
+ * Telegram UI Hook: Provides dynamic interactive buttons and instructional prompts.
+ */
+export async function getTelegramInterceptor(cmdText, executeCommand) {
+    if (cmdText === 'telegram config set') {
+        return { 
+            message: `⚠️ 'telegram config set' requires custom parameters (Key and Value) that cannot be intuitively selected via buttons.\n\nPlease copy and edit the following command directly into the chat:\n\n\`zero-ops telegram config set <key> <value>\``, 
+            buttons: [] 
+        };
+    }
+    
+    if (cmdText === 'telegram config get') {
+        return { 
+            message: `Select a configuration key to retrieve:`, 
+            buttons: [
+                [{ text: `🔑 Token`, callback: `cmd_telegram config get token` }],
+                [{ text: `💬 Chat ID`, callback: `cmd_telegram config get chat_id` }]
+            ]
+        };
+    }
+    return null;
 }
