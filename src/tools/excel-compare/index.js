@@ -32,7 +32,29 @@ function writeConfig(config) {
 }
 
 export default async function (program, toolName) {
-    program.description('Premium Excel Data Comparator');
+    program
+        .description('Premium Excel Data Comparator & Reconciliation Engine')
+        .addHelpText('after', `
+Example Workflows:
+  1. Setup Local AI (Ollama):
+     $ zero-ops excel-compare config set aiProvider ollama
+     $ zero-ops excel-compare config set ollamaModel llama3
+     $ zero-ops excel-compare
+
+  2. Setup Cloud AI (OpenAI):
+     $ zero-ops excel-compare config set aiProvider openai
+     $ zero-ops excel-compare config set openAiKey sk-proj-xxxx...
+     $ zero-ops excel-compare
+
+  3. Define a Global Primary Key:
+     $ zero-ops excel-compare config set defaultPrimaryKey "Employee ID"
+     $ zero-ops excel-compare
+
+Notes:
+  - The tool starts a local web server (default: http://localhost:8378).
+  - All Excel parsing and diffing happens safely inside your browser.
+  - Supports .xlsx, .xlsm, .xls, and .csv formats.
+`);
 
     // Sub-command: config
     const configCmd = program.command('config')
@@ -64,20 +86,22 @@ export default async function (program, toolName) {
         });
 
     // Detailed Help Section for Config
-    configCmd.on('--help', () => {
-        console.log('');
-        console.log('Available Configuration Keys:');
-        console.log('  aiProvider         : The active AI backend. "openai" (default) or "ollama"');
-        console.log('  openAiKey          : Your OpenAI API Key (sk-...)');
-        console.log('  ollamaUrl          : URL for local Ollama API (default: http://localhost:11434/api/generate)');
-        console.log('  ollamaModel        : Ollama model to use for insights (default: llama3)');
-        console.log('  defaultPrimaryKey  : Default column name to use as Primary Key (e.g. ID, Email)');
-        console.log('  ignoreCase         : "true" to ignore string casing during diff');
-        console.log('');
-        console.log('Examples:');
-        console.log('  $ zero-ops excel-compare config set aiProvider ollama');
-        console.log('  $ zero-ops excel-compare config set ollamaModel phi3');
-    });
+    configCmd.addHelpText('after', `
+Available Configuration Keys:
+  aiProvider         : The active AI backend. "openai" or "ollama"
+  openAiKey          : Your OpenAI API Key (sk-...)
+  ollamaUrl          : URL for local Ollama API (default: http://localhost:11434/api/generate)
+  ollamaModel        : Ollama model to use for insights (default: llama3)
+  defaultPrimaryKey  : Default column name to use as Primary Key (e.g. ID, Email)
+  lookaheadDistance  : How many rows to scan ahead to automatically align added/deleted rows when no PK is used (default: 50)
+  similarityThreshold: Minimum match ratio needed to treat misaligned rows as Modified instead of Deleted/Added (0.0 - 1.0, default: 0.5)
+  ignoreCase         : "true" to ignore string casing during diff
+
+Examples:
+  $ zero-ops excel-compare config set aiProvider ollama
+  $ zero-ops excel-compare config set defaultPrimaryKey "Transaction_ID"
+  $ zero-ops excel-compare config get
+`);
 
     // Default action (starts server)
     program.action(async () => {

@@ -46,6 +46,15 @@ A complete visual Git-style merge conflict resolution workflow for Excel data.
 *   **Exportable Reports**: Generate a visually rich HTML or PDF report, or export the raw diff data as a new Excel file or JSON.
 *   **Large File Support**: Efficient parsing (via streams or Web Workers) to handle large datasets without freezing the browser.
 
+### 🚀 Pro Features: Future Roadmap (Proposed)
+High-impact capabilities for Enterprise-grade reconciliation.
+*   **AI-Assisted Column Auto-Mapper**: If column headers were renamed (e.g., "ID" -> "Client_Ref"), the AI analyzes sample data distribution to automatically suggest the correct logical mapping.
+*   **Synchronized Side-by-Side View**: A dual-pane layout where scrolling the Base file automatically scrolls the Target file, useful for manual visual spot-checks of complex formatting.
+*   **Visual Analytics Dashboard**: Mini-charts (Bar/Pie) showing the percentage of sheet similarity and a "Variance Waterfall" chart for the most significant numeric changes.
+*   **Pre-Processing "Clean-Up" Rules**: User-defined regex or formatting rules (e.g., "Remove leading zeros", "Force Uppercase", "Trim Whitespace") that run on the data *before* the diff engine compares it, reducing false positives.
+*   **Batch Folder Reconciliation**: Instead of comparing two files, users can drag two folders. The tool automatically pairs files by name and generates a single "Master Audit Summary" for the entire project.
+*   **Conditional Formatting Change Detection**: Detects if the *rules* themselves changed (e.g., the threshold for "Overdue" changed from 30 days to 60 days), even if the cell values are the same.
+
 ### Enterprise & Pro Capabilities
 
 #### 🤖 Deep Dive: AI-Powered Insights Architecture

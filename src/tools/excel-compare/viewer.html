@@ -417,6 +417,59 @@
 
         @keyframes spin { to { transform: rotate(360deg); } }
 
+        /* Split View Extensions */
+        .table-wrapper { display: none; }
+        .table-wrapper.active { display: block; }
+        .split-container { display: none; flex: 1; flex-direction: row; overflow: hidden; gap: 8px; padding: 0 8px 8px 8px; background: #0b0d10; }
+        .split-container.active { display: flex; }
+        
+        .pane {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .pane-title {
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.03);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            display: flex; justify-content: space-between;
+        }
+        .pane-body { flex: 1; overflow: auto; }
+
+        .view-toggle-group {
+            display: flex;
+            background: rgba(255,255,255,0.05);
+            padding: 2px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+        }
+        .view-btn {
+            padding: 4px 12px;
+            font-size: 0.75rem;
+            border: none;
+            background: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: 4px;
+            transition: 0.2s;
+        }
+        .view-btn.active {
+            background: var(--accent-blue);
+            color: white;
+        }
+
+        /* Sync Ghosting */
+        tr.ghost-row { opacity: 0.1; pointer-events: none; }
+        tr.ghost-row td { border-color: transparent; }
+
     </style>
 </head>
 <body>
@@ -490,7 +543,11 @@
         
         <div class="data-panel">
             <div class="toolbar">
-                <label style="display:flex;align-items:center;gap:8px;font-size:0.875rem;cursor:pointer;">
+                <div class="view-toggle-group">
+                    <button class="view-btn active" id="btnViewUnified">Unified View</button>
+                    <button class="view-btn" id="btnViewSplit">Side-by-Side View</button>
+                </div>
+                <label style="display:flex;align-items:center;gap:8px;font-size:0.875rem;cursor:pointer;margin-left:16px;">
                     <input type="checkbox" id="chkShowOnlyDiff" /> Show Only Differences
                 </label>
                 <button class="btn" id="btnExportMerge" style="margin-left:auto;border-color:#10b981;color:#10b981;font-weight:600;">⬇️ Export Merged Master</button>
@@ -503,13 +560,35 @@
                 <div id="aiSummaryContent" style="font-size:0.9rem;line-height:1.5;">Generating summary...</div>
             </div>
 
-            <div class="table-wrapper">
+            <div class="table-wrapper active" id="unifiedWrapper">
                 <table id="dataTable">
                     <thead id="dataHead"></thead>
                     <tbody id="dataBody">
                         <!-- Dynamically populated -->
                     </tbody>
                 </table>
+            </div>
+
+            <!-- Split View Wrapper -->
+            <div class="split-container" id="splitWrapper">
+                <div class="pane">
+                    <div class="pane-title"><span>BASE (V1)</span></div>
+                    <div class="pane-body" id="scrollBase" onscroll="syncScroll(this, 'scrollTarget')">
+                        <table>
+                            <thead id="baseHead"></thead>
+                            <tbody id="baseBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="pane">
+                    <div class="pane-title"><span>TARGET (V2)</span></div>
+                    <div class="pane-body" id="scrollTarget" onscroll="syncScroll(this, 'scrollBase')">
+                        <table>
+                            <thead id="targetHead"></thead>
+                            <tbody id="targetBody"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -552,7 +631,17 @@
                 <input type="text" id="cfgPrimaryKey" class="control-input" placeholder="e.g. ID, Email, Part_Number">
             </div>
 
-            <label style="display:flex;align-items:center;gap:8px;font-size:0.875rem;cursor:pointer;">
+            <div class="control-group">
+                <label class="control-label">Lookahead Distance (Rows)</label>
+                <input type="number" id="cfgLookahead" class="control-input" placeholder="50" min="1" max="1000" title="How many rows to scan ahead to automatically align added/deleted rows when no PK is used">
+            </div>
+
+            <div class="control-group" style="margin-top: 4px;">
+                <label class="control-label">Similarity Threshold (0.0 to 1.0)</label>
+                <input type="number" id="cfgSimilarity" class="control-input" placeholder="0.5" min="0" max="1" step="0.1" title="Minimum match ratio (e.g. 0.5 = 50% columns match) needed to treat misaligned rows as Modified instead of Deleted/Added">
+            </div>
+
+            <label style="display:flex;align-items:center;gap:8px;font-size:0.875rem;cursor:pointer;margin-top:8px;">
                 <input type="checkbox" id="cfgIgnoreCase" /> Ignore String Casing in Diffs
             </label>
 
@@ -759,6 +848,8 @@
         document.getElementById('cfgOllamaUrl').value = systemConfig.ollamaUrl || 'http://localhost:11434/api/generate';
         document.getElementById('cfgOllamaModel').value = systemConfig.ollamaModel || 'llama3';
         document.getElementById('cfgPrimaryKey').value = systemConfig.defaultPrimaryKey || '';
+        document.getElementById('cfgLookahead').value = systemConfig.lookaheadDistance || 50;
+        document.getElementById('cfgSimilarity').value = systemConfig.similarityThreshold || 0.50;
         document.getElementById('cfgIgnoreCase').checked = systemConfig.ignoreCase === true || systemConfig.ignoreCase === 'true';
         selProv.dispatchEvent(new Event('change'));
         
@@ -776,7 +867,9 @@
             openAiKey: document.getElementById('cfgApiKey').value,
             ollamaUrl: document.getElementById('cfgOllamaUrl').value,
             ollamaModel: document.getElementById('cfgOllamaModel').value,
-            defaultPrimaryKey: document.getElementById('cfgPrimaryKey').value.trim() || null,
+            defaultPrimaryKey: document.getElementById('cfgPrimaryKey').value,
+            lookaheadDistance: parseInt(document.getElementById('cfgLookahead').value, 10),
+            similarityThreshold: parseFloat(document.getElementById('cfgSimilarity').value),
             ignoreCase: document.getElementById('cfgIgnoreCase').checked
         };
 
@@ -857,30 +950,111 @@
                 }
             });
         } else {
-            // Raw index based diffing (fallback)
-            const maxLen = Math.max(baseData.length, targetData.length);
-            for(let i = 0; i < maxLen; i++) {
+            /**
+             * Heuristic Row Alignment (Sliding Window Lookahead)
+             * --------------------------------------------------
+             * Problem: When no Primary Key is provided, a simple 1-to-1 index comparison (Row 5 vs Row 5)
+             *          fails completely if a single row is inserted or deleted, causing every subsequent row 
+             *          to be falsely marked as "Modified" due to the cascading index misalignment.
+             * 
+             * Solution: We use a greedy "Sliding Window" algorithm to dynamically re-align rows:
+             *   1. Compare the Base row (i) and Target row (j) by hashing their contents.
+             *   2. If they mismatch, we "look ahead" up to N rows (config.lookaheadDistance) 
+             *      in both the Base and Target arrays to find an exact matching row hash.
+             *   3. If a match is found ahead in the Target, it implies the rows in-between were "Added".
+             *   4. If a match is found ahead in the Base, it implies the rows in-between were "Removed".
+             *   5. The pointers (i, j) are continuously shifted to gracefully recover alignment.
+             */
+            let i = 0; // base pointer
+            let j = 0; // target pointer
+            const lookahead = parseInt(config.lookaheadDistance, 10) || 50;
+            const threshold = parseFloat(config.similarityThreshold) || 0.50;
+
+            const getSimilarity = (r1, r2) => {
+                let matches = 0;
+                let validCols = 0;
+                headers.forEach(h => {
+                    const v1 = String(r1[h] ?? "").trim();
+                    const v2 = String(r2[h] ?? "").trim();
+                    validCols++;
+                    if (compareVals(v1, v2)) matches++;
+                });
+                return validCols ? (matches / validCols) : 0;
+            };
+
+            while(i < baseData.length || j < targetData.length) {
                 const bRow = baseData[i];
-                const tRow = targetData[i];
-                if (bRow && !tRow) {
-                    combinedRows.push({ status: 'removed', mergeState: 'rejected', data: bRow, diffs: {} });
-                    isModified = true;
-                } else if (!bRow && tRow) {
+                const tRow = targetData[j];
+
+                if (!bRow) {
                     combinedRows.push({ status: 'added', mergeState: 'accepted', data: tRow, diffs: {} });
-                    isModified = true;
+                    isModified = true; j++;
+                } else if (!tRow) {
+                    combinedRows.push({ status: 'removed', mergeState: 'rejected', data: bRow, diffs: {} });
+                    isModified = true; i++;
                 } else {
-                    const diffs = {};
-                    let rowMod = false;
-                    headers.forEach(h => {
-                        const bVal = bRow[h] ?? "";
-                        const tVal = tRow[h] ?? "";
-                        if (!compareVals(bVal, tVal)) {
-                            diffs[h] = { old: bVal, new: tVal, mergeState: 'target' };
-                            rowMod = true;
-                            isModified = true;
+                    const sim = getSimilarity(bRow, tRow);
+
+                    if (sim === 1) {
+                        combinedRows.push({ status: 'identical', data: tRow, baseRowNum: bRow.__rowNum, diffs: {} });
+                        i++; j++;
+                    } else {
+                        // 1. Lookahead for EXACT match
+                        let exactInTarget = -1;
+                        for(let k = 1; k <= lookahead && (j + k) < targetData.length; k++) {
+                            if (getSimilarity(bRow, targetData[j + k]) === 1) { exactInTarget = k; break; }
                         }
-                    });
-                    combinedRows.push({ status: rowMod ? 'modified' : 'identical', data: tRow, baseRowNum: bRow.__rowNum, diffs });
+
+                        let exactInBase = -1;
+                        for(let k = 1; k <= lookahead && (i + k) < baseData.length; k++) {
+                            if (getSimilarity(tRow, baseData[i + k]) === 1) { exactInBase = k; break; }
+                        }
+
+                        if (exactInTarget !== -1 && (exactInBase === -1 || exactInTarget <= exactInBase)) {
+                            combinedRows.push({ status: 'added', mergeState: 'accepted', data: tRow, diffs: {} });
+                            isModified = true; j++;
+                        } else if (exactInBase !== -1) {
+                            combinedRows.push({ status: 'removed', mergeState: 'rejected', data: bRow, diffs: {} });
+                            isModified = true; i++;
+                        } else if (sim >= threshold) {
+                            // 2. No exact match ahead, but CURRENT rows are sufficiently similar -> Treat as MODIFIED
+                            const diffs = {};
+                            let rowMod = false;
+                            headers.forEach(h => {
+                                const bVal = bRow[h] ?? "";
+                                const tVal = tRow[h] ?? "";
+                                if (!compareVals(bVal, tVal)) {
+                                    diffs[h] = { old: bVal, new: tVal, mergeState: 'target' };
+                                    rowMod = true; isModified = true;
+                                }
+                            });
+                            combinedRows.push({ status: rowMod ? 'modified' : 'identical', data: tRow, baseRowNum: bRow.__rowNum, diffs });
+                            i++; j++;
+                        } else {
+                            // 3. Current rows are not similar. Lookahead for FUZZY match ahead
+                            let fuzzyInTarget = -1;
+                            for(let k = 1; k <= lookahead && (j + k) < targetData.length; k++) {
+                                if (getSimilarity(bRow, targetData[j + k]) >= threshold) { fuzzyInTarget = k; break; }
+                            }
+
+                            let fuzzyInBase = -1;
+                            for(let k = 1; k <= lookahead && (i + k) < baseData.length; k++) {
+                                if (getSimilarity(tRow, baseData[i + k]) >= threshold) { fuzzyInBase = k; break; }
+                            }
+
+                            if (fuzzyInTarget !== -1 && (fuzzyInBase === -1 || fuzzyInTarget <= fuzzyInBase)) {
+                                combinedRows.push({ status: 'added', mergeState: 'accepted', data: tRow, diffs: {} });
+                                isModified = true; j++;
+                            } else if (fuzzyInBase !== -1) {
+                                combinedRows.push({ status: 'removed', mergeState: 'rejected', data: bRow, diffs: {} });
+                                isModified = true; i++;
+                            } else {
+                                // 4. No logical alignment found. Mark Base as Removed, let Target be tested next iteration.
+                                combinedRows.push({ status: 'removed', mergeState: 'rejected', data: bRow, diffs: {} });
+                                isModified = true; i++;
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -915,6 +1089,47 @@
         renderTable();
     }
 
+    let viewMode = 'unified';
+    let isSyncingLeft = false;
+    let isSyncingRight = false;
+    
+    // Global function for inline HTML onscroll
+    window.syncScroll = function(source, targetId) {
+        if (targetId === 'scrollTarget') {
+            if (!isSyncingLeft) {
+                isSyncingRight = true;
+                const target = document.getElementById(targetId);
+                if(target) { target.scrollTop = source.scrollTop; target.scrollLeft = source.scrollLeft; }
+            }
+            isSyncingLeft = false;
+        } else {
+            if (!isSyncingRight) {
+                isSyncingLeft = true;
+                const target = document.getElementById(targetId);
+                if(target) { target.scrollTop = source.scrollTop; target.scrollLeft = source.scrollLeft; }
+            }
+            isSyncingRight = false;
+        }
+    };
+
+    document.getElementById('btnViewUnified').addEventListener('click', () => {
+        viewMode = 'unified';
+        document.getElementById('btnViewUnified').classList.add('active');
+        document.getElementById('btnViewSplit').classList.remove('active');
+        document.getElementById('unifiedWrapper').classList.add('active');
+        document.getElementById('splitWrapper').classList.remove('active');
+        renderTable();
+    });
+    
+    document.getElementById('btnViewSplit').addEventListener('click', () => {
+        viewMode = 'split';
+        document.getElementById('btnViewSplit').classList.add('active');
+        document.getElementById('btnViewUnified').classList.remove('active');
+        document.getElementById('unifiedWrapper').classList.remove('active');
+        document.getElementById('splitWrapper').classList.add('active');
+        renderTable();
+    });
+
     document.getElementById('chkShowOnlyDiff').addEventListener('change', () => {
         renderTable();
     });
@@ -931,13 +1146,25 @@
         tbody.innerHTML = '';
 
         if(sheet.status === 'removed') {
-            tbody.innerHTML = '<tr><td style="color:#ef4444;text-align:center;padding:24px;">This entire sheet was removed in the Target file.</td></tr>';
+            document.getElementById('dataBody').innerHTML = '<tr><td style="color:#ef4444;text-align:center;padding:24px;">This entire sheet was removed in the Target file.</td></tr>';
             return;
         }
 
         const headers = sheet.headers;
-        const theadTr = document.createElement('tr');
+        const showOnlyDiff = document.getElementById('chkShowOnlyDiff').checked;
+
+        if (viewMode === 'split') {
+            renderSplitTable(sheet, headers, showOnlyDiff);
+        } else {
+            renderUnifiedTable(sheet, headers, showOnlyDiff);
+        }
+    }
+
+    function renderUnifiedTable(sheet, headers, showOnlyDiff) {
+        const thead = document.getElementById('dataHead');
+        const tbody = document.getElementById('dataBody');
         
+        const theadTr = document.createElement('tr');
         const actionTh = document.createElement('th');
         actionTh.textContent = 'Merge Action';
         actionTh.style.width = '120px';
@@ -958,7 +1185,6 @@
         });
         thead.appendChild(theadTr);
 
-        const showOnlyDiff = document.getElementById('chkShowOnlyDiff').checked;
         const frag = document.createDocumentFragment();
         let renderedCount = 0;
 
@@ -1059,6 +1285,97 @@
             tbody.innerHTML = '<tr><td colspan="100%" style="text-align:center;color:var(--text-muted);padding:24px;">No differences found.</td></tr>';
         } else {
             tbody.appendChild(frag);
+        }
+    }
+
+    function renderSplitTable(sheet, headers, showOnlyDiff) {
+        const bHead = document.getElementById('baseHead');
+        const bBody = document.getElementById('baseBody');
+        const tHead = document.getElementById('targetHead');
+        const tBody = document.getElementById('targetBody');
+        
+        bHead.innerHTML = ''; bBody.innerHTML = '';
+        tHead.innerHTML = ''; tBody.innerHTML = '';
+
+        const trHb = document.createElement('tr'); 
+        const trHt = document.createElement('tr');
+        
+        // Add Row Num Header
+        const numHb = document.createElement('th'); numHb.textContent = '#'; numHb.style.width='40px'; trHb.appendChild(numHb);
+        const numHt = document.createElement('th'); numHt.textContent = '#'; numHt.style.width='40px'; trHt.appendChild(numHt);
+
+        headers.forEach(h => {
+            const thb = document.createElement('th'); thb.textContent = h; trHb.appendChild(thb);
+            const tht = document.createElement('th'); tht.textContent = h; trHt.appendChild(tht);
+        });
+        
+        bHead.appendChild(trHb); 
+        tHead.appendChild(trHt);
+
+        const fragB = document.createDocumentFragment();
+        const fragT = document.createDocumentFragment();
+        let renderedCount = 0;
+
+        sheet.rows.forEach(r => {
+            if (showOnlyDiff && r.status === 'identical') return;
+            renderedCount++;
+            
+            const trB = document.createElement('tr');
+            const trT = document.createElement('tr');
+            
+            // Build Row Num Col
+            const tdbNum = document.createElement('td'); tdbNum.style.color='var(--text-muted)';
+            const tdtNum = document.createElement('td'); tdtNum.style.color='var(--text-muted)';
+
+            if (r.status === 'added') {
+                trB.className = 'ghost-row';
+                trT.className = 'row-added';
+                tdbNum.textContent = '-'; tdtNum.textContent = r.data.__rowNum;
+                trB.appendChild(tdbNum); trT.appendChild(tdtNum);
+
+                headers.forEach(h => {
+                    const tdb = document.createElement('td'); tdb.innerHTML = '&nbsp;'; trB.appendChild(tdb);
+                    const tdt = document.createElement('td'); tdt.textContent = r.data[h] ?? ""; trT.appendChild(tdt);
+                });
+            } else if (r.status === 'removed') {
+                trB.className = 'row-removed';
+                trT.className = 'ghost-row';
+                tdbNum.textContent = r.data.__rowNum; tdtNum.textContent = '-';
+                trB.appendChild(tdbNum); trT.appendChild(tdtNum);
+
+                headers.forEach(h => {
+                    const tdb = document.createElement('td'); tdb.textContent = r.data[h] ?? ""; trB.appendChild(tdb);
+                    const tdt = document.createElement('td'); tdt.innerHTML = '&nbsp;'; trT.appendChild(tdt);
+                });
+            } else {
+                tdbNum.textContent = r.baseRowNum || r.data.__rowNum; 
+                tdtNum.textContent = r.data.__rowNum;
+                trB.appendChild(tdbNum); trT.appendChild(tdtNum);
+
+                headers.forEach(h => {
+                    const tdb = document.createElement('td');
+                    const tdt = document.createElement('td');
+                    if (r.status === 'modified' && r.diffs[h]) {
+                        tdb.className = 'cell-modified'; tdb.style.color = '#ef4444'; tdb.textContent = r.diffs[h].old || '-';
+                        tdt.className = 'cell-modified'; tdt.style.color = '#10b981'; tdt.textContent = r.diffs[h].new || '-';
+                    } else {
+                        tdb.textContent = r.data[h] ?? "";
+                        tdt.textContent = r.data[h] ?? "";
+                    }
+                    trB.appendChild(tdb);
+                    trT.appendChild(tdt);
+                });
+            }
+            fragB.appendChild(trB);
+            fragT.appendChild(trT);
+        });
+
+        if (renderedCount === 0 && showOnlyDiff) {
+            bBody.innerHTML = '<tr><td colspan="100%" style="text-align:center;color:var(--text-muted);padding:24px;">No differences.</td></tr>';
+            tBody.innerHTML = '<tr><td colspan="100%" style="text-align:center;color:var(--text-muted);padding:24px;">No differences.</td></tr>';
+        } else {
+            bBody.appendChild(fragB);
+            tBody.appendChild(fragT);
         }
     }
 
