@@ -630,6 +630,40 @@
         }
     });
 
+    function extractSheetData(ws) {
+        const rangeStr = ws['!ref'];
+        if (!rangeStr) return [];
+        const range = XLSX.utils.decode_range(rangeStr);
+        const headers = [];
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+            const cell = ws[XLSX.utils.encode_cell({c: C, r: range.s.r})];
+            headers.push(cell ? (cell.w || cell.v || `Col_${C}`) : `Col_${C}`);
+        }
+
+        const rows = [];
+        for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+            const rowObj = {};
+            let hasData = false;
+            for (let C = range.s.c; C <= range.e.c; ++C) {
+                const h = headers[C - range.s.c];
+                const cell = ws[XLSX.utils.encode_cell({c: C, r: R})];
+                if (!cell) {
+                    rowObj[h] = "";
+                } else {
+                    hasData = true;
+                    let val = cell.w !== undefined ? cell.w : (cell.v ?? "");
+                    if (cell.f) {
+                        rowObj[h] = `[ƒ =${cell.f}] ${val}`;
+                    } else {
+                        rowObj[h] = String(val);
+                    }
+                }
+            }
+            if (hasData) rows.push(rowObj);
+        }
+        return rows;
+    }
+
     function performDiff(baseBuf, targetBuf, pk, config) {
         const wbBase = XLSX.read(baseBuf, { type: 'array' });
         const wbTarget = XLSX.read(targetBuf, { type: 'array' });
@@ -647,14 +681,14 @@
             if (inBase && !inTarget) {
                 results.push({ name: sheetName, status: 'removed', rows: [], headers: [] });
             } else if (!inBase && inTarget) {
-                const data = XLSX.utils.sheet_to_json(wbTarget.Sheets[sheetName], { defval: "" });
+                const data = extractSheetData(wbTarget.Sheets[sheetName]);
                 const headers = getHeaders(data);
                 const rows = data.map(r => ({ status: 'added', data: r, diffs: {} }));
                 results.push({ name: sheetName, status: 'added', rows, headers });
             } else {
                 // Determine if identical or modified
-                const baseData = XLSX.utils.sheet_to_json(wbBase.Sheets[sheetName], { defval: "" });
-                const targetData = XLSX.utils.sheet_to_json(wbTarget.Sheets[sheetName], { defval: "" });
+                const baseData = extractSheetData(wbBase.Sheets[sheetName]);
+                const targetData = extractSheetData(wbTarget.Sheets[sheetName]);
                 
                 const headers = new Set([...getHeaders(baseData), ...getHeaders(targetData)]);
                 const { rows, isModified } = diffRows(baseData, targetData, pk, Array.from(headers), config);
@@ -879,6 +913,13 @@
 
         const headers = sheet.headers;
         const theadTr = document.createElement('tr');
+        
+        const actionTh = document.createElement('th');
+        actionTh.textContent = 'Action';
+        actionTh.style.width = '60px';
+        actionTh.style.textAlign = 'center';
+        theadTr.appendChild(actionTh);
+
         headers.forEach(h => {
             const th = document.createElement('th');
             th.textContent = h;
@@ -897,6 +938,39 @@
             const tr = document.createElement('tr');
             if (r.status === 'added') tr.className = 'row-added';
             if (r.status === 'removed') tr.className = 'row-removed';
+
+            const actionTd = document.createElement('td');
+            actionTd.style.textAlign = 'center';
+            const copyBtn = document.createElement('button');
+            copyBtn.textContent = '📋';
+            copyBtn.title = 'Copy row to clipboard (Excel compatible)';
+            copyBtn.style.cssText = 'background:none; border:none; cursor:pointer; font-size:1.1rem; opacity:0.7; transition:opacity 0.2s;';
+            copyBtn.onmouseover = () => copyBtn.style.opacity = '1';
+            copyBtn.onmouseout = () => copyBtn.style.opacity = '0.7';
+            copyBtn.onclick = () => {
+                const rowText = headers.map(h => {
+                    let val = String(r.data[h] ?? "");
+                    
+                    // If the diff engine flagged this as a formula, e.g. `[ƒ =SUM(A1:B1)] 100`
+                    // Extract just the `=SUM(A1:B1)` part so it actually calculates when pasted!
+                    const formulaMatch = val.match(/^\[ƒ =([^\]]+)\]/);
+                    if (formulaMatch) {
+                        val = '=' + formulaMatch[1];
+                    }
+
+                    if (val.includes('\t') || val.includes('\n') || val.includes('"')) {
+                        return '"' + val.replace(/"/g, '""') + '"';
+                    }
+                    return val;
+                }).join('\t');
+                navigator.clipboard.writeText(rowText).then(() => {
+                    const orig = copyBtn.textContent;
+                    copyBtn.textContent = '✅';
+                    setTimeout(() => copyBtn.textContent = orig, 1500);
+                }).catch(err => alert("Copy failed: " + err));
+            };
+            actionTd.appendChild(copyBtn);
+            tr.appendChild(actionTd);
 
             headers.forEach(h => {
                 const td = document.createElement('td');
