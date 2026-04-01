@@ -18,7 +18,7 @@ const toolName = process.env.ZERO_OPS_TOOL_NAME || 'telegram';
 function log(msg) {
     const logFile = path.join(os.homedir(), '.zero-ops', 'telegram.log');
     const entry = `[${new Date().toISOString()}] ${msg}\n`;
-    fs.appendFileSync(logFile, entry);
+    fs.appendFileSync(logFile, entry, { mode: 0o600 });
 }
 
 // Load config
@@ -55,10 +55,11 @@ function getAvailableTools() {
 // Helper: Execute command
 function executeCommand(cmdStr) {
     return new Promise((resolve) => {
-        // cmdStr e.g. "desktop list" or "desktop minimize 'app name'"
-        // We need to parse cmdStr into arguments array safely.
-        // Simple split by space is not enough for quoted arguments.
-        // We will match regex for spaces outside quotes.
+        // Defense-in-depth: Reject shell pipeline operators even though spawn is safe
+        if (/[&|;]/.test(cmdStr)) {
+            log(`Blocked potentially malicious command string: ${cmdStr}`);
+            return resolve('Security Error: Shell operators (&, |, ;) are strictly prohibited.');
+        }
 
         const argsMatch = cmdStr.match(/(?:[^\s"]+|"[^"]*")+/g);
         const args = argsMatch ? argsMatch.map(a => a.replace(/^"|"$/g, '')) : [];
@@ -286,7 +287,11 @@ async function executeAndReply(ctx, text) {
 
     // 3. Otherwise treat as full command execution
     await ctx.reply(`Executing: ${text}...`);
-    const output = await executeCommand(text);
+    let output = await executeCommand(text);
+
+    // Security: Redact potential secrets before transmitting to Telegram
+    // Masks common password/token flags in process arg dumps (e.g. from monitor inspect)
+    output = output.replace(/(--password|-p|token|key|secret)\s*=?\s*["']?([^\s"']+)["']?/gi, '$1=********');
 
     // Check if output contains a file path that looks like an artifact (e.g. screenshot or photo)
     const fileMatch = output.match(/(Screenshot|Photo|Image) saved to (.*?)(\s|$)/);

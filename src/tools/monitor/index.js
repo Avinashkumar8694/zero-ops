@@ -257,7 +257,7 @@ export default function (program, toolName) {
             });
 
             subprocess.unref();
-            fs.writeFileSync(pidFile, subprocess.pid.toString());
+            fs.writeFileSync(pidFile, subprocess.pid.toString(), { mode: 0o600 });
             console.log(`✅ Security monitor successfully detached into background (PID: ${subprocess.pid})`);
             console.log(`📜 Persistent Audit Logs: ${logFile}`);
         });
