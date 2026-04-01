@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Path for global configuration
-const configPath = path.join(os.homedir(), '.zero-ops-excel-compare.json');
+const configPath = path.join(os.homedir(), '.zero-ops-excel.json');
 
 // Read config
 function readConfig() {
@@ -37,18 +37,18 @@ export default async function (program, toolName) {
         .addHelpText('after', `
 Example Workflows:
   1. Setup Local AI (Ollama):
-     $ zero-ops excel-compare config set aiProvider ollama
-     $ zero-ops excel-compare config set ollamaModel llama3
-     $ zero-ops excel-compare
+     $ zero-ops excel config set aiProvider ollama
+     $ zero-ops excel config set ollamaModel llama3
+     $ zero-ops excel
 
   2. Setup Cloud AI (OpenAI):
-     $ zero-ops excel-compare config set aiProvider openai
-     $ zero-ops excel-compare config set openAiKey sk-proj-xxxx...
-     $ zero-ops excel-compare
+     $ zero-ops excel config set aiProvider openai
+     $ zero-ops excel config set openAiKey sk-proj-xxxx...
+     $ zero-ops excel
 
   3. Define a Global Primary Key:
-     $ zero-ops excel-compare config set defaultPrimaryKey "Employee ID"
-     $ zero-ops excel-compare
+     $ zero-ops excel config set defaultPrimaryKey "Employee ID"
+     $ zero-ops excel
 
 Notes:
   - The tool starts a local web server (default: http://localhost:8378).
@@ -98,9 +98,9 @@ Available Configuration Keys:
   ignoreCase         : "true" to ignore string casing during diff
 
 Examples:
-  $ zero-ops excel-compare config set aiProvider ollama
-  $ zero-ops excel-compare config set defaultPrimaryKey "Transaction_ID"
-  $ zero-ops excel-compare config get
+  $ zero-ops excel config set aiProvider ollama
+  $ zero-ops excel config set defaultPrimaryKey "Transaction_ID"
+  $ zero-ops excel config get
 `);
 
     // Default action (starts server)
@@ -168,7 +168,7 @@ Examples:
 
                         if (provider === 'openai') {
                             if (!config.openAiKey) {
-                                res.writeHead(400); res.end(JSON.stringify({ error: 'OpenAI API Key not configured. Use `zero-ops excel-compare config set openAiKey <key>`' }));
+                                res.writeHead(400); res.end(JSON.stringify({ error: 'OpenAI API Key not configured. Use `zero-ops excel config set openAiKey <key>`' }));
                                 return;
                             }
                             
@@ -247,9 +247,9 @@ Examples:
  * Telegram UI Hook: Provides instructional prompts for multi-parameter commands.
  */
 export async function getTelegramInterceptor(cmdText, executeCommand) {
-    if (cmdText === 'excel-compare config set') {
+    if (cmdText === 'excel config set') {
         return { 
-            message: `⚠️ 'excel-compare config set' requires custom parameters (Key and Value) that cannot be intuitively selected via buttons.\n\nPlease copy and edit the following command directly into the chat:\n\n\`zero-ops excel-compare config set <key> <value>\``, 
+            message: `⚠️ 'excel config set' requires custom parameters (Key and Value) that cannot be intuitively selected via buttons.\n\nPlease copy and edit the following command directly into the chat:\n\n\`zero-ops excel config set <key> <value>\``, 
             buttons: [] 
         };
     }
