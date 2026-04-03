@@ -86,7 +86,7 @@ export default async function (program, toolName) {
             });
 
             subprocess.unref();
-            fs.writeFileSync(pidFile, subprocess.pid.toString());
+            fs.writeFileSync(pidFile, subprocess.pid.toString(), { mode: 0o600 });
             console.log(`Telegram bot started (PID: ${subprocess.pid}, Log: ${logFile})`);
         });
 

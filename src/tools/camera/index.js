@@ -2,7 +2,6 @@ import { exec } from 'child_process';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
-import NodeWebcam from 'node-webcam';
 
 export default async function (program, toolName) {
     program.description('Capture photos from system webcam');
@@ -174,6 +173,30 @@ Add-Type -TypeDefinition $code
                 });
             };
 
+            const captureWinBinary = async (savePath) => {
+                // To avoid supply chain malware, users can BYOB (Bring Your Own Binary) 
+                // by placing a trusted CommandCam.exe locally into bin/win32/
+                const binPath = path.join(__dirname, 'bin', 'win32', 'CommandCam.exe');
+                if (!fs.existsSync(binPath)) {
+                    throw new Error('Local trusted CommandCam.exe not found in bin/win32/');
+                }
+                
+                return new Promise((resolve, reject) => {
+                    exec(`"${binPath}" /filename "${savePath}.jpg" /delay 1000`, (err, stdout, stderr) => {
+                        if (err) {
+                            reject(new Error(stderr || err.message));
+                        } else {
+                            if (fs.existsSync(`${savePath}.jpg`)) {
+                                console.log(`Photo saved to ${savePath}.jpg via trusted custom binary.`);
+                                resolve();
+                            } else {
+                                reject(new Error('Local binary executed but photo was not saved.'));
+                            }
+                        }
+                    });
+                });
+            };
+
             const captureWithFfmpeg = async (savePath) => {
                 let cmd = '';
                 if (platform === 'darwin') {
@@ -205,52 +228,36 @@ Add-Type -TypeDefinition $code
                         await captureMacNative(savePath);
                         return;
                     } catch (e) {
-                        console.log('Native Swift capture failed, trying node-webcam/ffmpeg...');
+                        console.log('Native Swift capture failed, falling back to FFmpeg...');
                     }
                 } else if (platform === 'win32') {
-                    // Try Windows Native First
+                    // 1. Try Local Trusted Custom Binary First (BYOB)
+                    try {
+                        console.log('Attempting capture via Local Trusted Binary (CommandCam)...');
+                        await captureWinBinary(savePath);
+                        return;
+                    } catch (e) {
+                        console.log(`Local binary capture skipped: ${e.message}`);
+                    }
+
+                    // 2. Try Windows Native PowerShell
                     try {
                         console.log('Attempting native capture via PowerShell/avicap32...');
                         await captureWinNative(savePath);
                         return;
                     } catch (e) {
-                        console.log('Native Windows capture failed or not supported, trying node-webcam/ffmpeg...');
+                        console.log('Native Windows capture failed or not supported, falling back to FFmpeg...');
                     }
                 }
-                // Linux -> Falls through to node-webcam which tries fswebcam/ffmpeg
 
-                // Fallback / Standard Node-Webcam logic
-                // Check deps implicitly by running it or explicit check
-
-                const opts = {
-                    width: 1280,
-                    height: 720,
-                    quality: 100,
-                    delay: 1, // 1 second delay
-                    saveShots: true,
-                    output: "jpeg",
-                    device: false,
-                    callbackReturn: "location",
-                    verbose: false
-                };
-
-                const Webcam = NodeWebcam.create(opts);
-
-                console.log('Capturing photo via node-webcam...');
-
-                Webcam.capture(savePath, async (err, data) => {
-                    if (err) {
-                        console.error(`Error capturing photo with node-webcam: ${err.message}. Attempting FFmpeg fallback...`);
-                        try {
-                            await captureWithFfmpeg(savePath);
-                        } catch (ffmpegErr) {
-                            console.error(`Error capturing photo with FFmpeg: ${ffmpegErr.message}.`);
-                            console.error(`Tip: Ensure you have a camera tool installed (imagesnap for Mac, fswebcam for Linux, or ffmpeg).`);
-                        }
-                    } else {
-                        console.log(`Photo saved to ${data}`);
-                    }
-                });
+                // Linux or Fallback for Mac/Win
+                try {
+                    console.log('Attempting capture via FFmpeg (cross-platform fallback)...');
+                    await captureWithFfmpeg(savePath);
+                } catch (ffmpegErr) {
+                    console.error(`Error capturing photo with FFmpeg: ${ffmpegErr.message}.`);
+                    console.error(`Tip: Ensure you have FFmpeg installed and accessible in your PATH.`);
+                }
 
             } catch (e) {
                 console.error(`Error: ${e.message}`);

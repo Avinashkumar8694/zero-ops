@@ -98,6 +98,57 @@
             background: #2563eb;
         }
 
+        /* App Navigation Options */
+        .app-nav {
+            display: flex;
+            gap: 4px;
+            background: rgba(255,255,255,0.05);
+            padding: 4px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+        .nav-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 6px 16px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .nav-btn:hover { color: var(--text-primary); }
+        .nav-btn.active {
+            background: var(--surface-color);
+            color: var(--text-primary);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .app-mode {
+            display: none;
+            flex: 1;
+            flex-direction: column;
+            overflow: hidden;
+            width: 100%;
+        }
+        .app-mode.active {
+            display: flex;
+        }
+
+        /* Make studio table content editable clearly visible */
+        #studioTable td[contenteditable="true"] {
+            outline: none;
+            transition: background 0.2s;
+        }
+        #studioTable td[contenteditable="true"]:hover {
+            background: rgba(255,255,255,0.05);
+        }
+        #studioTable td[contenteditable="true"]:focus {
+            background: rgba(59, 130, 246, 0.2);
+            border-color: #3b82f6;
+        }
+
         .btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
@@ -501,11 +552,18 @@
 <body>
 
     <header>
-        <h1><span style="font-size:1.5rem;">📊</span> Excel Data Comparator</h1>
+        <div style="display:flex; align-items:center; gap:32px;">
+            <h1><span style="font-size:1.5rem;">📊</span> Excel Data Toolkit</h1>
+            <nav class="app-nav">
+                <button class="nav-btn active" data-app="compare" onclick="switchApp('compare')">⚖️ Compare</button>
+                <button class="nav-btn" data-app="studio" onclick="switchApp('studio')">✏️ Editor & Converter</button>
+            </nav>
+        </div>
         <div class="header-controls">
             <button class="btn" id="btnSettings" onclick="toggleSettings()">⚙ Settings</button>
-            <button class="btn" id="btnNew" onclick="location.reload()" style="display:none;">🔄 New Comparison</button>
+            <button class="btn" id="btnNew" onclick="location.reload()" style="display:none;">🔄 New</button>
             <button class="btn btn-primary" id="btnExport" style="display:none;">⬇ Export Report</button>
+            <button class="btn btn-primary" id="btnExportStudio" onclick="exportStudioWorkspace()" style="display:none; background:#10b981; border-color:#059669;">⬇ Export .xlsx</button>
         </div>
     </header>
 
@@ -514,8 +572,10 @@
         <div id="loaderText">Processing Workbooks...</div>
     </div>
 
-    <!-- UPLOAD LAYER -->
-    <div class="workspace" id="uploadLayer">
+    <!-- COMPARE APP MODE -->
+    <div id="app-compare" class="app-mode active">
+        <!-- UPLOAD LAYER -->
+        <div class="workspace" id="uploadLayer">
         <div class="upload-container">
             <div class="dropzone-wrapper">
                 
@@ -615,6 +675,75 @@
                         </table>
                     </div>
                 </div>
+            </div>
+        </div>
+        </div>
+    </div>
+    
+    <!-- STUDIO APP MODE -->
+    <div id="app-studio" class="app-mode">
+        <div class="workspace" id="studioUploadLayer">
+            <div class="upload-container">
+                <div style="text-align:center; margin-bottom: 24px;">
+                    <h2 style="font-size: 2rem; margin-bottom: 8px;">Excel Data Studio</h2>
+                    <p style="color: var(--text-muted);">Convert JSON/CSV to Excel, or create quick blank sheets.</p>
+                </div>
+                
+                <div class="dropzone-wrapper" style="max-width: 600px; height: 200px;">
+                    <div class="dropzone" id="dropStudio">
+                        <input type="file" id="fileStudio" class="file-input" accept=".xlsx,.xls,.csv,.json" multiple />
+                        <div class="initial-content">
+                            <div class="drop-icon">📂</div>
+                            <div class="drop-title">Load Files</div>
+                            <div class="drop-desc">Drag & drop JSON, CSV, or Excel here.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display:flex; gap: 16px; margin-top: 12px; justify-content:center;">
+                    <button class="btn btn-primary" onclick="createBlankSheet()" style="padding: 12px 24px; font-weight: 600;">+ Create Blank Sheet</button>
+                    <button class="btn" onclick="openPasteModal(false)" style="padding: 12px 24px; font-weight: 600; border-color: #a78bfa; color: #a78bfa;">📋 Paste Data</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="viewer" id="studioViewerLayer" style="display:none;">
+            <div class="sidebar">
+                <ul class="sheet-list" id="studioSheetList">
+                    <!-- Studio Sheets -->
+                </ul>
+                <button class="btn" style="margin: 16px; justify-content:center;" onclick="createBlankSheet()">+ New Sheet</button>
+            </div>
+            
+            <div class="data-panel">
+                <div class="toolbar">
+                    <button class="btn" onclick="document.getElementById('fileAppendStudio').click()" style="color:#3b82f6; border-color:#3b82f6;">📥 Import to Sheet</button>
+                    <input type="file" id="fileAppendStudio" style="display:none;" accept=".xlsx,.xls,.csv,.json" multiple />
+                    <button class="btn" onclick="openPasteModal(true)" style="color:#a78bfa; border-color:#a78bfa; margin-left:8px;">📋 Paste to Sheet</button>
+                    <button class="btn" onclick="deleteCurrentStudioSheet()" style="color:#ef4444; border-color:#ef4444; margin-left:8px;">🗑 Delete Sheet</button>
+                    <button class="btn" onclick="renameCurrentStudioSheet()" style="margin-left:8px;">✏️ Rename</button>
+                    <div style="margin-left:auto; font-size: 0.8rem; color: var(--text-muted);">Cells are editable. Click to type.</div>
+                </div>
+                <div class="table-wrapper active">
+                    <table id="studioTable">
+                        <thead id="studioHead"></thead>
+                        <tbody id="studioBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PASTE MODAL -->
+    <div class="loader-overlay" id="pasteModal" style="background: rgba(15,17,21,0.8); backdrop-filter: blur(5px);">
+        <div style="background: var(--surface-color); border: 1px solid var(--border-color); padding: 24px; border-radius: 12px; width: 600px; max-width: 90vw; display: flex; flex-direction: column; gap: 16px;">
+            <h2 style="margin: 0; font-size: 1.25rem;">📋 Paste JSON or CSV</h2>
+            
+            <textarea id="pasteInputArea" class="control-input" style="height: 250px; font-family: monospace; resize: vertical;" placeholder='[{"name":"John", "age":30}]'></textarea>
+            
+            <div style="display:flex; justify-content:flex-end; gap: 12px; margin-top: 8px;">
+                <button class="btn" onclick="document.getElementById('pasteModal').classList.remove('active')">Cancel</button>
+                <button class="btn btn-primary" onclick="processPastedData()">Parse & Load</button>
             </div>
         </div>
     </div>
@@ -1561,7 +1690,7 @@
             });
             const data = await res.json();
             if (data.error) {
-                content.innerHTML = `<span style="color:#ef4444;">🚨 Error: ${data.error}</span><br><br><span style="font-size:0.8rem;color:var(--text-muted);">Did you set your API key? Run: \`zero-ops excel-compare config set openAiKey sk-...\` in your terminal.</span>`;
+                content.innerHTML = `<span style="color:#ef4444;">🚨 Error: ${data.error}</span><br><br><span style="font-size:0.8rem;color:var(--text-muted);">Did you set your API key? Run: \`zero-ops excel config set openAiKey sk-...\` in your terminal.</span>`;
             } else {
                 if (typeof marked !== 'undefined') {
                     content.innerHTML = `<div class="md-preview">${marked.parse(data.summary)}</div>`;
@@ -1578,6 +1707,323 @@
             content.innerHTML = `<span style="color:#ef4444;">Exception: ${e.message}</span>`;
         }
     });
+
+    // --- APP SHELL ROUTING ---
+    function switchApp(mode) {
+        document.querySelectorAll('.app-mode').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+        
+        document.getElementById(`app-${mode}`).classList.add('active');
+        document.querySelector(`.nav-btn[data-app="${mode}"]`).classList.add('active');
+        
+        if (mode === 'compare') {
+            document.getElementById('btnNew').style.display = 'flex';
+            document.getElementById('btnExport').style.display = diffResult ? 'flex' : 'none';
+            document.getElementById('btnExportStudio').style.display = 'none';
+        } else {
+            document.getElementById('btnNew').style.display = 'none';
+            document.getElementById('btnExport').style.display = 'none';
+            document.getElementById('btnExportStudio').style.display = studioSheets.length > 0 ? 'flex' : 'none';
+        }
+    }
+
+    // --- STUDIO LOGIC ---
+    let studioSheets = [];
+    let currentStudioSheetId = null;
+
+    function flattenObject(ob) {
+        var toReturn = {};
+        for (var i in ob) {
+            if (!ob.hasOwnProperty(i)) continue;
+            if ((typeof ob[i]) == 'object' && ob[i] !== null) {
+                if (Array.isArray(ob[i])) {
+                    toReturn[i] = JSON.stringify(ob[i]);
+                } else {
+                    var flatObject = flattenObject(ob[i]);
+                    for (var x in flatObject) {
+                        if (!flatObject.hasOwnProperty(x)) continue;
+                        toReturn[i + '.' + x] = flatObject[x];
+                    }
+                }
+            } else {
+                toReturn[i] = ob[i];
+            }
+        }
+        return toReturn;
+    }
+
+    function handleStudioFiles(files, appendToCurrent = false) {
+        document.getElementById('globalLoader').classList.add('active');
+        document.getElementById('loaderText').textContent = "Processing Studio Data...";
+        
+        setTimeout(async () => {
+            try {
+                for (const file of files) {
+                    const ext = file.name.split('.').pop().toLowerCase();
+                    if (['csv','json'].includes(ext)) {
+                        const text = await file.text();
+                        if (ext === 'json') {
+                            try {
+                                const data = JSON.parse(text);
+                                if (Array.isArray(data)) {
+                                    const flatData = data.map(o => flattenObject(o));
+                                    if (appendToCurrent && currentStudioSheetId) appendStudioSheet(flatData); 
+                                    else addStudioSheet(file.name.replace('.json',''), flatData);
+                                } else {
+                                    // Multi-sheet JSON object
+                                    for (const [key, val] of Object.entries(data)) {
+                                        if (Array.isArray(val)) {
+                                            const flatData = val.map(o => flattenObject(o));
+                                            if (appendToCurrent && currentStudioSheetId) appendStudioSheet(flatData);
+                                            else addStudioSheet(key, flatData);
+                                        } else if (typeof val === 'object') {
+                                            const items = Object.entries(val).map(([k,v]) => ({ Key: k, Value: typeof v === 'object' ? JSON.stringify(v) : v }));
+                                            if (appendToCurrent && currentStudioSheetId) appendStudioSheet(items);
+                                            else addStudioSheet(key, items);
+                                        } else {
+                                            const items = [{ Key: key, Value: val }];
+                                            if (appendToCurrent && currentStudioSheetId) appendStudioSheet(items);
+                                            else addStudioSheet('Parsed', items);
+                                        }
+                                    }
+                                }
+                            } catch(e) {
+                                alert("Invalid JSON file: " + file.name);
+                            }
+                        } else if (ext === 'csv') {
+                           const workbook = XLSX.read(text, {type: 'string'});
+                           const sheetName = workbook.SheetNames[0];
+                           const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "" });
+                           if (appendToCurrent && currentStudioSheetId) appendStudioSheet(json);
+                           else addStudioSheet(file.name.replace('.csv',''), json);
+                        }
+                    } else {
+                        // Excel
+                        const ab = await file.arrayBuffer();
+                        const workbook = XLSX.read(ab, { type: 'array' });
+                        workbook.SheetNames.forEach(sheetName => {
+                            const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "" });
+                            if (appendToCurrent && currentStudioSheetId) appendStudioSheet(json);
+                            else addStudioSheet(`${file.name.replace('.xlsx','')} - ${sheetName}`, json);
+                        });
+                    }
+                }
+                
+                document.getElementById('studioUploadLayer').style.display = 'none';
+                document.getElementById('studioViewerLayer').style.display = 'flex';
+                document.getElementById('btnExportStudio').style.display = 'flex';
+            } catch (err) {
+                alert("Error reading file: " + err.message);
+            }
+            document.getElementById('globalLoader').classList.remove('active');
+        }, 100);
+    }
+
+    function addStudioSheet(name, data) {
+        const id = 's_' + Date.now() + Math.random().toString(36).substr(2, 5);
+        let headers = [];
+        if (data.length > 0) {
+            data.forEach(row => {
+               Object.keys(row).forEach(k => { if (!headers.includes(k)) headers.push(k); });
+            });
+        }
+        if (headers.length === 0) headers = ['A','B','C','D','E']; // default for blank
+        
+        // Truncate name if too long for XLSX specification (31 chars)
+        let safeName = name.substring(0, 31);
+        
+        studioSheets.push({ id, name: safeName, data, headers });
+        selectStudioSheet(id);
+        renderStudioSidebar();
+    }
+
+    function appendStudioSheet(data) {
+        if (!currentStudioSheetId) return;
+        const sheet = studioSheets.find(s => s.id === currentStudioSheetId);
+        if (!sheet) return;
+        
+        let newHeaders = [];
+        data.forEach(row => {
+            Object.keys(row).forEach(k => { if (!newHeaders.includes(k) && !sheet.headers.includes(k)) newHeaders.push(k); });
+        });
+        sheet.headers.push(...newHeaders);
+        sheet.data.push(...data);
+        renderStudioTable();
+        renderStudioSidebar();
+    }
+
+    function createBlankSheet() {
+        const id = 's_' + Date.now() + Math.random().toString(36).substr(2, 5);
+        const headers = ['A','B','C','D','E'];
+        const data = [];
+        for (let i = 0; i < 20; i++) {
+            const row = {};
+            headers.forEach(h => row[h] = "");
+            data.push(row);
+        }
+        studioSheets.push({ id, name: "New Sheet " + (studioSheets.length + 1), data, headers });
+        document.getElementById('studioUploadLayer').style.display = 'none';
+        document.getElementById('studioViewerLayer').style.display = 'flex';
+        document.getElementById('btnExportStudio').style.display = 'flex';
+        selectStudioSheet(id);
+        renderStudioSidebar();
+    }
+
+    function selectStudioSheet(id) {
+        currentStudioSheetId = id;
+        renderStudioSidebar();
+        renderStudioTable();
+    }
+
+    function renderStudioSidebar() {
+        const ul = document.getElementById('studioSheetList');
+        ul.innerHTML = '';
+        studioSheets.forEach(sheet => {
+            const li = document.createElement('li');
+            li.className = 'sheet-item ' + (sheet.id === currentStudioSheetId ? 'active' : '');
+            li.innerHTML = `<span>${sheet.name}</span><span style="font-size:0.7rem; color:var(--text-muted);">${sheet.data.length} rows</span>`;
+            li.onclick = () => selectStudioSheet(sheet.id);
+            ul.appendChild(li);
+        });
+    }
+
+    function renderStudioTable() {
+        const sheet = studioSheets.find(s => s.id === currentStudioSheetId);
+        if (!sheet) return;
+
+        const thead = document.getElementById('studioHead');
+        const tbody = document.getElementById('studioBody');
+        thead.innerHTML = '';
+        tbody.innerHTML = '';
+
+        const trH = document.createElement('tr');
+        const thNum = document.createElement('th'); thNum.textContent = '#'; thNum.style.width = '40px'; trH.appendChild(thNum);
+        sheet.headers.forEach(h => {
+            const th = document.createElement('th');
+            th.textContent = h;
+            th.contentEditable = "true";
+            th.onblur = (e) => {
+                const newH = e.target.textContent.trim() || h; // prevent empty
+                if (newH !== h && !sheet.headers.includes(newH)) {
+                    sheet.headers[sheet.headers.indexOf(h)] = newH;
+                    // update object keys
+                    sheet.data.forEach(row => {
+                        row[newH] = row[h];
+                        delete row[h];
+                    });
+                    renderStudioTable();
+                } else if (newH !== h) {
+                    e.target.textContent = h; // revert if duplicate
+                }
+            };
+            trH.appendChild(th);
+        });
+        thead.appendChild(trH);
+
+        sheet.data.forEach((row, rowIndex) => {
+            const tr = document.createElement('tr');
+            const tdNum = document.createElement('td'); tdNum.textContent = rowIndex + 1; tdNum.style.color = 'var(--text-muted)';
+            tr.appendChild(tdNum);
+
+            sheet.headers.forEach(h => {
+                const td = document.createElement('td');
+                td.textContent = row[h] !== undefined ? row[h] : "";
+                td.contentEditable = "true";
+                td.onblur = (e) => {
+                    row[h] = e.target.textContent;
+                };
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+    }
+
+    function deleteCurrentStudioSheet() {
+        if (!currentStudioSheetId) return;
+        studioSheets = studioSheets.filter(s => s.id !== currentStudioSheetId);
+        if (studioSheets.length > 0) {
+            selectStudioSheet(studioSheets[0].id);
+        } else {
+            currentStudioSheetId = null;
+            document.getElementById('studioUploadLayer').style.display = 'flex';
+            document.getElementById('studioViewerLayer').style.display = 'none';
+            document.getElementById('btnExportStudio').style.display = 'none';
+        }
+    }
+
+    function renameCurrentStudioSheet() {
+        if (!currentStudioSheetId) return;
+        const sheet = studioSheets.find(s => s.id === currentStudioSheetId);
+        const name = prompt("Enter new sheet name:", sheet.name);
+        if (name && name.trim()) {
+            sheet.name = name.trim().substring(0, 31);
+            renderStudioSidebar();
+        }
+    }
+
+    function exportStudioWorkspace() {
+        if (studioSheets.length === 0) return;
+        const wb = XLSX.utils.book_new();
+        studioSheets.forEach(sheet => {
+            const wsData = [];
+            wsData.push(sheet.headers);
+            sheet.data.forEach(row => {
+                const rowData = [];
+                sheet.headers.forEach(h => rowData.push(row[h] ?? ""));
+                wsData.push(rowData);
+            });
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            let safeName = sheet.name.replace(/[\\\/\|\?\*\[\]]/g, "_").substring(0, 31);
+            XLSX.utils.book_append_sheet(wb, ws, safeName);
+        });
+        XLSX.writeFile(wb, "Excel_Studio.xlsx");
+    }
+
+    // --- Paste Logic ---
+    let pasteAppendsToCurrent = false;
+
+    function openPasteModal(appendToCurrent) {
+        pasteAppendsToCurrent = appendToCurrent;
+        document.getElementById('pasteInputArea').value = '';
+        document.getElementById('pasteModal').classList.add('active');
+        document.getElementById('pasteInputArea').focus();
+    }
+
+    function processPastedData() {
+        const text = document.getElementById('pasteInputArea').value.trim();
+        if (!text) return;
+        
+        document.getElementById('pasteModal').classList.remove('active');
+        
+        let ext = 'csv'; // default
+        if (text.startsWith('{') || text.startsWith('[')) {
+            ext = 'json';
+        }
+        
+        // Wrap as a virtual File object to re-use handleStudioFiles
+        const file = new File([text], `PastedData_${Date.now()}.${ext}`, { type: "text/plain" });
+        handleStudioFiles([file], pasteAppendsToCurrent);
+    }
+
+    // Studio Dropzone listeners
+    const dropStudio = document.getElementById('dropStudio');
+    const fileStudio = document.getElementById('fileStudio');
+    
+    if (dropStudio) {
+        dropStudio.addEventListener('dragover', e => { e.preventDefault(); dropStudio.classList.add('dragover'); });
+        dropStudio.addEventListener('dragleave', () => dropStudio.classList.remove('dragover'));
+        dropStudio.addEventListener('drop', e => {
+            e.preventDefault(); dropStudio.classList.remove('dragover');
+            if (e.dataTransfer.files.length) handleStudioFiles(e.dataTransfer.files);
+        });
+        fileStudio.addEventListener('change', e => {
+            if (e.target.files.length) handleStudioFiles(e.target.files);
+        });
+        document.getElementById('fileAppendStudio').addEventListener('change', e => {
+            if (e.target.files.length) handleStudioFiles(e.target.files, true);
+        });
+    }
+
 </script>
 </body>
 </html>

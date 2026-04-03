@@ -1,6 +1,6 @@
 # 📊 Excel Data Comparator (Premium)
 
-The `excel-compare` tool is a high-performance, completely local web application for identifying exact row and cell-level changes between two versions of large `.xlsx, .xls, or .csv` files.
+The `excel` tool is a high-performance, completely local web application for identifying exact row and cell-level changes between two versions of large `.xlsx, .xls, or .csv` files.
 
 ## Architecture
 
@@ -10,11 +10,19 @@ This tool utilizes a hybrid approach:
 
 ## Quick Start
 
-Launch the interactive UI on port `8378`:
+### Global Execution (Zero-Ops Architecture)
+If you have linked the zero-ops core globally, invoke the tool from anywhere:
 ```bash
-zero-ops excel-compare
+zero-ops excel
 ```
-Your default browser will automatically open `http://localhost:8378`. 
+
+### Local Execution (Source)
+If you are running the project directly from the source code without installation:
+```bash
+node zero-ops.js excel
+```
+
+Your default browser will automatically open `http://localhost:8378`.
 
 ## AI Generation Setup (Ollama & OpenAI)
 
@@ -26,26 +34,26 @@ You can configure the tool to use **OpenAI** (Fast, High Quality) or **Ollama** 
 If you are analyzing sensitive HR or Financial data, you can point the tool to your local Ollama instance:
 ```bash
 # 1. Set the provider
-zero-ops excel-compare config set aiProvider ollama
+zero-ops excel config set aiProvider ollama
 
 # 2. Select your local model (default is llama3)
-zero-ops excel-compare config set ollamaModel phi3
+zero-ops excel config set ollamaModel phi3
 
 # 3. (Optional) Set the URL if running on a separate machine
-zero-ops excel-compare config set ollamaUrl http://localhost:11434/api/generate
+zero-ops excel config set ollamaUrl http://localhost:11434/api/generate
 ```
 
 ### For High Intelligence (OpenAI)
 ```bash
 # 1. Set the provider
-zero-ops excel-compare config set aiProvider openai
+zero-ops excel config set aiProvider openai
 
 # 2. Set your secure API key
-zero-ops excel-compare config set openAiKey "sk-YOUR_API_KEY_HERE"
+zero-ops excel config set openAiKey "sk-YOUR_API_KEY_HERE"
 ```
 
 ## Available Config Keys
-Manage these via `zero-ops excel-compare config set <key> <value>`.
+Manage these via `zero-ops excel config set <key> <value>`.
 
 | Key | Default | Description |
 | :--- | :--- | :--- |
