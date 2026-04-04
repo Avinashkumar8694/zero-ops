@@ -720,6 +720,8 @@
                     <button class="btn" onclick="document.getElementById('fileAppendStudio').click()" style="color:#3b82f6; border-color:#3b82f6;">📥 Import to Sheet</button>
                     <input type="file" id="fileAppendStudio" style="display:none;" accept=".xlsx,.xls,.csv,.json" multiple />
                     <button class="btn" onclick="openPasteModal(true)" style="color:#a78bfa; border-color:#a78bfa; margin-left:8px;">📋 Paste to Sheet</button>
+                    <button class="btn" onclick="addStudioRow()" style="margin-left:8px; color:#10b981; border-color:#10b981;">➕ Add Row</button>
+                    <button class="btn" onclick="addStudioColumn()" style="margin-left:8px; color:#10b981; border-color:#10b981;">➕ Add Col</button>
                     <button class="btn" onclick="deleteCurrentStudioSheet()" style="color:#ef4444; border-color:#ef4444; margin-left:8px;">🗑 Delete Sheet</button>
                     <button class="btn" onclick="renameCurrentStudioSheet()" style="margin-left:8px;">✏️ Rename</button>
                     <div style="margin-left:auto; font-size: 0.8rem; color: var(--text-muted);">Cells are editable. Click to type.</div>
@@ -1065,21 +1067,31 @@
             return s1 === s2;
         };
 
-        if (pk && headers.includes(pk)) {
-            // Using Primary Key tracking
-            const baseMap = new Map(baseData.map(r => [String(r[pk]), r]));
-            const targetMap = new Map(targetData.map(r => [String(r[pk]), r]));
-            const seenKeys = new Set();
+        let pks = (pk || "").split(',').map(s => s.trim()).filter(s => headers.includes(s));
+
+        if (pks.length > 0) {
+            // Using Composite Primary Key tracking with sequential support for duplicates
+            const baseMap = new Map();
+            const getRowKey = (r) => pks.map(k => String(r[k])).join('|');
+
+            baseData.forEach(r => {
+                const val = getRowKey(r);
+                if (!baseMap.has(val)) baseMap.set(val, []);
+                baseMap.get(val).push(r);
+            });
 
             targetData.forEach(tRow => {
-                const val = String(tRow[pk]);
-                seenKeys.add(val);
-                if (!baseMap.has(val)) {
+                const val = getRowKey(tRow);
+                const baseList = baseMap.get(val);
+                
+                if (!baseList || baseList.length === 0) {
                     // Added row inside a modified sheet is kept by V2 default (accepted)
                     combinedRows.push({ status: 'added', mergeState: 'accepted', data: tRow, diffs: {} });
                     isModified = true;
                 } else {
-                    const bRow = baseMap.get(val);
+                    // Pull the first matching row from base matching this key sequentially
+                    const bRow = baseList.shift();
+                    
                     const diffs = {};
                     let rowMod = false;
                     headers.forEach(h => {
@@ -1096,13 +1108,29 @@
                 }
             });
 
-            // Find rows existing only in base
-            baseData.forEach(bRow => {
-                const val = String(bRow[pk]);
-                if (!seenKeys.has(val)) {
-                    // Removed rows default to strictly dropped (rejected V1, kept V2's deletion)
-                    combinedRows.push({ status: 'removed', mergeState: 'rejected', data: bRow, diffs: {} });
+            // Gently weave rows existing only in base (removed) into the naturally target-ordered combinedRows
+            // This guarantees BOTH Left (Base) and Right (Target) sides maintain their perfect monotonic row sequence
+            const removedRows = [];
+            baseMap.forEach((list) => {
+                list.forEach(bRow => {
+                    removedRows.push({ status: 'removed', mergeState: 'rejected', data: bRow, diffs: {} });
                     isModified = true;
+                });
+            });
+
+            // Sort removed rows by their original base row number to insert them Top-to-Bottom
+            removedRows.sort((a, b) => a.data.__rowNum - b.data.__rowNum);
+
+            removedRows.forEach(removed => {
+                const bNum = removed.data.__rowNum;
+                // Find the first row in combinedRows that has a baseRowNum greater than this removed row
+                // This anchors the removed row relative to surrounding surviving rows.
+                let insertIdx = combinedRows.findIndex(r => r.baseRowNum !== undefined && r.baseRowNum > bNum);
+                
+                if (insertIdx !== -1) {
+                    combinedRows.splice(insertIdx, 0, removed);
+                } else {
+                    combinedRows.push(removed);
                 }
             });
         } else {
@@ -1132,6 +1160,7 @@
                 headers.forEach(h => {
                     const v1 = String(r1[h] ?? "").trim();
                     const v2 = String(r2[h] ?? "").trim();
+                    if (v1 === "" && v2 === "") return; // IGNORE identical empty columns to prevent false positive high scores
                     validCols++;
                     if (compareVals(v1, v2)) matches++;
                 });
@@ -1166,14 +1195,16 @@
                             if (getSimilarity(tRow, baseData[i + k]) === 1) { exactInBase = k; break; }
                         }
 
-                        if (exactInTarget !== -1 && (exactInBase === -1 || exactInTarget <= exactInBase)) {
+                        // PREVENT FALSE POSITIVE JUMPS: Only jump to an exact match if the current row similarity is poor.
+                        // If current rows are heavily matched (e.g. >= threshold), assume it's a MODIFICATION of the same row, NOT a deletion.
+                        if (sim < threshold && exactInTarget !== -1 && (exactInBase === -1 || exactInTarget <= exactInBase)) {
                             combinedRows.push({ status: 'added', mergeState: 'accepted', data: tRow, diffs: {} });
                             isModified = true; j++;
-                        } else if (exactInBase !== -1) {
+                        } else if (sim < threshold && exactInBase !== -1) {
                             combinedRows.push({ status: 'removed', mergeState: 'rejected', data: bRow, diffs: {} });
                             isModified = true; i++;
                         } else if (sim >= threshold) {
-                            // 2. No exact match ahead, but CURRENT rows are sufficiently similar -> Treat as MODIFIED
+                            // 2. No closer exact match ahead (or current sim is extremely strong) -> Treat as MODIFIED
                             const diffs = {};
                             let rowMod = false;
                             headers.forEach(h => {
@@ -1396,13 +1427,21 @@
 
             const rowNumTd = document.createElement('td');
             rowNumTd.style.textAlign = 'center';
-            rowNumTd.style.color = 'var(--text-muted)';
             rowNumTd.style.fontWeight = '600';
             rowNumTd.style.fontSize = '0.75rem';
-            if (r.status === 'added') rowNumTd.textContent = 'T:' + r.data.__rowNum;
-            else if (r.status === 'removed') rowNumTd.textContent = 'B:' + r.data.__rowNum;
-            else if (r.status === 'modified') rowNumTd.textContent = 'B:' + r.baseRowNum + ' / T:' + r.data.__rowNum;
-            else rowNumTd.textContent = r.data.__rowNum;
+            if (r.status === 'added') {
+                rowNumTd.textContent = 'T:' + r.data.__rowNum;
+                rowNumTd.style.color = '#10b981';
+            } else if (r.status === 'removed') {
+                rowNumTd.textContent = 'B:' + r.data.__rowNum;
+                rowNumTd.style.color = '#ef4444';
+            } else if (r.status === 'modified') {
+                rowNumTd.textContent = 'B:' + r.baseRowNum + ' / T:' + r.data.__rowNum;
+                rowNumTd.style.color = '#eab308';
+            } else {
+                rowNumTd.textContent = r.data.__rowNum;
+                rowNumTd.style.color = 'var(--text-muted)';
+            }
             tr.appendChild(rowNumTd);
 
             headers.forEach(h => {
@@ -1504,7 +1543,9 @@
             if (r.status === 'added') {
                 trB.className = 'ghost-row';
                 trT.className = 'row-added';
-                tdbNum.textContent = '-'; tdtNum.textContent = r.data.__rowNum;
+                tdbNum.textContent = '-'; 
+                tdtNum.textContent = r.data.__rowNum;
+                tdtNum.style.color = '#10b981';
 
                 tdtAct.appendChild(createResolveBtn());
 
@@ -1518,7 +1559,9 @@
             } else if (r.status === 'removed') {
                 trB.className = 'row-removed';
                 trT.className = 'ghost-row';
-                tdbNum.textContent = r.data.__rowNum; tdtNum.textContent = '-';
+                tdbNum.textContent = r.data.__rowNum; 
+                tdbNum.style.color = '#ef4444';
+                tdtNum.textContent = '-';
 
                 tdbAct.appendChild(createResolveBtn());
 
@@ -1532,6 +1575,10 @@
             } else {
                 tdbNum.textContent = r.baseRowNum || r.data.__rowNum; 
                 tdtNum.textContent = r.data.__rowNum;
+                if (r.status === 'modified') {
+                    tdbNum.style.color = '#eab308';
+                    tdtNum.style.color = '#eab308';
+                }
                 trB.appendChild(tdbNum); trB.appendChild(tdbAct);
                 trT.appendChild(tdtNum); trT.appendChild(tdtAct);
 
@@ -1852,6 +1899,52 @@
         renderStudioSidebar();
     }
 
+    function addStudioRow() {
+        if (!currentStudioSheetId) return;
+        const sheet = studioSheets.find(s => s.id === currentStudioSheetId);
+        if (!sheet) return;
+        
+        const newRow = {};
+        sheet.headers.forEach(h => newRow[h] = "");
+        sheet.data.push(newRow);
+        
+        renderStudioTable();
+        renderStudioSidebar();
+        
+        // Auto-scroll to the bottom so the user sees the new row
+        setTimeout(() => {
+            const tableWrapper = document.querySelector('.table-wrapper.active');
+            if (tableWrapper) tableWrapper.scrollTop = tableWrapper.scrollHeight;
+        }, 50);
+    }
+
+    function addStudioColumn() {
+        if (!currentStudioSheetId) return;
+        const sheet = studioSheets.find(s => s.id === currentStudioSheetId);
+        if (!sheet) return;
+        
+        let colName = prompt("Enter new column name:");
+        if (!colName || !colName.trim()) return;
+        colName = colName.trim();
+        
+        if (sheet.headers.includes(colName)) {
+            alert("Column name already exists.");
+            return;
+        }
+        
+        sheet.headers.push(colName);
+        sheet.data.forEach(row => row[colName] = "");
+        
+        renderStudioTable();
+        renderStudioSidebar();
+        
+        // Auto-scroll to the right so the user sees the new column
+        setTimeout(() => {
+            const tableWrapper = document.querySelector('.table-wrapper.active');
+            if (tableWrapper) tableWrapper.scrollLeft = tableWrapper.scrollWidth;
+        }, 50);
+    }
+
     function createBlankSheet() {
         const id = 's_' + Date.now() + Math.random().toString(36).substr(2, 5);
         const headers = ['A','B','C','D','E'];
@@ -1898,10 +1991,34 @@
 
         const trH = document.createElement('tr');
         const thNum = document.createElement('th'); thNum.textContent = '#'; thNum.style.width = '40px'; trH.appendChild(thNum);
-        sheet.headers.forEach(h => {
+        sheet.headers.forEach((h, index) => {
             const th = document.createElement('th');
             th.textContent = h;
             th.contentEditable = "true";
+            
+            // Drag-and-Drop for Columns
+            th.draggable = true;
+            th.ondragstart = (e) => { 
+                e.dataTransfer.setData('text/plain', 'col:' + index); 
+                th.style.opacity = "0.4";
+            };
+            th.ondragend = () => th.style.opacity = "1";
+            th.ondragover = (e) => { e.preventDefault(); th.style.borderLeft = "2px solid var(--accent-blue)"; };
+            th.ondragleave = () => { th.style.borderLeft = ""; };
+            th.ondrop = (e) => {
+                e.preventDefault();
+                th.style.borderLeft = "";
+                const data = e.dataTransfer.getData('text/plain');
+                if (data && data.startsWith('col:')) {
+                    const fromIdx = parseInt(data.replace('col:',''));
+                    const toIdx = index;
+                    if (fromIdx !== toIdx && !isNaN(fromIdx)) {
+                        const colName = sheet.headers.splice(fromIdx, 1)[0];
+                        sheet.headers.splice(toIdx, 0, colName);
+                        renderStudioTable();
+                    }
+                }
+            };
             th.onblur = (e) => {
                 const newH = e.target.textContent.trim() || h; // prevent empty
                 if (newH !== h && !sheet.headers.includes(newH)) {
@@ -1922,7 +2039,36 @@
 
         sheet.data.forEach((row, rowIndex) => {
             const tr = document.createElement('tr');
-            const tdNum = document.createElement('td'); tdNum.textContent = rowIndex + 1; tdNum.style.color = 'var(--text-muted)';
+            
+            const tdNum = document.createElement('td'); 
+            tdNum.textContent = rowIndex + 1; 
+            tdNum.style.color = 'var(--text-muted)';
+            tdNum.style.cursor = 'grab';
+            tdNum.draggable = true;
+            
+            tdNum.ondragstart = (e) => {
+                e.dataTransfer.setData('text/plain', 'row:' + rowIndex);
+                tr.style.opacity = "0.4";
+            };
+            tdNum.ondragend = () => tr.style.opacity = "1";
+            
+            tr.ondragover = (e) => { e.preventDefault(); tr.style.borderTop = "2px solid var(--accent-blue)"; };
+            tr.ondragleave = () => { tr.style.borderTop = ""; };
+            tr.ondrop = (e) => {
+                e.preventDefault();
+                tr.style.borderTop = "";
+                const data = e.dataTransfer.getData('text/plain');
+                if (data && data.startsWith('row:')) {
+                    const fromIdx = parseInt(data.replace('row:',''));
+                    const toIdx = rowIndex;
+                    if (fromIdx !== toIdx && !isNaN(fromIdx)) {
+                        const rowItem = sheet.data.splice(fromIdx, 1)[0];
+                        sheet.data.splice(toIdx, 0, rowItem);
+                        renderStudioTable();
+                    }
+                }
+            };
+
             tr.appendChild(tdNum);
 
             sheet.headers.forEach(h => {
