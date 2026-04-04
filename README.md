@@ -189,6 +189,35 @@ zero-ops pdf-inspect ~/path/to/your/file.pdf
     - **Line Reconstruction**: Automatically merges fragmented text segments into logical lines, making the template human-readable and easy to tokensize.
     - **1:1 Fidelity**: Maintains exact PDF coordinates and embeds all relevant fonts.
 
+### MockDeck (`mockdeck`)
+Mock API studio for `zero-ops` with a browser UI plus operational CLI commands. The UI is rendered with `EJS`, reusable frontend pieces are built with `Lit`, and mock payloads support `Handlebars` templating.
+
+```bash
+# Start the local MockDeck UI
+zero-ops mockdeck
+
+# List registered APIs
+zero-ops mockdeck list
+
+# Add a mock from CLI
+zero-ops mockdeck add --name "Users" --method GET --path /api/users --type json --body '{ "users": [] }'
+
+# Delete a single mock
+zero-ops mockdeck delete <id>
+
+# Delete all mocks
+zero-ops mockdeck clear
+```
+
+**Key Features:**
+- **UI-first mock registration** for `json`, `text`, `html`, `xml`, `media`, and `proxy` response types.
+- **Handlebars templates by default** with request-aware placeholders like `request.query`, `request.params`, and `request.body`.
+- **API catalog + cleanup** flows in both UI and CLI.
+- **Postman-style trigger panel** to send one-off HTTP requests and inspect status, headers, and bodies.
+- **Runner support** for sequential request collections with step-to-step templating.
+- **Media asset serving** for images and other binary responses.
+- **Proxy support** for forwarding requests to upstream services while keeping local mock control.
+
 ### Excel Compare (`excel-compare`)
 A Premium data reconciliation tool to intelligently compare large `.xlsx, .xls, and .csv` files. It features a modern Glassmorphism browser interface, client-side SheetJS parsing, and both private and cloud AI integrations for executive summaries.
 

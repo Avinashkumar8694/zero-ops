@@ -1,0 +1,42 @@
+:root {
+    --bg: #0f1720;
+    --panel: #162130;
+    --panel-soft: #1b2b3f;
+    --text: #edf4ff;
+    --muted: #9db0c7;
+    --line: rgba(255, 255, 255, 0.08);
+    --accent: #4fd1c5;
+    --accent-2: #f6ad55;
+    --danger: #fc8181;
+    --success: #68d391;
+    --shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+    --radius: 18px;
+    --mono: "SFMono-Regular", "Menlo", monospace;
+    --sans: "Avenir Next", "Segoe UI", sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+        radial-gradient(circle at top left, rgba(79, 209, 197, 0.18), transparent 28%),
+        radial-gradient(circle at top right, rgba(246, 173, 85, 0.12), transparent 24%),
+        linear-gradient(180deg, #09111b 0%, #101926 45%, #0c1420 100%);
+    color: var(--text);
+    font-family: var(--sans);
+}
+
+button,
+input,
+select,
+textarea {
+    font: inherit;
+}
+
+a {
+    color: inherit;
+}
