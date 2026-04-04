@@ -1,0 +1,42 @@
+{
+  "mocks": [],
+  "collections": [
+    {
+      "id": "0ce64bdd-c3c3-41c9-9ec9-7a9228a3e493",
+      "name": "Core APIs",
+      "description": "workspace test",
+      "items": [
+        {
+          "id": "79d046d1-5c95-4e69-9dfb-9c1ace941aeb",
+          "type": "folder",
+          "kind": "folder",
+          "parentId": null,
+          "name": "Auth",
+          "description": "",
+          "method": "GET",
+          "url": "",
+          "mockId": "",
+          "folderColor": "",
+          "headers": {},
+          "body": "",
+          "mockConfig": {
+            "path": "/api/example",
+            "statusCode": 200,
+            "delayMs": 0,
+            "templateBody": "{\n  \"ok\": true,\n  \"mock\": \"{{mock.name}}\",\n  \"method\": \"{{request.method}}\",\n  \"path\": \"{{request.path}}\",\n  \"query\": \"{{json request.query}}\",\n  \"params\": \"{{json request.params}}\",\n  \"now\": \"{{now}}\"\n}",
+            "responseHeaders": {},
+            "proxyTargetUrl": ""
+          }
+        }
+      ],
+      "createdAt": "2026-04-04T09:23:18.319Z",
+      "updatedAt": "2026-04-04T09:23:51.491Z"
+    }
+  ],
+  "logs": [],
+  "workflows": [],
+  "datasets": [],
+  "settings": {
+    "port": 8381
+  }
+}

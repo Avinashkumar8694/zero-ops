@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MockDeck</title>
+    <title>MockDeck Runner</title>
     <link rel="stylesheet" href="<%= uiBase %>/public/styles.css" />
     <script type="importmap">
         {
@@ -21,12 +21,12 @@
     </script>
 </head>
 <body>
-    <mockdeck-app
-        data-api-base="<%= apiBase %>"
+    <mockdeck-runner
         data-runner-base="<%= runnerBase %>"
+        data-runner-api-base="<%= runnerApiBase %>"
         data-ui-base="<%= uiBase %>"
         data-state='<%- initialState %>'>
-    </mockdeck-app>
-    <script type="module" src="<%= uiBase %>/public/app.js"></script>
+    </mockdeck-runner>
+    <script type="module" src="<%= uiBase %>/public/runner.js"></script>
 </body>
 </html>

@@ -214,9 +214,11 @@ zero-ops mockdeck clear
 - **Handlebars templates by default** with request-aware placeholders like `request.query`, `request.params`, and `request.body`.
 - **API catalog + cleanup** flows in both UI and CLI.
 - **Postman-style trigger panel** to send one-off HTTP requests and inspect status, headers, and bodies.
-- **Runner support** for sequential request collections with step-to-step templating.
+- **Dedicated runner workspace** at `/__mockdeck/runner` for drag/drop node flows, dependency chaining, scripts, datasets, and analytics.
 - **Media asset serving** for images and other binary responses.
 - **Proxy support** for forwarding requests to upstream services while keeping local mock control.
+
+> 📚 **Detailed Documentation**: See the [MockDeck README](./src/tools/mockdeck/README.md) for runner workflows, CSV/Excel datasets, scripts, dependency mappings, and analytics details.
 
 ### Excel Compare (`excel-compare`)
 A Premium data reconciliation tool to intelligently compare large `.xlsx, .xls, and .csv` files. It features a modern Glassmorphism browser interface, client-side SheetJS parsing, and both private and cloud AI integrations for executive summaries.
