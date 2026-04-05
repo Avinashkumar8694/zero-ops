@@ -18,12 +18,16 @@ export function emptyNode(index = 1) {
         y: 140,
         enabled: true,
         method: 'GET',
-        url: '',
+        url: 'https://jsonplaceholder.typicode.com/posts/1',
         mockId: '',
         requestRef: { collectionId: '', itemId: '' },
         timeoutMs: 15000,
         headers: {},
+        bodyType: 'raw',
         body: '',
+        formData: [],
+        fileData: null,
+        fileName: null,
         dependsOn: [],
         mappings: [],
         useGlobalHeaders: true,
@@ -47,7 +51,11 @@ export function startNode() {
         requestRef: { collectionId: '', itemId: '' },
         timeoutMs: 15000,
         headers: {},
+        bodyType: 'raw',
         body: '',
+        formData: [],
+        fileData: null,
+        fileName: null,
         dependsOn: [],
         mappings: [],
         useGlobalHeaders: true,
@@ -58,6 +66,8 @@ export function startNode() {
 }
 
 export function emptyWorkflow() {
+    const start = startNode();
+    const req1 = { ...emptyNode(1), dependsOn: [start.id] };
     return {
         id: '',
         name: 'Flow 1',
@@ -71,7 +81,7 @@ export function emptyWorkflow() {
             stopOnError: false,
             environmentId: ''
         },
-        nodes: [startNode(), emptyNode(1)]
+        nodes: [start, req1]
     };
 }
 

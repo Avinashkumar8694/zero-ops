@@ -17,6 +17,7 @@ const DEFAULT_PORT = 8381;
 const UI_BASE = '/__mockdeck';
 const UI_API_BASE = `${UI_BASE}/api`;
 const RUNNER_BASE = `${UI_BASE}/runner`;
+const DOCS_BASE = `${UI_BASE}/docs`;
 const RUNNER_API_BASE = `${UI_BASE}/api/runner`;
 const MAX_LOGS = 150;
 const MAX_RUN_EVENTS = 500;
@@ -364,10 +365,14 @@ async function performHttpRequest(input) {
     const startedAt = Date.now();
     const targetUrl = new URL(input.url);
     const transport = targetUrl.protocol === 'https:' ? https : http;
-    const bodyText = input.body ?? '';
-    const bodyBuffer = Buffer.from(bodyText);
+    const bodyBuffer = Buffer.isBuffer(input.body) ? input.body : Buffer.from(input.body ?? '');
     const headers = { ...(input.headers || {}) };
-    if (bodyBuffer.length && !headers['content-length']) {
+    
+    if (input.contentType && !headers['content-type']) {
+        headers['content-type'] = input.contentType;
+    }
+
+    if (bodyBuffer.length) {
         headers['content-length'] = String(bodyBuffer.length);
     }
 
@@ -675,8 +680,7 @@ function createSampleDataset() {
         kind: 'csv',
         headers: ['username', 'userId'],
         rows: [
-            { username: 'alice', userId: 101 },
-            { username: 'bob', userId: 202 }
+            { username: 'alice', userId: 101 }
         ],
         sheetName: 'Sheet1',
         createdAt: new Date().toISOString()
@@ -733,6 +737,8 @@ function createSampleCollectionPayload() {
             description: 'Simulates authentication and returns a token that later steps reuse.',
             method: 'POST',
             body: '{ "username": "{{row.username}}" }',
+            bodyType: 'raw',
+            headers: { 'content-type': 'application/json' },
             mockConfig: {
                 path: '/api/sample/login',
                 statusCode: 200,
@@ -754,6 +760,7 @@ function createSampleCollectionPayload() {
             description: 'Reads the authorization header from the previous step and a dataset userId query parameter.',
             method: 'GET',
             body: '',
+            bodyType: 'none',
             mockConfig: {
                 path: '/api/sample/profile',
                 statusCode: 200,
@@ -777,7 +784,8 @@ function createSampleCollectionPayload() {
             method: 'GET',
             url: 'https://jsonplaceholder.typicode.com/users/{{row.userId}}',
             headers: {},
-            body: ''
+            body: '',
+            bodyType: 'none'
         },
         {
             id: createId('req'),
@@ -789,6 +797,7 @@ function createSampleCollectionPayload() {
             method: 'POST',
             url: 'https://httpbin.org/anything',
             headers: { 'content-type': 'application/json' },
+            bodyType: 'raw',
             body: '{ "username": "{{row.username}}", "token": "{{steps.login.response.body.token}}" }'
         }
     ];
@@ -796,10 +805,20 @@ function createSampleCollectionPayload() {
 
 function createSampleWorkflow(collection, dataset) {
     const activeEnvironmentId = collection.activeEnvironmentId || collection.environments?.[0]?.id || '';
-    const requests = Object.fromEntries((collection.items || []).filter((item) => item.type === 'request').map((item) => [item.name, item]));
-    const workflow = normalizeWorkflow({
+    const requestsByItemName = Object.fromEntries(
+        (collection.items || []).filter(i => i.type === 'request').map(i => [i.name, i])
+    );
+
+    const nodeIds = {
+        start: createId('node'),
+        login: createId('node'),
+        profile: createId('node'),
+        fetch: createId('node')
+    };
+
+    return normalizeWorkflow({
         name: `${collection.name} Demo Flow`,
-        description: 'Auto-created quickstart workflow that demonstrates environments, dataset rows, mappings, and pre/post scripts with comments.',
+        description: 'Auto-created quickstart workflow that demonstrates environments, dataset rows, mappings, and pre/post scripts.',
         datasetId: dataset.id,
         globals: {
             headers: { 'x-flow': 'quickstart' },
@@ -810,68 +829,58 @@ function createSampleWorkflow(collection, dataset) {
             environmentId: activeEnvironmentId
         },
         nodes: [
-            { nodeType: 'start', name: 'Start', x: 80, y: 220 },
+            { id: nodeIds.start, nodeType: 'start', name: 'Start', x: 80, y: 220, enabled: true },
             {
+                id: nodeIds.login,
                 name: 'Login',
                 nodeType: 'request',
                 x: 360,
                 y: 120,
-                requestRef: { collectionId: collection.id, itemId: requests['Login Mock']?.id || '' },
+                enabled: true,
+                requestRef: { collectionId: collection.id, itemId: requestsByItemName['Login Mock']?.id || '' },
                 method: 'POST',
+                bodyType: 'raw',
                 body: '{ "username": "{{row.username}}" }',
-                dependsOn: [],
+                dependsOn: [nodeIds.start],
                 notes: 'Example: reads row.username, writes runtime variables, and shows environment access.',
-                preScript: `// The active environment is available as ctx.environment.\n// Return vars to keep values for later nodes in this scenario.\nreturn {\n  vars: {\n    activeTenant: ctx.environment?.variables?.tenant || "demo-local",\n    selectedBaseUrl: ctx.environment?.variables?.base_url || "",\n    currentUsername: ctx.row.username\n  },\n  headers: {\n    "x-runner-label": ctx.environment?.variables?.runner_label || "quickstart",\n    "x-tenant": ctx.environment?.variables?.tenant || "demo-local"\n  }\n};`,
-                postScript: `// Validate the login response and persist useful values for later steps.\nhelpers.assert(ctx.response.statusCode === 200, "Login should return HTTP 200");\nreturn {\n  vars: {\n    accessToken: ctx.response.body.token,\n    currentUserId: ctx.response.body.userId\n  }\n};`
+                preScript: `// environment variables available in ctx.environment\nreturn {\n  vars: {\n    activeTenant: ctx.environment?.variables?.tenant || "demo",\n    selectedBaseUrl: ctx.environment?.variables?.base_url || ""\n  }\n};`,
+                postScript: `// persist values for later steps in ctx.globals\nhelpers.assert(ctx.response.statusCode === 200, "Login failed");\nreturn {\n  vars: {\n    accessToken: ctx.response.body.token,\n    currentUserId: ctx.response.body.userId\n  }\n};`
             },
             {
+                id: nodeIds.profile,
                 name: 'Profile',
                 nodeType: 'request',
                 x: 700,
                 y: 120,
-                requestRef: { collectionId: collection.id, itemId: requests['Profile Mock']?.id || '' },
+                enabled: true,
+                requestRef: { collectionId: collection.id, itemId: requestsByItemName['Profile Mock']?.id || '' },
                 method: 'GET',
-                dependsOn: [],
-                notes: 'Example: receives an auth header from a mapping and reads globals set by the Login post-script.',
-                preScript: `// You can read values created in earlier scripts through ctx.globals.\nreturn {\n  headers: {\n    "x-user-context": String(ctx.globals.currentUserId || ctx.row.userId)\n  }\n};`,
+                bodyType: 'none',
+                dependsOn: [nodeIds.login],
+                notes: 'Example: maps a token from the Login node and a userId from the dataset row.',
+                preScript: `return {\n  headers: {\n    "x-user-context": String(ctx.globals.currentUserId || ctx.row.userId)\n  }\n};`,
                 mappings: [
-                    { sourceType: 'step', sourceNodeId: '', sourcePath: 'response.body.token', targetType: 'header', targetKey: 'authorization' },
+                    { sourceType: 'step', sourceNodeId: nodeIds.login, sourcePath: 'response.body.token', targetType: 'header', targetKey: 'authorization' },
                     { sourceType: 'row', sourcePath: 'userId', targetType: 'query', targetKey: 'userId' }
                 ],
-                postScript: `// Assertions help turn this workflow into a real API test.\nhelpers.assert(ctx.response.ok === true, "Profile should be ok");\nreturn {\n  vars: {\n    profileAuthorizationEcho: ctx.response.body.authorization\n  }\n};`
+                postScript: `helpers.assert(ctx.response.ok === true, "Profile error");\nreturn {\n  vars: {\n    profileAuthorizationEcho: ctx.response.body.authorization\n  }\n};`
             },
             {
+                id: nodeIds.fetch,
                 name: 'Public User Fetch',
                 nodeType: 'request',
                 x: 1040,
                 y: 120,
-                requestRef: { collectionId: collection.id, itemId: requests['Public Users API']?.id || '' },
+                enabled: true,
+                requestRef: { collectionId: collection.id, itemId: requestsByItemName['Public Users API']?.id || '' },
                 method: 'GET',
-                dependsOn: [],
-                notes: 'Example: final real API step showing the flow can mix mocks and live endpoints.',
-                preScript: `// Environment values can also drive downstream headers or route choices.\nreturn {\n  headers: {\n    "x-env-name": ctx.environment?.name || "Local Demo",\n    "x-last-auth": String(ctx.globals.profileAuthorizationEcho || "")\n  }\n};`,
-                postScript: `helpers.assert(ctx.response.statusCode === 200, "Public user fetch should return 200");\nreturn {};`
+                bodyType: 'none',
+                dependsOn: [nodeIds.profile],
+                notes: 'Example: final real API step following the mocked auth/profile chain.',
+                postScript: `helpers.assert(ctx.response.statusCode === 200, "Final fetch failed");\nreturn {};`
             }
         ]
     });
-    const startId = workflow.nodes.find((node) => node.nodeType === 'start')?.id || '';
-    const loginId = workflow.nodes.find((node) => node.name === 'Login')?.id || '';
-    const profileId = workflow.nodes.find((node) => node.name === 'Profile')?.id || '';
-    const publicId = workflow.nodes.find((node) => node.name === 'Public User Fetch')?.id || '';
-    workflow.nodes = workflow.nodes.map((node) => {
-        if (node.name === 'Login') return { ...node, dependsOn: startId ? [startId] : [] };
-        if (node.name === 'Profile') return {
-            ...node,
-            dependsOn: loginId ? [loginId] : [],
-            mappings: [
-                { sourceType: 'step', sourceNodeId: loginId, sourcePath: 'response.body.token', targetType: 'header', targetKey: 'authorization' },
-                { sourceType: 'row', sourcePath: 'userId', targetType: 'query', targetKey: 'userId' }
-            ]
-        };
-        if (node.name === 'Public User Fetch') return { ...node, dependsOn: profileId ? [profileId] : [] };
-        return node;
-    });
-    return workflow;
 }
 
 function deleteMockById(store, mockId) {
@@ -1130,6 +1139,55 @@ function resolveNodeRequestSource(node, baseOrigin, mockLookup, requestLookup) {
     return { effectiveMethod, effectiveUrl, effectiveMockId, requestItem };
 }
 
+function assembleRequestBody(node, requestItem = null, templateContext = {}) {
+    const bodyType = node.bodyType || requestItem?.bodyType || 'raw';
+    let bodyBuffer = null;
+    let bodyText = '';
+    let contentType = null;
+    let fileMetadata = {};
+
+    if (bodyType === 'multipart') {
+        const boundary = `----MockDeckBoundary${Math.random().toString(36).substring(7)}`;
+        const parts = [];
+        const formData = (node.formData && node.formData.length) ? node.formData : (requestItem?.formData || []);
+        for (const part of formData) {
+            parts.push(Buffer.from(`--${boundary}\r\n`));
+            if (part.type === 'file' && part.value) {
+                const fileName = part.fileName || 'file';
+                parts.push(Buffer.from(`Content-Disposition: form-data; name="${part.key}"; filename="${fileName}"\r\n`));
+                parts.push(Buffer.from(`Content-Type: application/octet-stream\r\n\r\n`));
+                parts.push(Buffer.from(part.value, 'base64'));
+                parts.push(Buffer.from(`\r\n`));
+            } else {
+                const val = renderTemplate(String(part.value || ''), templateContext);
+                parts.push(Buffer.from(`Content-Disposition: form-data; name="${part.key}"\r\n\r\n`));
+                parts.push(Buffer.from(`${val}\r\n`));
+            }
+        }
+        parts.push(Buffer.from(`--${boundary}--\r\n`));
+        bodyBuffer = Buffer.concat(parts);
+        contentType = `multipart/form-data; boundary=${boundary}`;
+    } else if (bodyType === 'urlencoded') {
+        const formData = (node.formData && node.formData.length) ? node.formData : (requestItem?.formData || []);
+        const params = new URLSearchParams();
+        for (const part of formData) {
+            params.append(part.key, renderTemplate(String(part.value || ''), templateContext));
+        }
+        bodyText = params.toString();
+        contentType = 'application/x-www-form-urlencoded';
+    } else if (bodyType === 'binary') {
+        const fileData = node.fileData || requestItem?.fileData;
+        const fileName = node.fileName || requestItem?.fileName;
+        if (fileData) {
+            bodyBuffer = Buffer.from(fileData, 'base64');
+            fileMetadata = { fileName };
+        }
+    } else if (bodyType === 'raw') {
+        bodyText = renderTemplate((node.body || requestItem?.body || ''), templateContext);
+    }
+    return { body: bodyBuffer || bodyText, bodyBuffer, bodyText, contentType, fileMetadata };
+}
+
 function renderNodeUrl(node, runtimeContext, baseOrigin, mockLookup, requestLookup) {
     const source = resolveNodeRequestSource(node, baseOrigin, mockLookup, requestLookup);
     if (source.effectiveUrl) return renderTemplate(source.effectiveUrl, runtimeContext.templateContext);
@@ -1214,7 +1272,8 @@ async function executeWorkflowRun(run, workflow, store, options = {}) {
     const executableNodes = orderedNodes.filter((node) => node.nodeType !== 'start');
     const dataset = (store.datasets || []).find((item) => item.id === workflow.datasetId);
     const dataRows = dataset?.rows?.length ? dataset.rows : [{}];
-    const iterations = Math.max(1, Number(workflow.globals?.iterations || 1));
+    const iterations = Math.max(1, parseInt(workflow.globals?.iterations || 1, 10));
+    const concurrency = Math.max(1, parseInt(workflow.globals?.concurrency || 1, 10));
     const scenarios = [];
     for (let iteration = 0; iteration < iterations; iteration += 1) {
         for (let rowIndex = 0; rowIndex < dataRows.length; rowIndex += 1) {
@@ -1229,7 +1288,6 @@ async function executeWorkflowRun(run, workflow, store, options = {}) {
     run.progress.scenariosTotal = scenarios.length;
     run.progress.nodeTotal = scenarios.length * executableNodes.length;
 
-    const concurrency = Math.max(1, Number(workflow.globals?.concurrency || 1));
     const mockLookup = new Map((store.mocks || []).map((mock) => [mock.id, mock]));
     const requestLookup = new Map(flattenCollectionRequests(store).map((item) => [item.id, item]));
     const environmentLookup = new Map(flattenCollectionEnvironments(store).map((env) => [env.id, env]));
@@ -1245,6 +1303,8 @@ async function executeWorkflowRun(run, workflow, store, options = {}) {
     }
 
     const executeScenario = async (scenario) => {
+        // Each scenario (iteration + dataset row) gets its own isolated runtimeContext.
+        // This ensures that global variables modified in one parallel run do not leak into others.
         const runtimeContext = {
             row: scenario.row,
             iteration: scenario.iteration,
@@ -1294,16 +1354,28 @@ async function executeWorkflowRun(run, workflow, store, options = {}) {
                 continue;
             }
             const source = resolveNodeRequestSource(node, baseOrigin, mockLookup, requestLookup);
+            const bodyType = node.bodyType || source.requestItem?.bodyType || 'raw';
+            const { bodyBuffer, bodyText, contentType, fileMetadata } = assembleRequestBody(node, source.requestItem, runtimeContext.templateContext);
+            
             const requestState = {
                 url: new URL(renderNodeUrl(node, runtimeContext, baseOrigin, mockLookup, requestLookup)),
                 headers: node.useGlobalHeaders ? { ...workflow.globals.headers } : {},
-                bodyText: renderTemplate((node.body || source.requestItem?.body || ''), runtimeContext.templateContext),
-                bodyObject: parseJsonSafe(renderTemplate((node.body || source.requestItem?.body || ''), runtimeContext.templateContext), {})
+                bodyText,
+                bodyBuffer,
+                contentType
             };
+
+            if (fileMetadata?.fileName) {
+                requestState.headers['x-mockdeck-file'] = fileMetadata.fileName;
+            }
+
             Object.assign(requestState.headers, normalizeHeaders(source.requestItem?.headers || {}));
             Object.assign(requestState.headers, normalizeHeaders(node.headers || {}));
+            if (requestState.contentType && !requestState.headers['content-type']) {
+                requestState.headers['content-type'] = requestState.contentType;
+            }
             applyMappings(node, runtimeContext, requestState);
-
+            
             const preResult = runUserScript(node.preScript, {
                 workflow,
                 node,
@@ -1332,7 +1404,7 @@ async function executeWorkflowRun(run, workflow, store, options = {}) {
                 url: String(requestState.url),
                 method: source.effectiveMethod,
                 headers: requestState.headers,
-                body: requestState.bodyText,
+                body: requestState.bodyBuffer || requestState.bodyText,
                 timeoutMs: node.timeoutMs || workflow.globals.timeoutMs
             });
 
@@ -1376,6 +1448,8 @@ async function executeWorkflowRun(run, workflow, store, options = {}) {
                 response.statusMessage = error.message;
             }
 
+            const truncate = (str, maxLen = 3000) => (str && str.length > maxLen) ? str.slice(0, maxLen) + '...' : str;
+            
             run.progress.nodeCompleted += 1;
             pushRunEvent(run, {
                 kind: 'node-complete',
@@ -1385,7 +1459,21 @@ async function executeWorkflowRun(run, workflow, store, options = {}) {
                 statusCode: response.statusCode,
                 durationMs: response.durationMs,
                 ok: response.ok,
-                message: response.statusMessage
+                message: response.statusMessage,
+                error: (response.ok ? null : (response.statusMessage || 'Unknown Error')),
+                request: {
+                    url: requestState.url.toString(),
+                    method: source.effectiveMethod || node.method,
+                    headers: requestState.headers,
+                    body: bodyType === 'multipart' ? `(Multipart Form: ${node.formData?.length || 0} fields)` :
+                          bodyType === 'binary' ? `(Binary: ${node.fileName || 'file'})` :
+                          truncate(requestState.bodyText)
+                },
+                response: {
+                    status: response.statusCode,
+                    headers: response.headers,
+                    body: truncate(typeof response.body === 'string' ? response.body : JSON.stringify(response.body))
+                }
             });
 
             if (!response.ok && workflow.globals.stopOnError) break;
@@ -1489,13 +1577,25 @@ async function startServer(port) {
             return;
         }
 
+        if (req.method === 'GET' && parsedUrl.pathname === DOCS_BASE) {
+            const html = await renderPage('docs.ejs', {
+                uiBase: UI_BASE
+            });
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(html);
+            return;
+        }
+
         if (req.method === 'GET' && parsedUrl.pathname === RUNNER_BASE) {
             const store = readStore();
             const html = await renderPage('runner.ejs', {
                 uiBase: UI_BASE,
                 runnerBase: RUNNER_BASE,
                 runnerApiBase: RUNNER_API_BASE,
-                initialState: JSON.stringify(buildRunnerState(store, baseOrigin))
+                initialState: JSON.stringify({
+                    ...buildRunnerState(store, baseOrigin),
+                    view: parsedUrl.searchParams.get('view') || 'designer'
+                })
             });
             res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
             res.end(html);
@@ -1717,7 +1817,7 @@ async function startServer(port) {
                 url: payload.url,
                 method: payload.method,
                 headers: normalizeHeaders(payload.headers),
-                body: payload.body,
+                ...assembleRequestBody(payload),
                 timeoutMs: payload.timeoutMs
             });
             const store = readStore();

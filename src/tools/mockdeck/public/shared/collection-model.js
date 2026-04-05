@@ -15,8 +15,10 @@ export function emptyRequest(parentId = null) {
         description: '',
         method: 'GET',
         url: '',
-        headersText: '',
+        headersText: 'content-type: application/json',
+        bodyType: 'raw', // none, raw, multipart, urlencoded
         body: '',
+        formData: [], // [{ key, value, type: 'text' | 'file', fileName }]
         mockPath: '/api/example',
         mockStatusCode: 200,
         mockDelayMs: 0,

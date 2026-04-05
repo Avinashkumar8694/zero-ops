@@ -6,7 +6,12 @@ import '/lit_component/zero-modal.js';
 import '/lit_component/zero-panel.js';
 import '/lit_component/zero-stat-card.js';
 import '/lit_component/zero-section.js';
+import '/lit_component/zero-stat-grid.js';
 import '/lit_component/zero-empty-state.js';
+import '/lit_component/zero-input.js';
+import '/lit_component/zero-textarea.js';
+import '/lit_component/zero-select.js';
+import '/lit_component/zero-file-picker.js';
 import { api } from './shared/http.js';
 import { objectFromText, textFromObject, fileToBase64 } from './shared/formatters.js';
 import { METHODS, deepClone, emptyNode, startNode, emptyWorkflow, getNodeSize } from './shared/runner-model.js';
@@ -36,8 +41,48 @@ class MockDeckRunner extends LitElement {
         runHistory:           { state: true },
         selectedRunId:        { state: true },
         expandedScenarioKey:  { state: true },
-        libraryDragOver:      { state: true }
+        libraryDragOver:      { state: true },
+        view:                 { state: true },
+        selectedEventId:      { state: true },
+        selectedTraceTab:     { state: true }
     };
+
+    addNodeFormDataRow() {
+        this.workflow = {
+            ...this.workflow,
+            nodes: this.workflow.nodes.map(n => {
+                if (n.id !== this.selectedNodeId) return n;
+                const rows = [...(n.formData || [])];
+                rows.push({ key: '', value: '', type: 'text', fileName: '' });
+                return { ...n, formData: rows };
+            })
+        };
+    }
+
+    removeNodeFormDataRow(index) {
+        this.workflow = {
+            ...this.workflow,
+            nodes: this.workflow.nodes.map(n => {
+                if (n.id !== this.selectedNodeId) return n;
+                const rows = [...(n.formData || [])];
+                rows.splice(index, 1);
+                return { ...n, formData: rows };
+            })
+        };
+    }
+
+    updateNodeFormDataRow(index, field, value, fileName = null) {
+        this.workflow = {
+            ...this.workflow,
+            nodes: this.workflow.nodes.map(n => {
+                if (n.id !== this.selectedNodeId) return n;
+                const rows = [...(n.formData || [])];
+                rows[index] = { ...rows[index], [field]: value };
+                if (fileName) rows[index].fileName = fileName;
+                return { ...n, formData: rows };
+            })
+        };
+    }
 
     static styles = css`
         :host { display: block; padding: 16px; color: #edf4ff; font-family: 'Inter', system-ui, sans-serif; }
@@ -128,15 +173,38 @@ class MockDeckRunner extends LitElement {
         .panel { background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 14px; }
         .panel-heading { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: #9db0c7; margin: 0 0 10px; }
         .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-        label { display: grid; gap: 5px; font-size: 0.84rem; color: #cfe0f6; }
-        input, select, textarea {
-            width: 100%; min-width: 0; border-radius: 10px;
-            border: 1px solid rgba(255,255,255,0.1); background: rgba(6,16,26,0.65);
-            color: #edf4ff; padding: 8px 10px; font-size: 0.84rem;
-        }
-        textarea { min-height: 72px; resize: vertical; font-family: 'SFMono-Regular', Menlo, monospace; font-size: 0.78rem; }
         .cols { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
         .hint { color: #9db0c7; font-size: 0.8rem; line-height: 1.5; }
+
+        /* Monitor Drilldown CSS */
+        .event-list { display: grid; gap: 6px; }
+        .node-event {
+            background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 12px; padding: 12px; cursor: pointer; transition: 0.2s; position: relative;
+        }
+        .node-event:hover { background: rgba(255,255,255,0.04); border-color: rgba(79,209,197,0.3); }
+        .node-event.active { border-color: #4fd1c5; background: rgba(79,209,197,0.05); box-shadow: 0 0 20px rgba(79,209,197,0.07); }
+        .node-event.ok { border-left: 3px solid #4fd1c5; }
+        .node-event.fail { border-left: 3px solid #ff6464; }
+        .node-event-meta { display: flex; gap: 10px; font-size: 0.72rem; color: #9db0c7; margin-top: 4px; align-items: center; }
+        .node-event-status { padding: 1px 6px; border-radius: 4px; background: rgba(0,0,0,0.25); font-weight: 800; font-family: monospace; color: #cfe0f6; }
+        
+        .trace-panel { 
+            margin-top: 12px; padding: 16px; background: rgba(0,0,0,0.25); border-radius: 14px; 
+            border: 1px solid rgba(255,255,255,0.08); font-size: 0.82rem; line-height: 1.4;
+            cursor: default;
+        }
+        .trace-tabs { display: flex; gap: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); margin-bottom: 12px; }
+        .trace-tab { padding-bottom: 6px; cursor: pointer; color: #9db0c7; font-weight: 700; border-bottom: 2px solid transparent; font-size: 0.75rem; text-transform: uppercase; }
+        .trace-tab.active { color: #4fd1c5; border-bottom-color: #4fd1c5; }
+        .trace-section { margin-bottom: 16px; }
+        .trace-label { font-size: 0.65rem; font-weight: 800; color: #4fd1c5; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; display: block; opacity: 0.8; }
+        .trace-value { color: #cfe0f6; word-break: break-all; font-family: monospace; }
+        .trace-pre { 
+            background: #06101a; padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05); 
+            margin: 4px 0; overflow: auto; max-height: 380px; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.76rem;
+            color: #a5d6ff; line-height: 1.5;
+        }
 
         /* Node Library drag items */
         .lib-item {
@@ -228,6 +296,35 @@ class MockDeckRunner extends LitElement {
         .sidebar-btn:hover { color: #edf4ff; }
         @media (max-width: 1200px) { .runner-layout { grid-template-columns: 1fr; } .right-col { display: none; } }
         @media (max-width: 860px) { .hero { grid-template-columns: 1fr; } .stats { grid-template-columns: 1fr; } }
+
+        /* Monitor View */
+        .monitor-pane { display: grid; gap: 20px; }
+        .monitor-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+        .monitor-grid { display: grid; gap: 16px; margin-top: 10px; }
+        .event-log { background: rgba(6,16,26,0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; min-height: 400px; display: flex; flex-direction: column; }
+        .log-header { padding: 14px 20px; border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; align-items: center; }
+        .log-list { flex: 1; overflow-y: auto; max-height: 600px; padding: 10px; }
+        .log-item { 
+            padding: 12px 16px; border-radius: 10px; margin-bottom: 6px; cursor: pointer;
+            transition: background 0.12s; border: 1px solid transparent; display: grid; gap: 4px;
+        }
+        .log-item:hover { background: rgba(255,255,255,0.04); }
+        .log-item.active { background: rgba(79,209,197,0.08); border-color: rgba(79,209,197,0.25); }
+        .log-item-meta { display: flex; gap: 10px; font-size: 0.72rem; color: #9db0c7; align-items: center; }
+        .log-item-title { font-weight: 700; font-size: 0.86rem; color: #edf4ff; display: flex; align-items: center; gap: 8px; }
+        .log-detail { 
+            margin: 10px 0; padding: 16px; background: #040c16; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);
+            font-family: 'SFMono-Regular', Consolas, monospace; font-size: 0.76rem;
+        }
+        .detail-section { margin-bottom: 14px; }
+        .detail-label { font-weight: 800; color: #4fd1c5; text-transform: uppercase; font-size: 0.64rem; letter-spacing: 0.05em; margin-bottom: 6px; display: block; }
+        .detail-code { color: #d4e3f6; white-space: pre-wrap; word-break: break-all; }
+        .method-pill { padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: 800; background: rgba(255,255,255,0.1); color: #edf4ff; }
+        .method-pill.GET { color: #4fd1c5; background: rgba(79,209,197,0.12); }
+        .method-pill.POST { color: #f6ad55; background: rgba(246,173,85,0.12); }
+        .status-pill { font-weight: 800; font-size: 0.74rem; }
+        .status-pill.ok { color: #4fd1c5; }
+        .status-pill.error { color: #ff6464; }
     `;
 
     constructor() {
@@ -251,6 +348,8 @@ class MockDeckRunner extends LitElement {
         this.selectedRunId = '';
         this.expandedScenarioKey = '';
         this.libraryDragOver = false;
+        this.view = state.view || 'designer';
+        this.selectedEventId = '';
     }
 
     connectedCallback() {
@@ -607,6 +706,8 @@ class MockDeckRunner extends LitElement {
             body: JSON.stringify({ workflowId: this.workflow.id })
         });
         this.runState = response.run;
+        this.selectedRunId = response.run.id;
+        this.view = 'monitor';
         this.startPollingRun(response.run.id);
         this.setToast('Run started.');
     }
@@ -635,6 +736,12 @@ class MockDeckRunner extends LitElement {
         node.method = request.method || 'GET';
         node.url = request.url || '';
         node.mockId = request.mockId || '';
+        node.headers = deepClone(request.headers || {});
+        node.bodyType = request.bodyType || 'raw';
+        node.body = request.body || '';
+        node.formData = deepClone(request.formData || []);
+        node.fileData = request.fileData;
+        node.fileName = request.fileName;
         node.requestRef = { collectionId: request.collectionId || '', itemId: request.id || '' };
         this.workflow = { ...this.workflow, nodes: [...this.workflow.nodes, node] };
         this.openNodePopup(node);
@@ -685,6 +792,48 @@ class MockDeckRunner extends LitElement {
         if (status === 'done' || status === 'completed') return 'status-done';
         if (status === 'failed' || status === 'error') return 'status-error';
         return 'status-running';
+    }
+
+    renderTraceDetails(event) {
+        const tab = this.selectedTraceTab || 'request';
+        const isRequest = tab === 'request';
+        const data = isRequest ? event.request : event.response;
+        if (!data) return html`<div class="trace-panel">Trace data unavailable.</div>`;
+
+        return html`
+            <div class="trace-panel" @click=${(e) => e.stopPropagation()}>
+                <div class="trace-tabs">
+                    <div class=${`trace-tab ${tab === 'request' ? 'active' : ''}`} @click=${() => this.selectedTraceTab = 'request'}>Request</div>
+                    <div class=${`trace-tab ${tab === 'response' ? 'active' : ''}`} @click=${() => this.selectedTraceTab = 'response'}>Response</div>
+                </div>
+
+                ${isRequest ? html`
+                    <div class="trace-section">
+                        <span class="trace-label">Target URL</span>
+                        <div class="trace-value">${event.method} ${data.url}</div>
+                    </div>
+                ` : html`
+                    <div class="trace-section">
+                        <span class="trace-label">Status</span>
+                        <div class="trace-value">
+                            <span class="node-event-status">${data.statusCode}</span> ${event.ok ? 'Success' : 'Error'}
+                        </div>
+                    </div>
+                `}
+
+                <div class="trace-section">
+                    <span class="trace-label">Headers</span>
+                    <div class="trace-pre">${Object.entries(data.headers || {}).map(([k,v]) => html`${k}: ${v}\n`)}</div>
+                </div>
+
+                ${data.body ? html`
+                    <div class="trace-section">
+                        <span class="trace-label">Body</span>
+                        <div class="trace-pre">${typeof data.body === 'object' ? JSON.stringify(data.body, null, 2) : data.body}</div>
+                    </div>
+                ` : ''}
+            </div>
+        `;
     }
 
     _getDonutPath(pct, r = 30) {
@@ -751,53 +900,109 @@ class MockDeckRunner extends LitElement {
                 ${tab === 'basic' ? html`
                     ${node.nodeType === 'start' ? html`<div class="hint">This is the flow entry step. It does not call an API, but you can target your flow dataset here.</div>` : html`<div class="hint">Choose a saved API from collections or configure a custom endpoint.</div>`}
                     <div class="cols">
-                        <label>Step name <input name="name" .value=${node.name} @input=${this.updateNodeField} /></label>
-                        <label>Saved API source
-                            <select name="requestRefItemId" .value=${node.requestRef?.itemId || ''} @change=${this.updateNodeField}>
-                                <option value="">Custom URL / manual</option>
-                                ${(this.state.collectionRequests || []).map((request) => html`<option value=${request.id}>${request.collectionName} / ${request.name} (${request.kind})</option>`)}
-                            </select>
-                        </label>
+                        <zero-input label="Step name" name="name" .value=${node.name} @change=${this.updateNodeField}></zero-input>
+                        <zero-select label="Saved API source" name="requestRefItemId" .value=${node.requestRef?.itemId || ''} 
+                            .options=${[{value:'', label:'Custom URL / manual'}, ...(this.state.collectionRequests || []).map(r=>({value:r.id, label:`${r.collectionName} / ${r.name} (${r.kind})`}))]}
+                            @change=${this.updateNodeField}>
+                        </zero-select>
                     </div>
                     <div class="cols">
-                        <label>Depends on step IDs <input name="dependsOnText" .value=${(node.dependsOn || []).join(', ')} @input=${this.updateNodeField} placeholder="node-a, node-b" /></label>
-                        <label>Timeout ms <input name="timeoutMs" type="number" .value=${String(node.timeoutMs || 15000)} @input=${this.updateNodeField} /></label>
+                        <zero-input label="Depends on step IDs" name="dependsOnText" .value=${(node.dependsOn || []).join(', ')} @change=${this.updateNodeField} placeholder="node-1, node-2"></zero-input>
+                        <zero-input label="Timeout ms" name="timeoutMs" type="number" .value=${String(node.timeoutMs || 15000)} @change=${this.updateNodeField}></zero-input>
                     </div>
                     ${(node.dependsOn || []).length ? html`<div class="actions" style="margin-top:6px;">${(node.dependsOn || []).map((depId) => html`<zero-button tone="alt" compact @click=${() => this.removeDependency(node.id, depId)}>Remove ${depId}</zero-button>`)}</div>` : ''}
                 ` : ''}
 
                 ${tab === 'request' && node.nodeType !== 'start' ? html`
                     <div class="cols">
-                        <label>Method
-                            <select name="method" .value=${node.method} @change=${this.updateNodeField}>
-                                ${METHODS.map((method) => html`<option value=${method}>${method}</option>`)}
-                            </select>
-                        </label>
-                        <label>URL <input name="url" .value=${node.url} @input=${this.updateNodeField} placeholder="http://127.0.0.1:8381/api/users" /></label>
+                        <zero-select label="Method" name="method" .value=${node.method} 
+                            .options=${METHODS.map(m=>({value:m}))}
+                            @change=${this.updateNodeField}>
+                        </zero-select>
+                        <zero-input label="URL" name="url" .value=${node.url} @change=${this.updateNodeField} placeholder="http://127.0.0.1:8381/api/users"></zero-input>
                     </div>
-                    <label>Or linked mock endpoint
-                        <select name="mockId" .value=${node.mockId || ''} @change=${this.updateNodeField}>
-                            <option value="">None</option>
-                            ${(this.state.mocks || []).map((mock) => html`<option value=${mock.id}>${mock.name} (${mock.method} ${mock.path})</option>`)}
-                        </select>
-                    </label>
-                    <label>Request headers <textarea name="headersText" .value=${textFromObject(node.headers)} @input=${this.updateNodeField}></textarea></label>
-                    <label>Request body <textarea name="body" .value=${node.body || ''} @input=${this.updateNodeField} placeholder='{"userId":"{{row.userId}}"}'></textarea></label>
+                    <zero-select label="Or linked mock endpoint" name="mockId" .value=${node.mockId || ''} 
+                        .options=${[{value:'', label:'None'}, ...(this.state.mocks || []).map(m=>({value:m.id, label:`${m.name} (${m.method} ${m.path})`}))]}
+                        @change=${this.updateNodeField}>
+                    </zero-select>
+                    <zero-textarea label="Request headers (key: value)" name="headersText" .value=${textFromObject(node.headers)} @change=${this.updateNodeField} style="min-height:100px;"></zero-textarea>
+                    
+                    <div class="panel-heading" style="margin-top:16px;">Request Payload</div>
+                    <div style="display:flex; gap:12px; margin-bottom:12px;">
+                        ${['none', 'raw', 'multipart', 'urlencoded', 'binary'].map(type => html`
+                            <label style="display:flex; align-items:center; gap:5px; font-size:0.75rem; color:#9db0c7; cursor:pointer;">
+                                <input type="radio" name="bodyType" .checked=${(node.bodyType || 'none') === type} @change=${() => this.updateNodeField({target:{name:'bodyType',value:type}})}>
+                                ${type === 'urlencoded' ? 'x-www-form' : type.charAt(0).toUpperCase() + type.slice(1)}
+                            </label>
+                        `)}
+                    </div>
+
+                    ${(node.bodyType === 'raw') ? html`
+                        <zero-textarea label="Raw Body (JSON/Text)" name="body" .value=${node.body} @change=${this.updateNodeField} placeholder='{ "key": "value" }' style="min-height:180px;"></zero-textarea>
+                    ` : ''}
+
+                    ${(node.bodyType === 'binary') ? html`
+                        <div class="panel" style="background:rgba(255,255,255,0.02); border-style:dashed;">
+                            <zero-file-picker label="Binary File" .fileName=${node.fileName} .value=${node.fileData} @change=${(e)=>this.updateNodeField({target:{name:'fileData',value:e.detail.value,fileName:e.detail.fileName}})}></zero-file-picker>
+                        </div>
+                    ` : ''}
+
+                    ${(['multipart', 'urlencoded'].includes(node.bodyType)) ? html`
+                        <div class="form-data-grid">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                <span class="panel-heading" style="margin:0; font-size:0.65rem;">Key-Value Pairs</span>
+                                <zero-button compact tone="alt" @click=${this.addNodeFormDataRow}>+ Add Row</zero-button>
+                            </div>
+                            <table style="width:100%; border-collapse:collapse; font-size:0.75rem;">
+                                <thead>
+                                    <tr>
+                                        <th style="width:30%;">Key</th>
+                                        <th style="width:15%;">Type</th>
+                                        <th>Value</th>
+                                        <th style="width:40px;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${(node.formData || []).map((row, idx) => html`
+                                        <tr>
+                                            <td><zero-input .value=${row.key} @change=${(e)=>this.updateNodeFormDataRow(idx, 'key', e.detail.value)} placeholder="Key"></zero-input></td>
+                                            <td>
+                                                <select style="width:100%; height:32px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#edf4ff; font-size:0.75rem;" 
+                                                    @change=${(e)=>this.updateNodeFormDataRow(idx, 'type', e.target.value)}>
+                                                    <option value="text" ?selected=${row.type==='text'}>Text</option>
+                                                    <option value="file" ?selected=${row.type==='file'}>File</option>
+                                                </select>
+                                            </td>
+                                            <td>
+                                                ${row.type === 'file' ? html`
+                                                    <zero-file-picker .fileName=${row.fileName} .value=${row.value} @change=${(e)=>this.updateNodeFormDataRow(idx, 'value', e.detail.value, e.detail.fileName)}></zero-file-picker>
+                                                ` : html`
+                                                    <zero-input .value=${row.value} @change=${(e)=>this.updateNodeFormDataRow(idx, 'value', e.detail.value)} placeholder="Value"></zero-input>
+                                                `}
+                                            </td>
+                                            <td><div style="cursor:pointer; color:#ff6464; text-align:center;" @click=${()=>this.removeNodeFormDataRow(idx)}>✕</div></td>
+                                        </tr>
+                                    `)}
+                                </tbody>
+                            </table>
+                            ${(node.formData || []).length === 0 ? html`<div class="muted" style="padding:10px; text-align:center;">No fields added.</div>` : ''}
+                        </div>
+                    ` : ''}
                 ` : ''}
 
                 ${tab === 'mappings' && node.nodeType !== 'start' ? html`
                     <div class="hint">Map outputs from previous steps into this request.</div>
-                    <label>Mappings JSON <textarea name="mappingsText" .value=${JSON.stringify(node.mappings || [], null, 2)} @input=${this.updateNodeField} placeholder='[{"sourceType":"step","sourceNodeId":"node-1","sourcePath":"response.body.token","targetType":"header","targetKey":"authorization"}]'></textarea></label>
+                    <zero-textarea label="Mappings JSON" name="mappingsText" .value=${JSON.stringify(node.mappings || [], null, 2)} @change=${this.updateNodeField} placeholder='[{"sourceType":"step","sourceNodeId":"node-1","sourcePath":"response.body.token","targetType":"header","targetKey":"authorization"}]' style="min-height:220px;"></zero-textarea>
                 ` : ''}
 
                 ${tab === 'scripts' ? html`
-                    <div class="hint">Javascript executed before/after the request. You can mutate the <code>ctx</code> object to pass state or control the flow.</div>
-                    <label>Pre-script <textarea name="preScript" .value=${node.preScript || ''} @input=${this.updateNodeField}></textarea></label>
-                    <label>Post-script <textarea name="postScript" .value=${node.postScript || ''} @input=${this.updateNodeField}></textarea></label>
+                    <div class="hint">Javascript executed before/after the request. You can mutate the <code>ctx</code> object...</div>
+                    <zero-textarea label="Pre-script" name="preScript" .value=${node.preScript || ''} @change=${this.updateNodeField} style="min-height:140px;"></zero-textarea>
+                    <zero-textarea label="Post-script" name="postScript" .value=${node.postScript || ''} @change=${this.updateNodeField} style="min-height:140px;"></zero-textarea>
                 ` : ''}
 
                 ${tab === 'notes' ? html`
-                    <label>Notes & Documentation for this step <textarea name="notes" .value=${node.notes || ''} @input=${this.updateNodeField} style="min-height:140px;"></textarea></label>
+                    <zero-textarea label="Notes & Documentation" name="notes" .value=${node.notes || ''} @change=${this.updateNodeField} placeholder="Describe the purpose of this step..." style="min-height:200px;"></zero-textarea>
                 ` : ''}
             </div>
             
@@ -878,17 +1083,27 @@ class MockDeckRunner extends LitElement {
                                 <div><strong>Scenario:</strong> ${key} ${isExpanded ? '▾' : '▸'}</div>
                                 ${isExpanded ? html`
                                     <div class="event-list" style="margin-top:10px; margin-bottom:8px;" @click=${(e) => e.stopPropagation()}>
-                                        ${scenarioEvents.map(e => html`
-                                            <div class=${`node-event ${e.ok ? 'ok' : 'fail'}`}>
-                                                <strong>${e.nodeName || 'Node'}</strong>
-                                                <div class="node-event-meta">
-                                                    <span>${e.kind}</span>
-                                                    ${e.statusCode ? html`<span>Status: ${e.statusCode}</span>` : ''}
-                                                    ${e.durationMs ? html`<span>${e.durationMs}ms</span>` : ''}
+                                        ${scenarioEvents.map(e => {
+                                            const isSelected = this.selectedEventId === e.nodeId + e.scenarioKey; // Unique ID for event
+                                            return html`
+                                                <div class=${`node-event ${e.ok ? 'ok' : 'fail'} ${isSelected ? 'active' : ''}`} 
+                                                     @click=${() => {
+                                                         this.selectedEventId = isSelected ? '' : (e.nodeId + e.scenarioKey);
+                                                         if (!this.selectedTraceTab) this.selectedTraceTab = 'request';
+                                                     }}>
+                                                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                                                        <strong>${e.nodeName || 'Node'}</strong>
+                                                        <span class="node-event-status" style="font-size:0.65rem;">${e.statusCode || 'N/A'}</span>
+                                                    </div>
+                                                    <div class="node-event-meta">
+                                                        <span>${e.kind}</span>
+                                                        ${e.durationMs ? html`<span>${e.durationMs}ms</span>` : ''}
+                                                    </div>
+                                                    ${e.error ? html`<div style="color:#ff6464; margin-top:4px; font-size:0.75rem;">${e.error}</div>` : ''}
+                                                    ${isSelected ? this.renderTraceDetails(e) : ''}
                                                 </div>
-                                                ${e.error ? html`<div style="color:#ff6464; margin-top:4px;">${e.error}</div>` : ''}
-                                            </div>
-                                        `)}
+                                            `;
+                                        })}
                                     </div>
                                 ` : ''}
                             </div>
@@ -903,247 +1118,343 @@ class MockDeckRunner extends LitElement {
         const activeEnvironment = (this.state.environments || []).find((item) => item.id === this.workflow.globals.environmentId) || null;
         return html`
             <div class="cols">
-                <label>
-                    Workflow name
-                    <input name="name" .value=${this.workflow.name} @input=${this.updateWorkflowField} />
-                </label>
-                <label>
-                    Target Dataset
-                    <select name="datasetId" .value=${this.workflow.datasetId || ''} @change=${this.updateWorkflowField}>
-                        <option value="">None (Run 1 iteration)</option>
-                        ${(this.state.datasets || []).map((item) => html`<option value=${item.id}>${item.name} (${item.rowCount} rows)</option>`)}
-                    </select>
-                </label>
+                <zero-input label="Workflow name" name="name" .value=${this.workflow.name} @change=${this.updateWorkflowField}></zero-input>
+                <zero-select label="Target Dataset" name="datasetId" .value=${this.workflow.datasetId || ''} 
+                    .options=${[{value:'', label:'None (Run 1 iteration)'}, ...(this.state.datasets || []).map(r=>({value:r.id, label:`${r.name} (${r.rowCount} rows)`}))]}
+                    @change=${this.updateWorkflowField}>
+                </zero-select>
             </div>
             <div class="cols">
-                <label>
-                    Active Environment
-                    <select name="globals.environmentId" .value=${this.workflow.globals.environmentId || ''} @change=${this.updateWorkflowField}>
-                        <option value="">None</option>
-                        ${(this.state.environments || []).map((item) => html`<option value=${item.id}>${item.collectionName} / ${item.name}${item.isActive ? ' (Collection Default)' : ''}</option>`)}
-                    </select>
-                </label>
-                <label>
-                    Concurrent runners
-                    <input name="globals.concurrency" type="number" .value=${String(this.workflow.globals.concurrency)} @input=${this.updateWorkflowField} />
-                </label>
+                <zero-select label="Active Environment" name="globals.environmentId" .value=${this.workflow.globals.environmentId || ''} 
+                    .options=${[{value:'', label:'None'}, ...(this.state.environments || []).map(r=>({value:r.id, label:`${r.collectionName} / ${r.name}${r.isActive ? ' (Default)' : ''}`}))]}
+                    @change=${this.updateWorkflowField}>
+                </zero-select>
+                <zero-input label="Concurrent runners" name="globals.concurrency" type="number" .value=${String(this.workflow.globals.concurrency)} @change=${this.updateWorkflowField}></zero-input>
             </div>
             <div class="cols">
-                <label>
-                    Total iterations override
-                    <input name="globals.iterations" type="number" .value=${String(this.workflow.globals.iterations)} @input=${this.updateWorkflowField} placeholder="(Reads from dataset)" />
-                </label>
-                <label>
-                    Timeout ms
-                    <input name="globals.timeoutMs" type="number" .value=${String(this.workflow.globals.timeoutMs)} @input=${this.updateWorkflowField} />
-                </label>
+                <zero-input label="Total iterations" name="globals.iterations" type="number" .value=${String(this.workflow.globals.iterations || 1)} @change=${this.updateWorkflowField}></zero-input>
+                <zero-input label="Global Timeout ms" name="globals.timeoutMs" type="number" .value=${String(this.workflow.globals.timeoutMs)} @change=${this.updateWorkflowField}></zero-input>
             </div>
-            <label style="flex-direction:row; display:flex; align-items:center; gap:8px;">
-                <input name="globals.stopOnError" type="checkbox" .checked=${Boolean(this.workflow.globals.stopOnError)} @change=${this.updateWorkflowField} style="width:auto;" />
-                Stop workflow on first node error
-            </label>
-            <label>
-                Global headers (Injected into every request)
-                <textarea .value=${textFromObject(this.workflow.globals.headers)} @input=${this.updateGlobalHeaders} placeholder="Authorization: Bearer top-secret&#10;x-mock-mode: bypass"></textarea>
-            </label>
-            ${activeEnvironment ? html`<div class="hint">Environment active: ${activeEnvironment.name}. Access it in templates with <code>{{env.base_url}}</code> or in scripts with <code>ctx.environment.variables.base_url</code>.</div>` : ''}
+            <div class="hint" style="margin-bottom:12px;">
+                <strong>Total Estimated Runs:</strong> 
+                ${(this.state.datasets?.find(d => d.id === this.workflow.datasetId)?.rowCount || 1) * Math.max(1, parseInt(this.workflow.globals.iterations || 1, 10))} 
+                (Iterations × Dataset Rows)
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+                <input name="globals.stopOnError" type="checkbox" .checked=${Boolean(this.workflow.globals.stopOnError)} @change=${this.updateWorkflowField} style="width:auto; margin:0;" />
+                <span style="font-size:0.84rem; color:#cfe0f6;">Stop workflow on first node error</span>
+            </div>
+            <zero-textarea label="Global headers (Injected into every request)" .value=${textFromObject(this.workflow.globals.headers)} @change=${this.updateGlobalHeaders} placeholder="Authorization: Bearer secret"></zero-textarea>
+            ${activeEnvironment ? html`<div class="hint" style="margin-top:8px;">Environment active: ${activeEnvironment.name}. Access it in templates with <code>{{env.base_url}}</code>.</div>` : ''}
         `;
     }
 
-    renderDocs() {
+    renderAnalyticsDashboard() {
+        const run = this.selectedRunId ? (this.runHistory.find(r => r.id === this.selectedRunId) || this.runState) : this.runState;
+        if (!run) return html`<zero-empty-state message="No active run metrics available."></zero-empty-state>`;
+        
+        const events = run.events || [];
+        const successCount = run.summary?.success || 0;
+        const failureCount = run.summary?.failure || 0;
+        const totalCount = run.progress?.nodeTotal || 0;
+        const avgMs = run.summary?.avgMs || 0;
+        const progress = totalCount > 0 ? Math.round((run.progress.nodeCompleted / totalCount) * 100) : 0;
+
+        // Sparkline logic
+        const maxPts = 50;
+        const recentEvents = events.slice(-maxPts);
+        const successPts = recentEvents.map((ev, i) => `${(i / (maxPts-1)) * 100},${ev.ok ? 0 : 100}`).join(' ');
+        const latencyPts = recentEvents.map((ev, i) => {
+            const val = Math.min(100, ((ev.durationMs || 0) / (avgMs * 2 || 200)) * 100);
+            return `${(i / (maxPts-1)) * 100},${100 - val}`;
+        }).join(' ');
+
         return html`
-            <div class="docs">
-                <h4>What is this?</h4>
-                <p>The runner executes API requests in a visual workflow flow. Link steps sequentially or concurrently by dragging paths between nodes.</p>
-                <h4>Templates</h4>
-                <p>Use curly brace syntax in URLs, headers, and bodies.</p>
-                <ul>
-                    <li><code>{{row.email}}</code> - Pulled from Dataset</li>
-                    <li><code>{{step.my_node.response.body.token}}</code> - Step output</li>
-                    <li><code>{{env.base_url}}</code> - Active config</li>
-                </ul>
-                <h4>Scripts API</h4>
-                <p>Access the runtime context in pre/post scripts via <code>ctx</code>.</p>
-                <pre>
-// preScript example
-ctx.request.headers['x-trace'] = '123';
-return ctx;
-
-// postScript example to extract data
-ctx.globals.session_id = ctx.response.body.sid;
-return ctx;</pre>
+            <div class="analytics-overview">
+                <div class="panel-heading">Global Overview</div>
+                <zero-stat-grid columns="4">
+                    <zero-stat-card value=${String(run.status)} label="Status"></zero-stat-card>
+                    <zero-stat-card value=${`${progress}%`} label="Progress"></zero-stat-card>
+                    <zero-stat-card value=${String(successCount)} label="Success Nodes"></zero-stat-card>
+                    <zero-stat-card value=${String(failureCount)} label="Failed Nodes" style="color:#ff6464;"></zero-stat-card>
+                </zero-stat-grid>
+            </div>
+            
+            <div class="monitor-grid" style="margin-top:20px;">
+                <div class="panel">
+                    <div class="panel-heading">Performance Trends</div>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                        <div>
+                            <div class="hint" style="margin-bottom:8px; font-weight:700;">Success vs Failure (Recent)</div>
+                            <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="width:100%; height:60px; background:rgba(0,0,0,0.2); border-radius:8px;">
+                                <polyline fill="none" stroke="#4fd1c5" stroke-width="2" points=${successPts} />
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="hint" style="margin-bottom:8px; font-weight:700;">Latency (Recent)</div>
+                            <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="width:100%; height:60px; background:rgba(0,0,0,0.2); border-radius:8px;">
+                                <polyline fill="none" stroke="#f6ad55" stroke-width="2" points=${latencyPts} />
+                            </svg>
+                        </div>
+                    </div>
+                    <zero-stat-grid columns="3" style="margin-top:16px;">
+                        <zero-stat-card value=${`${avgMs}ms`} label="Avg Latency"></zero-stat-card>
+                        <zero-stat-card value=${run.summary?.throughputPerSec ? `${run.summary.throughputPerSec}/s` : '0/s'} label="Throughput"></zero-stat-card>
+                        <zero-stat-card value=${String(run.progress?.scenariosTotal || 0)} label="Total Scenarios"></zero-stat-card>
+                    </zero-stat-grid>
+                </div>
             </div>
         `;
     }
 
-    render() {
+    renderEventLog() {
+        const run = this.selectedRunId ? (this.runHistory.find(r => r.id === this.selectedRunId) || this.runState) : this.runState;
+        const events = run?.events || [];
+        
+        return html`
+            <div class="event-log" style="margin-top:20px;">
+                <div class="log-header">
+                    <h3 style="margin:0; font-size:0.9rem;">Execution Trigger Log</h3>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <zero-badge tone=${run?.status === 'running' ? 'warn' : 'alt'}>${run?.status || 'idle'}</zero-badge>
+                        <span style="font-size:0.75rem; color:#9db0c7;">${events.length} events recorded</span>
+                    </div>
+                </div>
+                <div class="log-list">
+                    ${events.length === 0 ? html`<div class="hint" style="padding:40px; text-align:center;">Waiting for execution events...</div>` : ''}
+                    ${events.slice().reverse().map(event => {
+                        const isExpanded = this.selectedEventId === event.id;
+                        return html`
+                            <div class="log-item ${isExpanded ? 'active' : ''}" @click=${() => this.selectedEventId = isExpanded ? '' : event.id}>
+                                <div class="log-item-title">
+                                    <span class="method-pill ${event.method}">${event.method || 'EXE'}</span>
+                                    <span style="flex:1">${event.nodeName || 'Step'}</span>
+                                    <span class="status-pill ${event.ok ? 'ok' : 'error'}">${event.statusCode || (event.ok ? 'OK' : 'ERR')}</span>
+                                </div>
+                                <div class="log-item-meta">
+                                    <span>${new Date(event.at).toLocaleTimeString()}</span>
+                                    ${event.durationMs ? html`<span>• ${event.durationMs}ms</span>` : ''}
+                                    ${event.scenarioKey ? html`<span>• Scenario: ${event.scenarioKey}</span>` : ''}
+                                </div>
+                                ${isExpanded ? html`
+                                    <div class="log-detail" @click=${(e) => e.stopPropagation()}>
+                                        ${event.request ? html`
+                                            <div class="detail-section">
+                                                <span class="detail-label">Request Details</span>
+                                                <div class="detail-code">URL: ${event.request.url}\n\nHeaders:\n${JSON.stringify(event.request.headers, null, 2)}\n\nBody:\n${event.request.body || '(empty)'}</div>
+                                            </div>
+                                        ` : ''}
+                                        ${event.response ? html`
+                                            <div class="detail-section">
+                                                <span class="detail-label">Response Details</span>
+                                                <div class="detail-code">Status: ${event.response.status}\n\nHeaders:\n${JSON.stringify(event.response.headers, null, 2)}\n\nBody:\n${typeof event.response.body === 'object' ? JSON.stringify(event.response.body, null, 2) : event.response.body}</div>
+                                            </div>
+                                        ` : ''}
+                                        ${(event.error || (!event.ok && event.message)) ? html`
+                                            <div class="detail-section">
+                                                <span class="detail-label" style="color:#ff6464;">Error Trace</span>
+                                                <div class="detail-code" style="color:#ff9494;">${event.error || event.message}</div>
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `;
+                    })}
+                </div>
+            </div>
+        `;
+    }
+
+    renderMonitor() {
+        return html`
+            <div class="monitor-pane">
+                <div class="monitor-header">
+                    <div class="title" style="flex:1;">
+                        <zero-badge>Live Monitoring</zero-badge>
+                        <h1>Run: ${this.workflow.name || 'Current Flow'}</h1>
+                        <p class="lead">Tracking live triggers, request cycles, and aggregate performance metrics.</p>
+                        <div class="actions" style="margin-top:16px;">
+                            <zero-button tone="alt" @click=${() => this.view = 'designer'}>← Designer View</zero-button>
+                            <zero-button tone="warn" @click=${() => api(`${this.runnerApiBase}/runs/${this.selectedRunId || this.runState?.id}`, { method: 'DELETE' })}>Stop Execution</zero-button>
+                        </div>
+                    </div>
+                </div>
+
+                ${this.renderAnalyticsDashboard()}
+                ${this.renderEventLog()}
+            </div>
+        `;
+    }
+
+    renderDesigner() {
         const dialogNode = this.dialogNode;
         const dataset = (this.state.datasets || []).find((item) => item.id === this.workflow.datasetId);
         
         return html`
-            <div class="shell">
-                <section class="hero">
-                    <div class="title">
-                        <zero-badge>Runner Workspace</zero-badge>
-                        <h1>End-to-End Scenarios</h1>
-                        <p class="lead">Build visual DAGs for complex end-to-end testing, parallel load execution, and chained API mock validation. Pull data inputs from CSV datasets.</p>
-                        <div class="actions" style="margin-top:14px;">
-                            <zero-button tone="alt" href=${this.uiBase}>Back to Mocks</zero-button>
-                            <zero-button tone="alt" @click=${this.saveWorkflow}>Save Design</zero-button>
-                            <zero-button @click=${this.runWorkflow}>Launch Runner 🚀</zero-button>
+            <section class="hero" style="margin-bottom: 20px;">
+                <div class="title">
+                    <zero-badge>Scenario Designer</zero-badge>
+                    <h1>${this.workflow.name || 'Untitled Flow'}</h1>
+                    <p class="lead">Design visual DAGs for end-to-end testing, parallel execution, and chained mock validation. Connect nodes to define step order.</p>
+                    <div class="actions" style="margin-top:14px;">
+                        <zero-button tone="alt" href=${this.uiBase}>Dashboard</zero-button>
+                        <zero-button tone="alt" @click=${this.saveWorkflow}>Save Design</zero-button>
+                        <zero-button @click=${this.runWorkflow}>Launch Runner 🚀</zero-button>
+                        <zero-button tone="alt" href="/__mockdeck/docs" target="_blank">Docs 📖</zero-button>
+                    </div>
+                </div>
+                <div class="stats">
+                    <zero-stat-card value=${String(this.workflow.nodes.length)} label="Nodes"></zero-stat-card>
+                    <zero-stat-card value=${String(this.state.datasets?.length || 0)} label="Datasets"></zero-stat-card>
+                    <zero-stat-card value=${String(this.state.workflows?.length || 0)} label="Workflows"></zero-stat-card>
+                    <zero-stat-card value=${String(this.runState?.status || 'idle')} label="Engine Status"></zero-stat-card>
+                </div>
+            </section>
+
+            <section class=${`runner-layout ${this.sidebarCollapsed ? 'sidebar-hidden' : ''}`}>
+                <div class="left-col">
+                    <div class="panel" style="padding:0; display:flex; flex-direction:column;">
+                        <div style="padding:16px 20px; border-bottom:1px solid rgba(255,255,255,0.06); display:flex; justify-content:space-between;">
+                            <div class="panel-heading" style="margin:0;">Flow Canvas</div>
+                            <zero-button compact tone="alt" @click=${() => { this.sidebarCollapsed = !this.sidebarCollapsed; }}>${this.sidebarCollapsed ? 'Show Sidebar' : 'Hide Sidebar'}</zero-button>
                         </div>
-                    </div>
-                    <div class="stats">
-                        <zero-stat-card value=${String(this.workflow.nodes.length)} label="Workflow Steps"></zero-stat-card>
-                        <zero-stat-card value=${String(this.state.datasets?.length || 0)} label="Uploaded Datasets"></zero-stat-card>
-                        <zero-stat-card value=${String(this.state.workflows?.length || 0)} label="Saved Workflows"></zero-stat-card>
-                        <zero-stat-card value=${String(this.runState?.status || 'idle')} label="Latest Status"></zero-stat-card>
-                    </div>
-                </section>
-
-                <section class=${`runner-layout ${this.sidebarCollapsed ? 'sidebar-hidden' : ''}`}>
-                    <div class="left-col">
-                        <div class="panel" style="padding:0; display:flex; flex-direction:column;">
-                            <div style="padding:16px 20px; border-bottom:1px solid rgba(255,255,255,0.06); display:flex; justify-content:space-between;">
-                                <div class="panel-heading" style="margin:0;">Flow Canvas</div>
-                                <zero-button compact tone="alt" @click=${() => { this.sidebarCollapsed = !this.sidebarCollapsed; }}>${this.sidebarCollapsed ? 'Show Sidebar' : 'Hide Sidebar'}</zero-button>
-                            </div>
-                            <div class=${`board-wrap ${this.libraryDragOver ? 'drag-over' : ''}`}
-                                 @dragover=${this.onCanvasDragOver}
-                                 @dragleave=${this.onCanvasDragLeave}
-                                 @drop=${this.onCanvasDrop}>
-                                <div class="board">
-                                    <svg class="links">
-                                        <defs>
-                                            <marker id="arrowhead" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto" markerUnits="userSpaceOnUse">
-                                                <path d="M 0 1 L 12 7 L 0 13 Q 4 7 0 1 Z" fill="rgba(79,209,197,0.96)"></path>
-                                            </marker>
-                                            <marker id="arrowhead-warm" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto" markerUnits="userSpaceOnUse">
-                                                <path d="M 0 1 L 12 7 L 0 13 Q 4 7 0 1 Z" fill="rgba(246,173,85,0.98)"></path>
-                                            </marker>
-                                        </defs>
-                                        ${this.renderLinks()}
-                                    </svg>
-                                    ${this.workflow.nodes.map((node) => html`
-                                        <div
-                                            data-node-id=${node.id}
-                                            class=${`node ${node.nodeType === 'start' ? 'start-node' : ''} ${this.selectedNodeId === node.id ? 'selected' : ''} ${this.connectorDrag?.hoverTargetId === node.id ? 'drop-target' : ''}`}
-                                            style=${`left:${node.x}px;top:${node.y}px;`}
-                                            @mousedown=${(event) => this.startDrag(event, node)}
-                                            @dblclick=${(event) => { event.stopPropagation(); this.openNodePopup(node); }}
-                                            @click=${() => { this.selectedNodeId = node.id; }}>
-                                            
-                                            <div class="node-top">
-                                                <span class=${`node-method ${node.nodeType === 'start' ? 'start' : ''}`}>${node.nodeType === 'start' ? 'ROOT' : node.method}</span>
-                                                <span class="node-name" title=${node.name}>${node.name}</span>
-                                            </div>
-                                            
-                                            <div class="node-hint">
-                                                ${node.nodeType === 'start' ? 'Drill from here' : (node.url || node.mockId ? (node.url || 'Mock Linked') : 'Collection API')}
-                                            </div>
-
-                                            <div class="node-status">
-                                                <div class=${`status-dot ${this._getNodeStatus(node.id)}`}></div>
-                                            </div>
-
-                                            ${node.nodeType !== 'start' ? html`<div class="node-entry-handle" data-node-id=${node.id} title="Entry connector"></div>` : ''}
-                                            <div class="node-exit-handle" title="Drag to next step" @pointerdown=${(event) => this.startConnectorDrag(event, node.id)}></div>
+                        <div class=${`board-wrap ${this.libraryDragOver ? 'drag-over' : ''}`}
+                             @dragover=${this.onCanvasDragOver}
+                             @dragleave=${this.onCanvasDragLeave}
+                             @drop=${this.onCanvasDrop}>
+                            <div class="board">
+                                <svg class="links">
+                                    <defs>
+                                        <marker id="arrowhead" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto" markerUnits="userSpaceOnUse">
+                                            <path d="M 0 1 L 12 7 L 0 13 Q 4 7 0 1 Z" fill="rgba(79,209,197,0.96)"></path>
+                                        </marker>
+                                        <marker id="arrowhead-warm" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto" markerUnits="userSpaceOnUse">
+                                            <path d="M 0 1 L 12 7 L 0 13 Q 4 7 0 1 Z" fill="rgba(246,173,85,0.98)"></path>
+                                        </marker>
+                                    </defs>
+                                    ${this.renderLinks()}
+                                </svg>
+                                ${this.workflow.nodes.map((node) => html`
+                                    <div
+                                        data-node-id=${node.id}
+                                        class=${`node ${node.nodeType === 'start' ? 'start-node' : ''} ${this.selectedNodeId === node.id ? 'selected' : ''} ${this.connectorDrag?.hoverTargetId === node.id ? 'drop-target' : ''}`}
+                                        style=${`left:${node.x}px;top:${node.y}px;`}
+                                        @mousedown=${(event) => this.startDrag(event, node)}
+                                        @dblclick=${(event) => { event.stopPropagation(); this.openNodePopup(node); }}
+                                        @click=${() => { this.selectedNodeId = node.id; }}>
+                                        
+                                        <div class="node-top">
+                                            <span class=${`node-method ${node.nodeType === 'start' ? 'start' : ''}`}>${node.nodeType === 'start' ? 'ROOT' : node.method}</span>
+                                            <span class="node-name" title=${node.name}>${node.name}</span>
                                         </div>
-                                    `)}
-                                </div>
+                                        
+                                        <div class="node-hint">
+                                            ${node.nodeType === 'start' ? 'Drill from here' : (node.url || node.mockId ? (node.url || 'Mock Linked') : 'Collection API')}
+                                        </div>
+
+                                        <div class="node-status">
+                                            <div class=${`status-dot ${this._getNodeStatus(node.id)}`}></div>
+                                        </div>
+
+                                        ${node.nodeType !== 'start' ? html`<div class="node-entry-handle" data-node-id=${node.id} title="Entry connector"></div>` : ''}
+                                        <div class="node-exit-handle" title="Drag to next step" @pointerdown=${(event) => this.startConnectorDrag(event, node.id)}></div>
+                                    </div>
+                                `)}
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <div class="right-col">
-                        <zero-section heading="API Component Library" ?open=${true}>
-                            <div class="hint" style="margin-bottom:12px;">Drag an endpoint onto the canvas to add it to the workflow, or add a blank step.</div>
-                            <div class="actions" style="margin-bottom:12px;">
-                                <zero-button @click=${this.addNode} tone="alt">Add Manual Step</zero-button>
-                            </div>
-                            <div class="api-list" style="max-height: 45vh; overflow-y: auto; padding-right: 6px; display: flex; flex-direction: column; gap: 4px;">
-                                ${(this.state.collectionRequests || []).map((request) => this.renderLibraryRequest(request))}
-                                ${(this.state.mocks || [])
-                                    .filter((mock) => !(this.state.collectionRequests || []).some((request) => request.mockId === mock.id))
-                                    .map((mock) => this.renderLibraryRequest({
-                                        id: `mock-${mock.id}`,
-                                        name: mock.name,
-                                        method: mock.method,
-                                        kind: mock.type === 'proxy' ? 'proxy' : 'mock',
-                                        collectionName: 'Standalone',
-                                        mockId: mock.id,
-                                        url: `${window.location.origin}${mock.path}`
-                                    }))}
-                            </div>
-                        </zero-section>
+                <div class="right-col">
+                    <zero-section heading="API Library" ?open=${true}>
+                        <div class="api-list" style="max-height: 50vh; overflow-y: auto; padding-right: 6px; display: flex; flex-direction: column; gap: 4px;">
+                            ${(this.state.collectionRequests || []).map((request) => this.renderLibraryRequest(request))}
+                            ${(this.state.mocks || [])
+                                .filter((mock) => !(this.state.collectionRequests || []).some((request) => request.mockId === mock.id))
+                                .map((mock) => this.renderLibraryRequest({
+                                    id: `mock-${mock.id}`,
+                                    name: mock.name,
+                                    method: mock.method,
+                                    kind: mock.type === 'proxy' ? 'proxy' : 'mock',
+                                    collectionName: 'Standalone Mocks',
+                                    mockId: mock.id,
+                                    url: `${window.location.origin}${mock.path}`
+                                }))}
+                        </div>
+                        <div class="actions" style="margin-top:12px;">
+                            <zero-button @click=${this.addNode} tone="alt" style="width:100%;">Create Manual Step</zero-button>
+                        </div>
+                    </zero-section>
 
-                        <zero-section heading="Design Settings" ?open=${true}>
-                            ${this.renderWorkflowSettings()}
-                        </zero-section>
+                    <zero-section heading="Configuration" ?open=${true}>
+                        ${this.renderWorkflowSettings()}
+                    </zero-section>
 
-                        <zero-section heading="Run History & Analytics" ?open=${true}>
-                            ${this.renderAnalytics()}
-                        </zero-section>
+                    <zero-section heading="Run Statistics" ?open=${true}>
+                        ${this.renderAnalytics()}
+                    </zero-section>
 
-                        <zero-section heading="Datasets" ?open=${false}>
-                            <label style="margin-bottom:10px;">
-                                Upload dataset (.csv, .xlsx)
-                                <input type="file" accept=".csv,.xlsx,.xls" @change=${this.uploadDataset} />
-                            </label>
-                            ${dataset ? html`<div class="hint" style="margin-bottom:10px;"><strong>Active:</strong> ${dataset.name}</div>` : ''}
-                            ${(this.state.datasets || []).length ? html`
-                                <table>
-                                    <thead><tr><th>Name</th><th>Rows</th><th>Actions</th></tr></thead>
-                                    <tbody>
-                                        ${(this.state.datasets || []).map((item) => html`
-                                            <tr>
-                                                <td>${item.name}</td>
-                                                <td>${item.rowCount}</td>
-                                                <td><zero-button tone="warn" compact @click=${() => this.deleteDataset(item.id)}>Del</zero-button></td>
-                                            </tr>
-                                        `)}
-                                    </tbody>
-                                </table>
-                            ` : html`<div class="hint">No datasets.</div>`}
-                        </zero-section>
+                    <zero-section heading="Data Sources" ?open=${false}>
+                        <label style="margin-bottom:10px;">
+                            Upload CSV/Excel
+                            <input type="file" accept=".csv,.xlsx,.xls" @change=${this.uploadDataset} />
+                        </label>
+                        ${dataset ? html`<div class="hint" style="margin-bottom:10px;"><strong>Active:</strong> ${dataset.name}</div>` : ''}
+                        ${(this.state.datasets || []).length ? html`
+                            <table>
+                                <thead><tr><th>Name</th><th>Count</th><th>Del</th></tr></thead>
+                                <tbody>
+                                    ${(this.state.datasets || []).map((item) => html`
+                                        <tr>
+                                            <td>${item.name}</td>
+                                            <td>${item.rowCount}</td>
+                                            <td><zero-button tone="warn" compact @click=${() => this.deleteDataset(item.id)}>X</zero-button></td>
+                                        </tr>
+                                    `)}
+                                </tbody>
+                            </table>
+                        ` : html`<div class="hint">No datasets.</div>`}
+                    </zero-section>
 
-                        <zero-section heading="Saved Workflows" ?open=${false}>
-                            ${(this.state.workflows || []).length ? html`
-                                <table>
-                                    <thead><tr><th>Name</th><th>Nodes</th><th>Actions</th></tr></thead>
-                                    <tbody>
-                                        ${(this.state.workflows || []).map((item) => html`
-                                            <tr>
-                                                <td>${item.name}</td>
-                                                <td>${item.nodeCount}</td>
-                                                <td style="display:flex;gap:4px;">
-                                                    <zero-button tone="alt" compact @click=${() => { this.workflow = deepClone(item); this.selectedNodeId = item.nodes?.[0]?.id || ''; }}>Load</zero-button>
-                                                    <zero-button tone="warn" compact @click=${() => this.deleteWorkflow(item.id)}>Del</zero-button>
-                                                </td>
-                                            </tr>
-                                        `)}
-                                    </tbody>
-                                </table>
-                            ` : html`<div class="hint">No workflows.</div>`}
-                        </zero-section>
+                    <zero-section heading="Saved Sequences" ?open=${false}>
+                        ${(this.state.workflows || []).length ? html`
+                            <table>
+                                <thead><tr><th>Name</th><th>Nodes</th><th>Action</th></tr></thead>
+                                <tbody>
+                                    ${(this.state.workflows || []).map((item) => html`
+                                        <tr>
+                                            <td>${item.name}</td>
+                                            <td>${item.nodeCount}</td>
+                                            <td style="display:flex;gap:4px;">
+                                                <zero-button tone="alt" compact @click=${() => { this.workflow = deepClone(item); this.selectedNodeId = item.nodes?.[0]?.id || ''; }}>Load</zero-button>
+                                                <zero-button tone="warn" compact @click=${() => this.deleteWorkflow(item.id)}>Del</zero-button>
+                                            </td>
+                                        </tr>
+                                    `)}
+                                </tbody>
+                            </table>
+                        ` : html`<div class="hint">No flows.</div>`}
+                    </zero-section>
+                </div>
+            </section>
 
-                        <zero-section heading="Documentation" ?open=${false}>
-                            ${this.renderDocs()}
-                        </zero-section>
-                    </div>
-                </section>
-            </div>
-
-            <zero-modal id="node-dialog" heading="Step Editor" .description=${dialogNode ? `Configure ${dialogNode.name}` : ''} @close=${this.closeNodeDialog}>
+            <zero-modal id="node-dialog" heading="Node Properties" .description=${dialogNode ? `Editing: ${dialogNode.name}` : ''} @close=${this.closeNodeDialog}>
                 ${dialogNode ? this.renderNodeInspector(dialogNode) : ''}
                 ${dialogNode ? html`
-                    <div class="dialog-actions" style="margin-top:20px; border-top:1px solid rgba(255,255,255,0.06); padding-top:14px;">
-                        <zero-button tone="alt" @click=${this.hideNodeDialog}>Close Dialog</zero-button>
-                        <zero-button @click=${this.hideNodeDialog}>Ok, Done</zero-button>
+                    <div class="dialog-actions" style="margin-top:20px; border-top:1px solid rgba(255,255,255,0.06); padding-top:14px; display:flex; justify-content:flex-end;">
+                        <zero-button @click=${this.hideNodeDialog}>OK, Close</zero-button>
                     </div>
                 ` : ''}
             </zero-modal>
-            
+        `;
+    }
+
+    render() {
+        return html`
+            <div class="shell">
+                ${this.view === 'monitor' ? this.renderMonitor() : this.renderDesigner()}
+            </div>
             ${this.toast ? html`<div class="toast">${this.toast}</div>` : ''}
         `;
     }

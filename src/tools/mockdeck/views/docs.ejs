@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MockDeck Documentation</title>
+    <link rel="stylesheet" href="<%= uiBase %>/public/styles.css" />
+    <script type="importmap">
+        {
+            "imports": {
+                "lit": "/vendor/lit/index.js",
+                "lit/": "/vendor/lit/",
+                "lit-html": "/vendor/lit-html/lit-html.js",
+                "lit-html/": "/vendor/lit-html/",
+                "lit-element": "/vendor/lit-element/index.js",
+                "lit-element/": "/vendor/lit-element/",
+                "@lit/reactive-element": "/vendor/@lit/reactive-element/reactive-element.js",
+                "@lit/reactive-element/": "/vendor/@lit/reactive-element/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <mockdeck-docs
+        data-ui-base="<%= uiBase %>">
+    </mockdeck-docs>
+    <script type="module" src="<%= uiBase %>/public/docs.js"></script>
+</body>
+</html>
