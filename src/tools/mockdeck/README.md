@@ -7,6 +7,14 @@ It has two workspaces:
 - `Mock Manager`: register and manage mock APIs, proxy responses, templated responses, media responses, and individual API triggering.
 - `Runner Workspace`: model end-to-end scenarios as connected nodes, execute chained requests, apply dependencies between nodes, run CSV/Excel driven data sets, and inspect live/final analytics.
 
+New collections can also seed:
+
+- a demo folder structure
+- mock plus real API examples
+- a sample dataset
+- a sample runner workflow
+- collection environments with one active by default
+
 ## Start
 
 ```bash
@@ -137,6 +145,33 @@ Use this when:
 - the rest should continue to hit a real backend
 - you want to place a local façade in front of a real service
 
+## Collection Environments
+
+Each collection can now store environments and mark one as active.
+
+Example variables:
+
+```text
+base_url: http://127.0.0.1:8381
+tenant: demo-local
+default_timeout_ms: 15000
+runner_label: local-seeded-flow
+```
+
+Use environments when:
+
+- local and staging need different base values
+- scripts should read named variables instead of hardcoded strings
+- templates should reference reusable environment data
+
+Where to use them:
+
+- in Handlebars templates: `{{env.base_url}}`
+- in runner scripts: `ctx.environment.variables.base_url`
+- active runtime globals are also initialized from environment variables, so `ctx.globals.tenant` is available too
+
+The active environment is selected on the collection, and a workflow can explicitly choose which saved environment to run with.
+
 ## Triggering individual APIs
 
 The `Trigger Request` panel behaves like a compact Postman request tab:
@@ -195,6 +230,7 @@ Examples:
 - login node produces token
 - next node maps `response.body.token` into `authorization` header
 - next node uses `row.userId` from a dataset
+- scripts can store values into globals and later steps can read them
 
 ### Mapping format
 
@@ -249,6 +285,7 @@ Available context:
 - `response` in post-script
 - `steps`
 - `globals`
+- `environment`
 
 Available helpers:
 
@@ -276,6 +313,134 @@ return {
   }
 };
 ```
+
+### Script context reference
+
+`ctx.row`
+
+- the current dataset row for this scenario
+- example: `ctx.row.username`
+
+`ctx.environment`
+
+- the selected environment object for this workflow run
+- use `ctx.environment.name`
+- use `ctx.environment.variables.base_url`
+
+`ctx.globals`
+
+- runtime variables collected during the same scenario
+- values returned from earlier scripts through `vars`
+- example: `ctx.globals.accessToken`
+
+`ctx.request`
+
+- in pre-script: the request about to be sent
+- fields include URL, headers, and body
+
+`ctx.response`
+
+- available in post-script
+- fields include `statusCode`, `headers`, `body`, `ok`, and `durationMs`
+
+`ctx.steps`
+
+- all completed upstream steps in the same scenario
+- useful when a later script wants to inspect earlier request or response data
+
+### What is row?
+
+When a workflow uses a CSV or Excel dataset, each row is one input record for a scenario run.
+
+Example row:
+
+```json
+{
+  "username": "alice",
+  "userId": 101
+}
+```
+
+Then inside runner templates or scripts:
+
+- `{{row.username}}`
+- `{{row.userId}}`
+- `ctx.row.username`
+- `ctx.row.userId`
+
+### Setting and reading variables
+
+Set variables in a script:
+
+```js
+return {
+  vars: {
+    accessToken: ctx.response.body.token,
+    currentUserId: ctx.response.body.userId
+  }
+};
+```
+
+Read them later:
+
+```js
+return {
+  headers: {
+    authorization: String(ctx.globals.accessToken || "")
+  }
+};
+```
+
+### Request and response access
+
+Useful pre-script access:
+
+- `ctx.request.url`
+- `ctx.request.headers`
+- `ctx.request.body`
+
+Useful post-script access:
+
+- `ctx.response.statusCode`
+- `ctx.response.ok`
+- `ctx.response.headers`
+- `ctx.response.body`
+- `ctx.response.durationMs`
+
+### Practical guidelines
+
+- use environments for reusable base values such as URLs, tenant names, tokens, or timeouts
+- use dataset rows for input variation
+- use mappings when values should flow automatically from one node to the next
+- use pre-script for request shaping
+- use post-script for assertions and extracting values
+- keep scripts small and return only what later nodes really need
+
+### Seeded sample flow
+
+When you create a fresh collection without custom items, MockDeck seeds a demo flow with examples of:
+
+- login mock -> profile mock -> real API chaining
+- dataset row usage with `row.username` and `row.userId`
+- mapping a previous response token into the next request header
+- pre-script usage for setting variables and headers
+- post-script usage for assertions and persisting variables
+- environment selection and access
+
+The seeded environments include:
+
+- `Local Demo`
+- `Staging Demo`
+
+The seeded scripts are intentionally commented so users can learn from them directly in the UI.
+
+Example ideas shown in the sample:
+
+- `ctx.environment.variables.tenant`
+- `ctx.globals.accessToken`
+- `helpers.assert(...)`
+- returning `vars` from scripts
+- using environment values in request headers
 
 ### CSV and Excel data support
 
@@ -380,4 +545,3 @@ Stored items include:
 - datasets
 - workflows
 - local media assets
-

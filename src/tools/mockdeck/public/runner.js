@@ -1,116 +1,15 @@
 import { LitElement, html, css, svg } from 'lit';
-
-const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
-
-async function api(path, options = {}) {
-    const response = await fetch(path, {
-        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-        ...options
-    });
-    if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || `Request failed with ${response.status}`);
-    }
-    return response.json();
-}
-
-function deepClone(value) {
-    return JSON.parse(JSON.stringify(value));
-}
-
-function emptyNode(index = 1) {
-    return {
-        id: `node-${crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`}`,
-        nodeType: 'request',
-        name: `Node ${index}`,
-        x: 60 + (index - 1) * 220,
-        y: 80,
-        enabled: true,
-        method: 'GET',
-        url: '',
-        mockId: '',
-        requestRef: { collectionId: '', itemId: '' },
-        timeoutMs: 15000,
-        headers: {},
-        body: '',
-        dependsOn: [],
-        mappings: [],
-        useGlobalHeaders: true,
-        preScript: 'return {};',
-        postScript: 'return {};',
-        notes: ''
-    };
-}
-
-function startNode() {
-    return {
-        id: `node-${crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`}`,
-        nodeType: 'start',
-        name: 'Start',
-        x: 80,
-        y: 240,
-        enabled: true,
-        method: 'GET',
-        url: '',
-        mockId: '',
-        requestRef: { collectionId: '', itemId: '' },
-        timeoutMs: 15000,
-        headers: {},
-        body: '',
-        dependsOn: [],
-        mappings: [],
-        useGlobalHeaders: true,
-        preScript: '',
-        postScript: '',
-        notes: 'Flow starting point'
-    };
-}
-
-function emptyWorkflow() {
-    return {
-        id: '',
-        name: 'Flow 1',
-        description: '',
-        datasetId: '',
-        globals: {
-            headers: {},
-            iterations: 1,
-            concurrency: 1,
-            timeoutMs: 15000,
-            stopOnError: false
-        },
-        nodes: [startNode(), emptyNode(1)]
-    };
-}
-
-function objectFromText(text) {
-    const output = {};
-    String(text || '')
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .forEach((line) => {
-            const index = line.indexOf(':');
-            if (index > 0) output[line.slice(0, index).trim()] = line.slice(index + 1).trim();
-        });
-    return output;
-}
-
-function textFromObject(value) {
-    return Object.entries(value || {}).map(([key, val]) => `${key}: ${val}`).join('\n');
-}
-
-function fileToBase64(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-            const result = String(reader.result || '');
-            resolve(result.includes(',') ? result.split(',')[1] : result);
-        };
-        reader.onerror = () => reject(reader.error || new Error('Failed to read file.'));
-        reader.readAsDataURL(file);
-    });
-}
+import '/lit_component/zero-badge.js';
+import '/lit_component/zero-button.js';
+import '/lit_component/zero-list-item.js';
+import '/lit_component/zero-modal.js';
+import '/lit_component/zero-panel.js';
+import '/lit_component/zero-stat-card.js';
+import '/lit_component/zero-section.js';
+import '/lit_component/zero-empty-state.js';
+import { api } from './shared/http.js';
+import { objectFromText, textFromObject, fileToBase64 } from './shared/formatters.js';
+import { METHODS, deepClone, emptyNode, startNode, emptyWorkflow, getNodeSize } from './shared/runner-model.js';
 
 const CONNECTOR_DEBUG = true;
 
@@ -121,217 +20,214 @@ function connectorLog(...args) {
 
 class MockDeckRunner extends LitElement {
     static properties = {
-        runnerApiBase: { state: true },
-        runnerBase: { state: true },
-        uiBase: { state: true },
-        state: { state: true },
-        workflow: { state: true },
-        selectedNodeId: { state: true },
-        runState: { state: true },
-        datasetPreview: { state: true },
-        toast: { state: true },
-        connectorDrag: { state: true }
+        runnerApiBase:        { state: true },
+        runnerBase:           { state: true },
+        uiBase:               { state: true },
+        state:                { state: true },
+        workflow:             { state: true },
+        selectedNodeId:       { state: true },
+        runState:             { state: true },
+        datasetPreview:       { state: true },
+        toast:                { state: true },
+        connectorDrag:        { state: true },
+        sidebarCollapsed:     { state: true },
+        dialogNodeId:         { state: true },
+        dialogTab:            { state: true },
+        runHistory:           { state: true },
+        selectedRunId:        { state: true },
+        expandedScenarioKey:  { state: true },
+        libraryDragOver:      { state: true }
     };
 
     static styles = css`
-        :host { display: block; padding: 24px; color: #edf4ff; }
-        .shell { max-width: 1620px; margin: 0 auto; display: grid; gap: 20px; }
-        .hero {
-            display: grid;
-            grid-template-columns: 1.2fr 0.8fr;
-            gap: 20px;
-            align-items: start;
-        }
+        :host { display: block; padding: 16px; color: #edf4ff; font-family: 'Inter', system-ui, sans-serif; }
+        .shell { max-width: 1680px; margin: 0 auto; display: grid; gap: 14px; }
+        .hero { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 14px; align-items: start; }
         .title {
-            padding: 24px;
-            border-radius: 26px;
-            border: 1px solid rgba(255,255,255,0.08);
-            background:
-                radial-gradient(circle at top left, rgba(246,173,85,0.18), transparent 34%),
-                linear-gradient(135deg, rgba(79,209,197,0.1), rgba(255,255,255,0.03));
-            box-shadow: 0 24px 60px rgba(0,0,0,0.24);
+            padding: 18px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.08);
+            background: radial-gradient(circle at top left, rgba(246,173,85,0.18), transparent 34%), linear-gradient(135deg, rgba(79,209,197,0.1), rgba(255,255,255,0.03));
+            box-shadow: 0 20px 48px rgba(0,0,0,0.22);
         }
-        h1 { margin: 0 0 12px; font-size: clamp(2rem, 4vw, 3.4rem); line-height: 0.95; letter-spacing: -0.04em; }
-        .lead { margin: 0; color: #d4e3f6; line-height: 1.65; max-width: 64ch; }
-        .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-        .stat {
-            padding: 14px 16px;
-            border-radius: 16px;
-            background: rgba(255,255,255,0.04);
-            border: 1px solid rgba(255,255,255,0.06);
-        }
-        .stat strong { display: block; font-size: 1.4rem; }
-        .stat span { color: #9db0c7; font-size: 0.9rem; }
-        .grid {
-            display: grid;
-            grid-template-columns: minmax(0, 1.35fr) minmax(340px, 0.95fr);
-            gap: 20px;
-            align-items: start;
-        }
-        .stack { display: grid; gap: 20px; }
-        .panel {
-            background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
-            border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 18px;
-            box-shadow: 0 24px 60px rgba(0,0,0,0.28);
-            padding: 18px;
-        }
-        .panel h3 { margin: 0; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.04em; }
-        .panel p { margin: 6px 0 14px; color: #9db0c7; font-size: 0.92rem; }
-        .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
-        .btn, button {
-            border: 0;
-            border-radius: 999px;
-            padding: 11px 16px;
-            cursor: pointer;
-            color: #08111a;
-            background: #4fd1c5;
-            font-weight: 700;
-            text-decoration: none;
-        }
-        .btn.alt, button.alt { color: #edf4ff; background: rgba(255,255,255,0.08); }
-        .btn.warn, button.warn { background: #fc8181; }
-        label { display: grid; gap: 6px; font-size: 0.92rem; color: #cfe0f6; }
-        input, select, textarea {
-            width: 100%;
-            border-radius: 14px;
-            border: 1px solid rgba(255,255,255,0.1);
-            background: rgba(6, 16, 26, 0.65);
-            color: #edf4ff;
-            padding: 12px 14px;
-        }
-        textarea { min-height: 110px; resize: vertical; font-family: "SFMono-Regular", Menlo, monospace; }
-        .cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+        h1 { margin: 0 0 8px; font-size: clamp(1.6rem, 3vw, 2.6rem); line-height: 0.96; letter-spacing: -0.04em; }
+        .lead { margin: 0; color: #d4e3f6; line-height: 1.5; font-size: 0.88rem; }
+        .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+        .runner-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px; align-items: start; }
+        .runner-layout.sidebar-hidden { grid-template-columns: 1fr 0; }
+        .left-col { display: grid; gap: 14px; }
+        .right-col { display: grid; gap: 10px; overflow: hidden; transition: opacity 0.2s; }
+        .runner-layout.sidebar-hidden .right-col { opacity: 0; pointer-events: none; }
+
+        /* Canvas */
         .board-wrap {
-            position: relative;
-            min-height: 700px;
-            overflow: auto;
-            touch-action: none;
-            border-radius: 20px;
+            position: relative; border-radius: 16px; overflow: auto;
             background:
-                linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px),
-                linear-gradient(180deg, rgba(6,16,26,0.82), rgba(10,18,28,0.96));
-            background-size: 28px 28px, 28px 28px, auto;
-            border: 1px solid rgba(255,255,255,0.08);
+                linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px),
+                linear-gradient(180deg, rgba(4,12,22,0.9), rgba(8,16,26,0.98));
+            background-size: 24px 24px, 24px 24px, auto;
+            border: 1px solid rgba(255,255,255,0.07);
+            min-height: 800px;
         }
-        .board { position: relative; width: max(100%, 1400px); min-height: 700px; }
-        svg.links {
-            position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 700px;
-            z-index: 1;
-            overflow: visible;
-            pointer-events: auto;
-        }
+        .board-wrap.drag-over { border-color: rgba(246,173,85,0.6); box-shadow: inset 0 0 0 3px rgba(246,173,85,0.1); }
+        .board { position: relative; width: max(100%, 2400px); min-height: 1200px; }
+        svg.links { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; overflow: visible; pointer-events: auto; }
+
+        /* Compact nodes */
         .node {
-            position: absolute;
-            width: 220px;
-            padding: 14px;
-            border-radius: 18px;
-            background: rgba(12, 23, 34, 0.95);
-            border: 1px solid rgba(255,255,255,0.1);
-            box-shadow: 0 18px 35px rgba(0,0,0,0.22);
-            cursor: grab;
-            user-select: none;
-            z-index: 2;
-            touch-action: none;
+            position: absolute; width: 176px; height: 72px; padding: 10px 12px; border-radius: 13px;
+            box-sizing: border-box;
+            background: linear-gradient(135deg, rgba(12,22,34,0.98), rgba(16,28,42,0.95));
+            border: 1px solid rgba(255,255,255,0.09);
+            box-shadow: 0 12px 28px rgba(0,0,0,0.28);
+            cursor: grab; user-select: none; z-index: 2; touch-action: none;
+            transition: box-shadow 0.15s, border-color 0.15s;
         }
-        .node.selected { border-color: rgba(79,209,197,0.85); box-shadow: 0 20px 45px rgba(79,209,197,0.22); }
-        .node.drop-target { border-color: rgba(246,173,85,0.95); box-shadow: 0 0 0 3px rgba(246,173,85,0.15), 0 20px 45px rgba(246,173,85,0.18); }
-        .node strong { display: block; font-size: 1rem; margin-bottom: 6px; }
-        .node small { color: #9db0c7; display: block; line-height: 1.5; }
-        .node-entry-handle,
-        .node-exit-handle {
-            position: absolute;
-            top: calc(50% - 12px);
-            width: 28px;
-            height: 28px;
-            border-radius: 999px;
-            border: 2px solid rgba(79,209,197,0.9);
-            background: #0f1720;
-            color: #7be7dd;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: crosshair;
-            font-size: 14px;
-            font-weight: 700;
-            box-shadow: 0 8px 18px rgba(79,209,197,0.18);
-            touch-action: none;
+        .node:hover { border-color: rgba(255,255,255,0.16); }
+        .node.selected { border-color: rgba(79,209,197,0.85); box-shadow: 0 0 0 2px rgba(79,209,197,0.18), 0 16px 36px rgba(79,209,197,0.18); }
+        .node.drop-target { border-color: rgba(246,173,85,0.9); box-shadow: 0 0 0 3px rgba(246,173,85,0.15); }
+        .node.start-node { width: 130px; border-color: rgba(246,173,85,0.6); background: rgba(28,20,8,0.95); }
+        .node-top { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+        .node-method {
+            display: inline-flex; padding: 1px 5px; border-radius: 5px;
+            font-size: 0.6rem; font-weight: 800; letter-spacing: 0.04em;
+            font-family: monospace; background: rgba(79,209,197,0.14); color: #4fd1c5; flex-shrink: 0;
         }
-        .node-entry-handle { left: -14px; }
-        .node-exit-handle { right: -14px; }
-        .node.start-node {
-            border-color: rgba(246,173,85,0.75);
-            background: rgba(36, 26, 10, 0.92);
+        .node-method.start { background: rgba(246,173,85,0.14); color: #f6ad55; }
+        .node-name { font-size: 0.84rem; font-weight: 700; line-height: 1.2; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .node-hint { font-size: 0.7rem; color: #9db0c7; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+        .node-status { display: flex; align-items: center; gap: 5px; margin-top: 5px; }
+        .status-dot {
+            width: 7px; height: 7px; border-radius: 50%; background: #9db0c7; flex-shrink: 0;
         }
-        .node.start-node .pill {
-            background: rgba(246,173,85,0.18);
-            color: #ffd591;
+        .status-dot.running { background: #f6ad55; animation: pulse 1s infinite; }
+        .status-dot.done { background: #4fd1c5; }
+        .status-dot.error { background: #ff6464; }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+        .node-entry-handle, .node-exit-handle {
+            position: absolute; top: calc(50% - 9px);
+            width: 18px; height: 18px; border-radius: 50%;
+            border: 2px solid rgba(79,209,197,0.9); background: #0f1720;
+            display: flex; align-items: center; justify-content: center;
+            cursor: crosshair; touch-action: none;
+            transition: transform 0.12s;
         }
-        .pill {
-            display: inline-flex;
-            align-items: center;
-            padding: 4px 9px;
-            border-radius: 999px;
-            font-size: 0.78rem;
-            background: rgba(79,209,197,0.14);
-            color: #7be7dd;
-            margin-bottom: 8px;
+        .node-entry-handle:hover, .node-exit-handle:hover { transform: scale(1.25); }
+        .node-entry-handle { left: -10px; }
+        .node-exit-handle { right: -10px; }
+        .node-entry-handle::after, .node-exit-handle::after {
+            content: ''; width: 6px; height: 6px; border-radius: 50%; background: #7be7dd;
         }
-        .hint { color: #9db0c7; font-size: 0.88rem; }
-        .edge-delete {
-            pointer-events: all;
-            cursor: pointer;
-            fill: rgba(252,129,129,0.95);
-            stroke: rgba(15,23,32,0.95);
-            stroke-width: 2;
+
+        /* SVG edges */
+        .edge-delete { pointer-events: all; cursor: pointer; fill: rgba(252,129,129,0.95); stroke: rgba(15,23,32,0.95); stroke-width: 2; }
+        .edge-delete-text { pointer-events: none; fill: white; font-size: 11px; font-family: sans-serif; text-anchor: middle; dominant-baseline: central; }
+        .edge-core { filter: drop-shadow(0 0 8px rgba(79,209,197,0.2)); }
+        .edge-draft { filter: drop-shadow(0 0 8px rgba(246,173,85,0.2)); }
+
+        /* Panel / form shared */
+        .panel { background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 14px; }
+        .panel-heading { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: #9db0c7; margin: 0 0 10px; }
+        .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        label { display: grid; gap: 5px; font-size: 0.84rem; color: #cfe0f6; }
+        input, select, textarea {
+            width: 100%; min-width: 0; border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.1); background: rgba(6,16,26,0.65);
+            color: #edf4ff; padding: 8px 10px; font-size: 0.84rem;
         }
-        .edge-delete-text {
-            pointer-events: none;
-            fill: white;
-            font-size: 12px;
-            font-family: sans-serif;
-            text-anchor: middle;
-            dominant-baseline: central;
+        textarea { min-height: 72px; resize: vertical; font-family: 'SFMono-Regular', Menlo, monospace; font-size: 0.78rem; }
+        .cols { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+        .hint { color: #9db0c7; font-size: 0.8rem; line-height: 1.5; }
+
+        /* Node Library drag items */
+        .lib-item {
+            padding: 8px 10px; border-radius: 10px;
+            background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
+            cursor: grab; display: flex; align-items: center; gap: 8px;
+            transition: background 0.12s, border-color 0.12s;
         }
-        .edge-core {
-            filter: drop-shadow(0 0 10px rgba(79,209,197,0.22));
+        .lib-item:hover { background: rgba(79,209,197,0.08); border-color: rgba(79,209,197,0.25); cursor: grab; }
+        .lib-item:active { cursor: grabbing; }
+        .lib-kind { display: inline-flex; padding: 1px 5px; border-radius: 5px; font-size: 0.6rem; font-weight: 800; letter-spacing: 0.03em; font-family: monospace; flex-shrink: 0; }
+        .lib-real  { background: rgba(156,163,175,0.12); color: #9ca3af; }
+        .lib-mock  { background: rgba(79,209,197,0.12);  color: #4fd1c5; }
+        .lib-proxy { background: rgba(246,173,85,0.12);  color: #f6ad55; }
+        .lib-custom{ background: rgba(167,139,250,0.12); color: #a78bfa; }
+        .lib-name { font-size: 0.82rem; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .lib-col { font-size: 0.72rem; color: #9db0c7; }
+
+        /* Dialog tabs */
+        .dialog-tabs { display: flex; gap: 4px; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 14px; }
+        .dialog-tab { padding: 8px 12px; border-radius: 10px 10px 0 0; font-size: 0.8rem; font-weight: 600; cursor: pointer; color: #9db0c7; transition: color 0.12s, background 0.12s; }
+        .dialog-tab:hover { color: #edf4ff; }
+        .dialog-tab.active { color: #4fd1c5; border-bottom: 2px solid #4fd1c5; margin-bottom: -1px; }
+        .dialog-body { display: grid; gap: 10px; }
+
+        /* Run history */
+        .run-list { display: grid; gap: 8px; }
+        .run-card {
+            padding: 10px 12px; border-radius: 12px;
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
+            cursor: pointer; transition: border-color 0.12s, background 0.12s;
         }
-        .edge-draft {
-            filter: drop-shadow(0 0 10px rgba(246,173,85,0.22));
+        .run-card:hover { background: rgba(255,255,255,0.05); border-color: rgba(79,209,197,0.2); }
+        .run-card.active { border-color: rgba(79,209,197,0.6); background: rgba(79,209,197,0.05); }
+        .run-header { display: flex; align-items: center; gap: 8px; }
+        .run-name { font-size: 0.86rem; font-weight: 700; flex: 1; }
+        .status-badge { display: inline-flex; padding: 2px 7px; border-radius: 999px; font-size: 0.66rem; font-weight: 700; }
+        .status-running { background: rgba(246,173,85,0.15); color: #f6ad55; }
+        .status-done { background: rgba(79,209,197,0.12); color: #4fd1c5; }
+        .status-error { background: rgba(255,80,80,0.12); color: #ff6464; }
+        .run-meta { display: flex; gap: 10px; margin-top: 4px; font-size: 0.74rem; color: #9db0c7; }
+        .scenario-list { display: grid; gap: 6px; margin-top: 10px; }
+        .scenario-row {
+            padding: 8px 10px; border-radius: 10px;
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+            cursor: pointer; font-size: 0.8rem;
         }
-        table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
-        th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); vertical-align: top; }
-        pre {
-            margin: 0;
-            padding: 14px;
-            border-radius: 14px;
-            background: rgba(6, 16, 26, 0.75);
-            overflow: auto;
-            font-size: 0.86rem;
+        .scenario-row:hover { border-color: rgba(79,209,197,0.2); }
+        .node-event {
+            padding: 8px 10px; border-radius: 10px;
+            background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);
+            font-size: 0.78rem; display: grid; gap: 3px;
         }
-        .event-list { display: grid; gap: 8px; max-height: 320px; overflow: auto; }
-        .event {
-            padding: 10px 12px;
-            border-radius: 14px;
-            background: rgba(255,255,255,0.04);
-            border: 1px solid rgba(255,255,255,0.06);
-        }
-        .toast {
-            position: sticky;
-            bottom: 18px;
-            margin-left: auto;
-            padding: 12px 16px;
-            border-radius: 14px;
-            background: rgba(6,16,26,0.92);
-            border: 1px solid rgba(79,209,197,0.35);
-            width: fit-content;
-        }
-        @media (max-width: 1180px) { .hero, .grid { grid-template-columns: 1fr; } }
-        @media (max-width: 760px) { :host { padding: 16px; } .cols, .stats { grid-template-columns: 1fr; } }
+        .node-event.ok { border-left: 3px solid #4fd1c5; }
+        .node-event.fail { border-left: 3px solid #ff6464; }
+        .node-event-meta { display: flex; gap: 8px; color: #9db0c7; flex-wrap: wrap; }
+
+        /* Analytics bar chart */
+        .bar-chart { display: grid; gap: 8px; }
+        .bar-row { display: grid; grid-template-columns: 120px 1fr 60px; gap: 8px; align-items: center; font-size: 0.78rem; }
+        .bar-track { height: 8px; border-radius: 99px; background: rgba(255,255,255,0.06); overflow: hidden; }
+        .bar-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #4fd1c5, #7be7dd); transition: width 0.4s ease; }
+        .bar-fill.fail { background: linear-gradient(90deg, #ff6464, #ff9494); }
+        .bar-label { color: #9db0c7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .bar-value { color: #cfe0f6; text-align: right; }
+
+        /* Analytics donut */
+        .donut-wrap { display: flex; align-items: center; gap: 16px; }
+        .donut-legend { display: grid; gap: 6px; font-size: 0.8rem; }
+        .legend-row { display: flex; align-items: center; gap: 6px; }
+        .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+        /* Docs */
+        .docs { display: grid; gap: 14px; font-size: 0.82rem; line-height: 1.65; color: #cfe0f6; }
+        .docs h4 { margin: 0 0 4px; font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #9db0c7; }
+        .docs code { font-family: monospace; background: rgba(79,209,197,0.1); color: #4fd1c5; padding: 1px 5px; border-radius: 4px; font-size: 0.8rem; }
+        .docs pre { background: rgba(6,16,26,0.8); border-radius: 10px; padding: 10px; font-size: 0.76rem; overflow: auto; color: #cfe0f6; margin: 0; }
+
+        /* Misc */
+        .event-list { display: grid; gap: 6px; max-height: 280px; overflow: auto; }
+        .event { padding: 7px 10px; border-radius: 10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); font-size: 0.8rem; }
+        pre { margin: 0; padding: 10px; border-radius: 10px; background: rgba(6,16,26,0.75); overflow: auto; font-size: 0.76rem; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+        th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid rgba(255,255,255,0.07); vertical-align: top; }
+        th { color: #9db0c7; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        .toast { position: fixed; bottom: 20px; right: 20px; padding: 10px 14px; border-radius: 12px; background: rgba(6,16,26,0.95); border: 1px solid rgba(79,209,197,0.35); z-index: 9999; font-size: 0.86rem; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+        .sidebar-bar { display: flex; flex-direction: column; gap: 0; width: 44px; }
+        .sidebar-btn { writing-mode: vertical-rl; text-orientation: mixed; padding: 16px 8px; cursor: pointer; color: #9db0c7; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; transition: color 0.12s; }
+        .sidebar-btn:hover { color: #edf4ff; }
+        @media (max-width: 1200px) { .runner-layout { grid-template-columns: 1fr; } .right-col { display: none; } }
+        @media (max-width: 860px) { .hero { grid-template-columns: 1fr; } .stats { grid-template-columns: 1fr; } }
     `;
 
     constructor() {
@@ -348,22 +244,26 @@ class MockDeckRunner extends LitElement {
         this.toast = '';
         this.dragState = null;
         this.connectorDrag = null;
+        this.sidebarCollapsed = false;
+        this.dialogNodeId = '';
+        this.dialogTab = 'basic';
+        this.runHistory = [];
+        this.selectedRunId = '';
+        this.expandedScenarioKey = '';
+        this.libraryDragOver = false;
     }
 
     connectedCallback() {
         super.connectedCallback();
         this.boundMove = this.onPointerMove.bind(this);
         this.boundUp = this.onPointerUp.bind(this);
-        this.boundMessage = this.onPopupMessage.bind(this);
         window.addEventListener('pointermove', this.boundMove);
         window.addEventListener('pointerup', this.boundUp);
-        window.addEventListener('message', this.boundMessage);
     }
 
     disconnectedCallback() {
         window.removeEventListener('pointermove', this.boundMove);
         window.removeEventListener('pointerup', this.boundUp);
-        window.removeEventListener('message', this.boundMessage);
         clearInterval(this.poller);
         super.disconnectedCallback();
     }
@@ -376,6 +276,10 @@ class MockDeckRunner extends LitElement {
 
     get selectedNode() {
         return this.workflow.nodes.find((node) => node.id === this.selectedNodeId) || this.workflow.nodes[0];
+    }
+
+    get dialogNode() {
+        return this.workflow.nodes.find((node) => node.id === this.dialogNodeId) || null;
     }
 
     async refreshState() {
@@ -415,10 +319,11 @@ class MockDeckRunner extends LitElement {
     addNode() {
         const requestCount = this.workflow.nodes.filter((node) => node.nodeType !== 'start').length;
         const node = emptyNode(requestCount + 1);
-        node.x = 320 + requestCount * 240;
-        node.y = 240;
+        node.x = 340 + requestCount * 280;
+        node.y = 160 + (requestCount % 2) * 180;
         this.workflow = { ...this.workflow, nodes: [...this.workflow.nodes, node] };
         this.selectedNodeId = node.id;
+        return node;
     }
 
     removeNode(nodeId) {
@@ -434,13 +339,18 @@ class MockDeckRunner extends LitElement {
         }));
         const nextNodes = nodes.length ? nodes : [startNode(), emptyNode(1)];
         this.workflow = { ...this.workflow, nodes: nextNodes };
-        this.selectedNodeId = this.workflow.nodes[0].id;
+        if (this.selectedNodeId === nodeId) this.selectedNodeId = nextNodes[0]?.id || '';
+        if (this.dialogNodeId === nodeId) this.hideNodeDialog();
     }
 
     updateNode(patch) {
+        this.updateNodeById(this.selectedNodeId, patch);
+    }
+
+    updateNodeById(nodeId, patch) {
         this.workflow = {
             ...this.workflow,
-            nodes: this.workflow.nodes.map((node) => node.id === this.selectedNodeId ? { ...node, ...patch } : node)
+            nodes: this.workflow.nodes.map((node) => node.id === nodeId ? { ...node, ...patch } : node)
         };
     }
 
@@ -500,11 +410,13 @@ class MockDeckRunner extends LitElement {
     }
 
     getEntryAnchor(node) {
-        return { x: node.x - 12, y: node.y + 60 };
+        const { height } = getNodeSize(node);
+        return { x: node.x, y: node.y + height / 2 };
     }
 
     getExitAnchor(node) {
-        return { x: node.x + 232, y: node.y + 60 };
+        const { width, height } = getNodeSize(node);
+        return { x: node.x + width, y: node.y + height / 2 };
     }
 
     findDropTargetAt(point, sourceId) {
@@ -514,9 +426,10 @@ class MockDeckRunner extends LitElement {
         }
         const candidates = this.workflow.nodes.filter((node) => node.id !== sourceId && node.nodeType !== 'start');
         const match = candidates.find((node) => {
+            const { width, height } = getNodeSize(node);
             const anchor = this.getEntryAnchor(node);
             const withinAnchor = Math.abs(point.x - anchor.x) <= 22 && Math.abs(point.y - anchor.y) <= 22;
-            const withinNodeBody = point.x >= node.x && point.x <= node.x + 220 && point.y >= node.y && point.y <= node.y + 120;
+            const withinNodeBody = point.x >= node.x && point.x <= node.x + width && point.y >= node.y && point.y <= node.y + height;
             return withinAnchor || withinNodeBody;
         }) || null;
         connectorLog('findDropTargetAt', { point, sourceId, match: match?.id || null });
@@ -624,99 +537,20 @@ class MockDeckRunner extends LitElement {
         };
     }
 
-    onPopupMessage(event) {
-        const payload = event.data;
-        if (!payload || payload.type !== 'mockdeck-node-update') return;
-        this.workflow = {
-            ...this.workflow,
-            nodes: this.workflow.nodes.map((node) => node.id === payload.nodeId ? { ...node, ...payload.patch } : node)
-        };
-        this.selectedNodeId = payload.nodeId;
-        this.setToast('Node properties updated from popup.');
+    openNodePopup(node) {
+        this.dialogNodeId = node.id;
+        this.selectedNodeId = node.id;
+        this.updateComplete.then(() => {
+            this.renderRoot.querySelector('#node-dialog')?.showModal();
+        });
     }
 
-    openNodePopup(node) {
-        const popup = window.open('', `mockdeck-node-${node.id}`, 'popup=yes,width=780,height=860,resizable=yes,scrollbars=yes');
-        if (!popup) {
-            this.setToast('Popup was blocked by the browser.');
-            return;
-        }
-        const escapedNode = JSON.stringify({
-            ...node,
-            headersText: textFromObject(node.headers),
-            dependsOnText: (node.dependsOn || []).join(', '),
-            mappingsText: JSON.stringify(node.mappings || [], null, 2)
-        }).replace(/</g, '\\u003c');
-        popup.document.write(`<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8" />
-<title>Step Properties Popup</title>
-<style>
-body{margin:0;padding:18px;background:#0f1720;color:#edf4ff;font-family:Segoe UI,sans-serif}
-h1{margin:0 0 14px;font-size:20px}
-form{display:grid;gap:12px}
-label{display:grid;gap:6px;font-size:14px;color:#cfe0f6}
-input,select,textarea{width:100%;box-sizing:border-box;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:#102033;color:#edf4ff;padding:10px 12px;font:inherit}
-textarea{min-height:100px;resize:vertical;font-family:Menlo,monospace}
-.cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-button{border:0;border-radius:999px;padding:10px 14px;background:#4fd1c5;color:#08111a;font-weight:700;cursor:pointer}
-</style>
-</head>
-<body>
-<h1>Step Properties Popup</h1>
-<form id="node-form">
-<div class="cols">
-<label>Name<input name="name" /></label>
-<label>Method<select name="method"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select></label>
-</div>
-<label>URL<input name="url" /></label>
-<div class="cols">
-<label>Linked mock<input name="mockId" /></label>
-<label>Timeout ms<input name="timeoutMs" type="number" /></label>
-</div>
-<label>Depends on node IDs<input name="dependsOnText" /></label>
-<label>Headers<textarea name="headersText"></textarea></label>
-<label>Body<textarea name="body"></textarea></label>
-<label>Mappings JSON<textarea name="mappingsText"></textarea></label>
-<label>Pre-script<textarea name="preScript"></textarea></label>
-<label>Post-script<textarea name="postScript"></textarea></label>
-<label>Notes<textarea name="notes"></textarea></label>
-<button type="submit">Save Properties</button>
-</form>
-<script>
-const node = ${escapedNode};
-const form = document.getElementById('node-form');
-for (const [key, value] of Object.entries(node)) {
-  const el = form.elements.namedItem(key);
-  if (el) el.value = value ?? '';
-}
-form.addEventListener('submit', (event) => {
-  event.preventDefault();
-  const patch = {
-    name: form.name.value,
-    method: form.method.value,
-    url: form.url.value,
-    mockId: form.mockId.value,
-    timeoutMs: Number(form.timeoutMs.value || 15000),
-    dependsOn: form.dependsOnText.value.split(',').map(item => item.trim()).filter(Boolean),
-    headers: Object.fromEntries(form.headersText.value.split('\\n').map(line => line.trim()).filter(Boolean).map(line => {
-      const idx = line.indexOf(':');
-      return idx > 0 ? [line.slice(0, idx).trim().toLowerCase(), line.slice(idx + 1).trim()] : null;
-    }).filter(Boolean)),
-    body: form.body.value,
-    mappings: JSON.parse(form.mappingsText.value || '[]'),
-    preScript: form.preScript.value,
-    postScript: form.postScript.value,
-    notes: form.notes.value
-  };
-  window.opener.postMessage({ type: 'mockdeck-node-update', nodeId: node.id, patch }, '*');
-  window.close();
-});
-</script>
-</body>
-</html>`);
-        popup.document.close();
+    hideNodeDialog() {
+        this.renderRoot.querySelector('#node-dialog')?.close();
+    }
+
+    closeNodeDialog() {
+        this.dialogNodeId = '';
     }
 
     async saveWorkflow() {
@@ -782,8 +616,97 @@ form.addEventListener('submit', (event) => {
         this.poller = setInterval(async () => {
             const response = await api(`${this.runnerApiBase}/runs/${runId}`);
             this.runState = response.run;
-            if (response.run.status !== 'running') clearInterval(this.poller);
+            if (response.run.status !== 'running') {
+                clearInterval(this.poller);
+                if (!this.runHistory.find(r => r.id === response.run.id)) {
+                    this.runHistory = [response.run, ...this.runHistory].slice(0, 20);
+                    this.selectedRunId = response.run.id;
+                }
+            }
         }, 1000);
+    }
+
+    addNodeFromRequest(request, dropX = null, dropY = null) {
+        const requestCount = this.workflow.nodes.filter((node) => node.nodeType !== 'start').length;
+        const node = emptyNode(requestCount + 1);
+        node.x = dropX !== null ? dropX : 340 + requestCount * 220;
+        node.y = dropY !== null ? dropY : 160 + (requestCount % 3) * 140;
+        node.name = request.name;
+        node.method = request.method || 'GET';
+        node.url = request.url || '';
+        node.mockId = request.mockId || '';
+        node.requestRef = { collectionId: request.collectionId || '', itemId: request.id || '' };
+        this.workflow = { ...this.workflow, nodes: [...this.workflow.nodes, node] };
+        this.openNodePopup(node);
+    }
+
+    // Drag-drop from library onto canvas
+    onLibraryDragStart(event, request) {
+        event.dataTransfer.setData('application/json', JSON.stringify(request));
+        event.dataTransfer.effectAllowed = 'copy';
+    }
+
+    onCanvasDragOver(event) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+        this.libraryDragOver = true;
+    }
+
+    onCanvasDragLeave() {
+        this.libraryDragOver = false;
+    }
+
+    onCanvasDrop(event) {
+        event.preventDefault();
+        this.libraryDragOver = false;
+        const raw = event.dataTransfer.getData('application/json');
+        if (!raw) return;
+        const request = JSON.parse(raw);
+        const rect = this.renderRoot.querySelector('.board')?.getBoundingClientRect();
+        const x = rect ? Math.max(20, event.clientX - rect.left - 88) : 200;
+        const y = rect ? Math.max(20, event.clientY - rect.top - 45) : 160;
+        this.addNodeFromRequest(request, x, y);
+    }
+
+    // Run history helpers
+    _getNodeStatus(nodeId) {
+        if (!this.runState) return 'idle';
+        const events = this.runState.events || [];
+        const nodeEvents = events.filter((e) => e.nodeId === nodeId && e.kind === 'node-complete');
+        if (!nodeEvents.length) {
+            const running = events.find((e) => e.nodeId === nodeId && e.kind === 'node-start');
+            return running ? 'running' : 'idle';
+        }
+        return nodeEvents.some((e) => !e.ok) ? 'error' : 'done';
+    }
+
+    _getStatusClass(status) {
+        if (status === 'running') return 'status-running';
+        if (status === 'done' || status === 'completed') return 'status-done';
+        if (status === 'failed' || status === 'error') return 'status-error';
+        return 'status-running';
+    }
+
+    _getDonutPath(pct, r = 30) {
+        const circumference = 2 * Math.PI * r;
+        const dash = circumference * pct;
+        const gap = circumference - dash;
+        return `${Math.round(dash)} ${Math.round(gap)}`;
+    }
+
+    renderLibraryRequest(request) {
+        return html`
+            <div
+                class="lib-item"
+                draggable="true"
+                @dragstart=${(e) => this.onLibraryDragStart(e, request)}>
+                <span class=${`lib-kind lib-${request.kind || 'real'}`}>${request.kind || 'real'}</span>
+                <div class="label-group" style="flex:1; display:grid;">
+                    <div class="lib-name">${request.name}</div>
+                    <div class="lib-col">${request.method || 'GET'} • ${request.collectionName || 'Saved API'}</div>
+                </div>
+            </div>
+        `;
     }
 
     renderLinks() {
@@ -791,10 +714,8 @@ form.addEventListener('submit', (event) => {
         const links = this.workflow.nodes.flatMap((node) => (node.dependsOn || []).map((dependencyId) => {
             const dependency = nodeMap.get(dependencyId);
             if (!dependency) return null;
-            const x1 = dependency.x + 232;
-            const y1 = dependency.y + 60;
-            const x2 = node.x - 12;
-            const y2 = node.y + 60;
+            const { x: x1, y: y1 } = this.getExitAnchor(dependency);
+            const { x: x2, y: y2 } = this.getEntryAnchor(node);
             const midX = (x1 + x2) / 2;
             return svg`
                 <path d="M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}" fill="none" stroke="rgba(79,209,197,0.12)" stroke-width="12" stroke-linecap="round"></path>
@@ -814,142 +735,285 @@ form.addEventListener('submit', (event) => {
         return links;
     }
 
-    renderNodeInspector() {
-        const node = this.selectedNode;
+    renderNodeInspector(node = this.selectedNode) {
         if (!node) return html`<div class="hint">Select a node to edit it.</div>`;
+        const tab = this.dialogTab || 'basic';
         return html`
-            ${node.nodeType === 'start' ? html`<div class="hint">Start step only defines where the flow begins. Connect its exit point to the first executable step.</div>` : ''}
-            <div class="cols">
-                <label>
-                    Name
-                    <input name="name" .value=${node.name} @input=${this.updateNodeField} />
-                </label>
-                <label>
-                    Source request
-                    <select name="requestRefItemId" .value=${node.requestRef?.itemId || ''} @change=${this.updateNodeField}>
-                        <option value="">Custom URL / manual</option>
-                        ${(this.state.collectionRequests || []).map((request) => html`<option value=${request.id}>${request.collectionName} / ${request.name} (${request.kind})</option>`)}
-                    </select>
-                </label>
+            <div class="dialog-tabs">
+                <div class=${`dialog-tab ${tab === 'basic' ? 'active' : ''}`} @click=${{handleEvent:()=>this.dialogTab='basic'}}>Basic</div>
+                ${node.nodeType !== 'start' ? html`<div class=${`dialog-tab ${tab === 'request' ? 'active' : ''}`} @click=${{handleEvent:()=>this.dialogTab='request'}}>Request</div>` : ''}
+                ${node.nodeType !== 'start' ? html`<div class=${`dialog-tab ${tab === 'mappings' ? 'active' : ''}`} @click=${{handleEvent:()=>this.dialogTab='mappings'}}>Mappings</div>` : ''}
+                <div class=${`dialog-tab ${tab === 'scripts' ? 'active' : ''}`} @click=${{handleEvent:()=>this.dialogTab='scripts'}}>Scripts</div>
+                <div class=${`dialog-tab ${tab === 'notes' ? 'active' : ''}`} @click=${{handleEvent:()=>this.dialogTab='notes'}}>Notes</div>
             </div>
-            ${node.nodeType !== 'start' ? html`<div class="cols">
-                <label>
-                    Method
-                    <select name="method" .value=${node.method} @change=${this.updateNodeField}>
-                        ${METHODS.map((method) => html`<option value=${method}>${method}</option>`)}
-                    </select>
-                </label>
-                <label>
-                    URL
-                    <input name="url" .value=${node.url} @input=${this.updateNodeField} placeholder="http://127.0.0.1:8381/api/users" />
-                </label>
+            
+            <div class="dialog-body">
+                ${tab === 'basic' ? html`
+                    ${node.nodeType === 'start' ? html`<div class="hint">This is the flow entry step. It does not call an API, but you can target your flow dataset here.</div>` : html`<div class="hint">Choose a saved API from collections or configure a custom endpoint.</div>`}
+                    <div class="cols">
+                        <label>Step name <input name="name" .value=${node.name} @input=${this.updateNodeField} /></label>
+                        <label>Saved API source
+                            <select name="requestRefItemId" .value=${node.requestRef?.itemId || ''} @change=${this.updateNodeField}>
+                                <option value="">Custom URL / manual</option>
+                                ${(this.state.collectionRequests || []).map((request) => html`<option value=${request.id}>${request.collectionName} / ${request.name} (${request.kind})</option>`)}
+                            </select>
+                        </label>
+                    </div>
+                    <div class="cols">
+                        <label>Depends on step IDs <input name="dependsOnText" .value=${(node.dependsOn || []).join(', ')} @input=${this.updateNodeField} placeholder="node-a, node-b" /></label>
+                        <label>Timeout ms <input name="timeoutMs" type="number" .value=${String(node.timeoutMs || 15000)} @input=${this.updateNodeField} /></label>
+                    </div>
+                    ${(node.dependsOn || []).length ? html`<div class="actions" style="margin-top:6px;">${(node.dependsOn || []).map((depId) => html`<zero-button tone="alt" compact @click=${() => this.removeDependency(node.id, depId)}>Remove ${depId}</zero-button>`)}</div>` : ''}
+                ` : ''}
+
+                ${tab === 'request' && node.nodeType !== 'start' ? html`
+                    <div class="cols">
+                        <label>Method
+                            <select name="method" .value=${node.method} @change=${this.updateNodeField}>
+                                ${METHODS.map((method) => html`<option value=${method}>${method}</option>`)}
+                            </select>
+                        </label>
+                        <label>URL <input name="url" .value=${node.url} @input=${this.updateNodeField} placeholder="http://127.0.0.1:8381/api/users" /></label>
+                    </div>
+                    <label>Or linked mock endpoint
+                        <select name="mockId" .value=${node.mockId || ''} @change=${this.updateNodeField}>
+                            <option value="">None</option>
+                            ${(this.state.mocks || []).map((mock) => html`<option value=${mock.id}>${mock.name} (${mock.method} ${mock.path})</option>`)}
+                        </select>
+                    </label>
+                    <label>Request headers <textarea name="headersText" .value=${textFromObject(node.headers)} @input=${this.updateNodeField}></textarea></label>
+                    <label>Request body <textarea name="body" .value=${node.body || ''} @input=${this.updateNodeField} placeholder='{"userId":"{{row.userId}}"}'></textarea></label>
+                ` : ''}
+
+                ${tab === 'mappings' && node.nodeType !== 'start' ? html`
+                    <div class="hint">Map outputs from previous steps into this request.</div>
+                    <label>Mappings JSON <textarea name="mappingsText" .value=${JSON.stringify(node.mappings || [], null, 2)} @input=${this.updateNodeField} placeholder='[{"sourceType":"step","sourceNodeId":"node-1","sourcePath":"response.body.token","targetType":"header","targetKey":"authorization"}]'></textarea></label>
+                ` : ''}
+
+                ${tab === 'scripts' ? html`
+                    <div class="hint">Javascript executed before/after the request. You can mutate the <code>ctx</code> object to pass state or control the flow.</div>
+                    <label>Pre-script <textarea name="preScript" .value=${node.preScript || ''} @input=${this.updateNodeField}></textarea></label>
+                    <label>Post-script <textarea name="postScript" .value=${node.postScript || ''} @input=${this.updateNodeField}></textarea></label>
+                ` : ''}
+
+                ${tab === 'notes' ? html`
+                    <label>Notes & Documentation for this step <textarea name="notes" .value=${node.notes || ''} @input=${this.updateNodeField} style="min-height:140px;"></textarea></label>
+                ` : ''}
             </div>
-            <div class="cols">
-                <label>
-                    Or linked mock
-                    <select name="mockId" .value=${node.mockId || ''} @change=${this.updateNodeField}>
-                        <option value="">None</option>
-                        ${(this.state.mocks || []).map((mock) => html`<option value=${mock.id}>${mock.name} (${mock.method} ${mock.path})</option>`)}
-                    </select>
-                </label>
-            </div>` : ''}
-            <div class="cols">
-                <label>
-                    Depends on node IDs
-                    <input name="dependsOnText" .value=${(node.dependsOn || []).join(', ')} @input=${this.updateNodeField} placeholder="node-a, node-b" />
-                </label>
-                <label>
-                    Timeout ms
-                    <input name="timeoutMs" type="number" .value=${String(node.timeoutMs || 15000)} @input=${this.updateNodeField} />
-                </label>
-            </div>
-            ${(node.dependsOn || []).length ? html`<div class="actions">${(node.dependsOn || []).map((depId) => html`<button class="alt" @click=${() => this.removeDependency(node.id, depId)}>Remove ${depId}</button>`)}</div>` : ''}
-            ${node.nodeType !== 'start' ? html`<label>
-                Request headers
-                <textarea name="headersText" .value=${textFromObject(node.headers)} @input=${this.updateNodeField}></textarea>
-            </label>
-            <label>
-                Request body
-                <textarea name="body" .value=${node.body || ''} @input=${this.updateNodeField} placeholder='{"userId":"{{row.userId}}"}'></textarea>
-            </label>
-            <label>
-                Mappings JSON
-                <textarea name="mappingsText" .value=${JSON.stringify(node.mappings || [], null, 2)} @input=${this.updateNodeField} placeholder='[{"sourceType":"step","sourceNodeId":"node-1","sourcePath":"response.body.token","targetType":"header","targetKey":"authorization"}]'></textarea>
-            </label>` : ''}
-            <label>
-                Pre-script
-                <textarea name="preScript" .value=${node.preScript || ''} @input=${this.updateNodeField}></textarea>
-            </label>
-            <label>
-                Post-script
-                <textarea name="postScript" .value=${node.postScript || ''} @input=${this.updateNodeField}></textarea>
-            </label>
-            <label>
-                Notes
-                <textarea name="notes" .value=${node.notes || ''} @input=${this.updateNodeField}></textarea>
-            </label>
-            <div class="actions">
-                ${node.nodeType !== 'start' ? html`<button class="warn" @click=${() => this.removeNode(node.id)}>Delete node</button>` : ''}
+            
+            <div class="actions" style="margin-top:16px;">
+                ${node.nodeType !== 'start' ? html`<zero-button tone="warn" @click=${() => this.removeNode(node.id)}>Delete step from workflow</zero-button>` : ''}
             </div>
         `;
     }
 
-    renderRunSummary() {
-        const run = this.runState;
-        if (!run) return html`<div class="hint">No run yet. Save the workflow and start a run to see live progress and final analytics.</div>`;
-        const progressPercent = run.progress.nodeTotal ? Math.round((run.progress.nodeCompleted / run.progress.nodeTotal) * 100) : 0;
+    renderAnalytics() {
+        const run = this.selectedRunId ? this.runHistory.find(r => r.id === this.selectedRunId) || this.runState : this.runState;
+        if (!run) return html`<div class="hint">No runs yet. Execute the workflow to capture analytics.</div>`;
+        const metrics = run.summary?.nodeMetrics || [];
+        const isSelected = (id) => this.selectedRunId === id;
+        
         return html`
-            <div class="cols">
-                <div class="stat"><strong>${run.status}</strong><span>Run status</span></div>
-                <div class="stat"><strong>${progressPercent}%</strong><span>Node progress</span></div>
-                <div class="stat"><strong>${run.progress.scenariosCompleted}/${run.progress.scenariosTotal}</strong><span>Scenarios completed</span></div>
-                <div class="stat"><strong>${run.progress.nodeCompleted}/${run.progress.nodeTotal}</strong><span>Requests completed</span></div>
+            <div class="run-list">
+                ${this.runHistory.map((item) => html`
+                    <div class=${`run-card ${isSelected(item.id) || (!this.selectedRunId && item.id === run.id) ? 'active' : ''}`} @click=${() => { this.selectedRunId = item.id; this.expandedScenarioKey = ''; }}>
+                        <div class="run-header">
+                            <span class="run-name">${this.workflow.name}</span>
+                            <span class=${`status-badge ${this._getStatusClass(item.status)}`}>${item.status}</span>
+                        </div>
+                        <div class="run-meta">
+                            <span>${new Date(item.startedAt).toLocaleTimeString()}</span>
+                            <span>${item.progress?.scenariosCompleted || 0} scenarios</span>
+                            ${item.summary ? html`<span>${item.summary.avgMs}ms avg</span>` : ''}
+                        </div>
+                    </div>
+                `)}
             </div>
+            
             ${run.summary ? html`
-                <div class="cols" style="margin-top:12px;">
-                    <div class="stat"><strong>${run.summary.success}</strong><span>Successful requests</span></div>
-                    <div class="stat"><strong>${run.summary.failure}</strong><span>Failed requests</span></div>
-                    <div class="stat"><strong>${run.summary.avgMs} ms</strong><span>Average latency</span></div>
-                    <div class="stat"><strong>${run.summary.throughputPerSec}/s</strong><span>Throughput</span></div>
+                <div class="donut-wrap" style="margin-top:20px; margin-bottom:16px;">
+                    <svg width="60" height="60" viewBox="0 0 64 64">
+                        <circle cx="32" cy="32" r="30" fill="none" stroke="rgba(255,100,100,0.8)" stroke-width="6"></circle>
+                        <circle cx="32" cy="32" r="30" fill="none" stroke="rgba(79,209,197,0.9)" stroke-width="6"
+                                stroke-dasharray=${this._getDonutPath((run.summary.success+0.001) / Math.max(1, run.progress.nodeTotal))} 
+                                stroke-linecap="round" transform="rotate(-90 32 32)">
+                        </circle>
+                    </svg>
+                    <div class="donut-legend">
+                        <div class="legend-row">
+                            <div class="legend-dot" style="background:#4fd1c5;"></div>
+                            <span>${run.summary.success} Successful API calls</span>
+                        </div>
+                        <div class="legend-row">
+                            <div class="legend-dot" style="background:#ff6464;"></div>
+                            <span>${run.summary.failure} Failed calls</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bar-chart">
+                    ${metrics.map(metric => {
+                        const pct = Math.max(2, Math.round((metric.requests / Math.max(1, run.progress.nodeTotal)) * 100));
+                        return html`
+                            <div class="bar-row">
+                                <div class="bar-label" title=${metric.nodeName}>${metric.nodeName}</div>
+                                <div class="bar-track">
+                                    <div class=${`bar-fill ${metric.failure > 0 ? 'fail' : ''}`} style=${`width:${pct}%`}></div>
+                                </div>
+                                <div class="bar-value">${metric.avgMs}ms</div>
+                            </div>
+                        `;
+                    })}
+                </div>
+            ` : ''}
+
+            ${run.events?.length ? html`
+                <h4 style="margin:20px 0 10px; font-size:0.75rem; color:#9db0c7; text-transform:uppercase; letter-spacing:0.04em;">Scenario Log Drilldown</h4>
+                <div class="scenario-list">
+                    ${[...new Set(run.events.map(e => e.scenarioKey))].filter(Boolean).map(key => {
+                        const isExpanded = this.expandedScenarioKey === key;
+                        const scenarioEvents = run.events.filter(e => e.scenarioKey === key);
+                        return html`
+                            <div class="scenario-row" @click=${() => this.expandedScenarioKey = isExpanded ? '' : key}>
+                                <div><strong>Scenario:</strong> ${key} ${isExpanded ? '▾' : '▸'}</div>
+                                ${isExpanded ? html`
+                                    <div class="event-list" style="margin-top:10px; margin-bottom:8px;" @click=${(e) => e.stopPropagation()}>
+                                        ${scenarioEvents.map(e => html`
+                                            <div class=${`node-event ${e.ok ? 'ok' : 'fail'}`}>
+                                                <strong>${e.nodeName || 'Node'}</strong>
+                                                <div class="node-event-meta">
+                                                    <span>${e.kind}</span>
+                                                    ${e.statusCode ? html`<span>Status: ${e.statusCode}</span>` : ''}
+                                                    ${e.durationMs ? html`<span>${e.durationMs}ms</span>` : ''}
+                                                </div>
+                                                ${e.error ? html`<div style="color:#ff6464; margin-top:4px;">${e.error}</div>` : ''}
+                                            </div>
+                                        `)}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `;
+                    })}
                 </div>
             ` : ''}
         `;
     }
 
+    renderWorkflowSettings() {
+        const activeEnvironment = (this.state.environments || []).find((item) => item.id === this.workflow.globals.environmentId) || null;
+        return html`
+            <div class="cols">
+                <label>
+                    Workflow name
+                    <input name="name" .value=${this.workflow.name} @input=${this.updateWorkflowField} />
+                </label>
+                <label>
+                    Target Dataset
+                    <select name="datasetId" .value=${this.workflow.datasetId || ''} @change=${this.updateWorkflowField}>
+                        <option value="">None (Run 1 iteration)</option>
+                        ${(this.state.datasets || []).map((item) => html`<option value=${item.id}>${item.name} (${item.rowCount} rows)</option>`)}
+                    </select>
+                </label>
+            </div>
+            <div class="cols">
+                <label>
+                    Active Environment
+                    <select name="globals.environmentId" .value=${this.workflow.globals.environmentId || ''} @change=${this.updateWorkflowField}>
+                        <option value="">None</option>
+                        ${(this.state.environments || []).map((item) => html`<option value=${item.id}>${item.collectionName} / ${item.name}${item.isActive ? ' (Collection Default)' : ''}</option>`)}
+                    </select>
+                </label>
+                <label>
+                    Concurrent runners
+                    <input name="globals.concurrency" type="number" .value=${String(this.workflow.globals.concurrency)} @input=${this.updateWorkflowField} />
+                </label>
+            </div>
+            <div class="cols">
+                <label>
+                    Total iterations override
+                    <input name="globals.iterations" type="number" .value=${String(this.workflow.globals.iterations)} @input=${this.updateWorkflowField} placeholder="(Reads from dataset)" />
+                </label>
+                <label>
+                    Timeout ms
+                    <input name="globals.timeoutMs" type="number" .value=${String(this.workflow.globals.timeoutMs)} @input=${this.updateWorkflowField} />
+                </label>
+            </div>
+            <label style="flex-direction:row; display:flex; align-items:center; gap:8px;">
+                <input name="globals.stopOnError" type="checkbox" .checked=${Boolean(this.workflow.globals.stopOnError)} @change=${this.updateWorkflowField} style="width:auto;" />
+                Stop workflow on first node error
+            </label>
+            <label>
+                Global headers (Injected into every request)
+                <textarea .value=${textFromObject(this.workflow.globals.headers)} @input=${this.updateGlobalHeaders} placeholder="Authorization: Bearer top-secret&#10;x-mock-mode: bypass"></textarea>
+            </label>
+            ${activeEnvironment ? html`<div class="hint">Environment active: ${activeEnvironment.name}. Access it in templates with <code>{{env.base_url}}</code> or in scripts with <code>ctx.environment.variables.base_url</code>.</div>` : ''}
+        `;
+    }
+
+    renderDocs() {
+        return html`
+            <div class="docs">
+                <h4>What is this?</h4>
+                <p>The runner executes API requests in a visual workflow flow. Link steps sequentially or concurrently by dragging paths between nodes.</p>
+                <h4>Templates</h4>
+                <p>Use curly brace syntax in URLs, headers, and bodies.</p>
+                <ul>
+                    <li><code>{{row.email}}</code> - Pulled from Dataset</li>
+                    <li><code>{{step.my_node.response.body.token}}</code> - Step output</li>
+                    <li><code>{{env.base_url}}</code> - Active config</li>
+                </ul>
+                <h4>Scripts API</h4>
+                <p>Access the runtime context in pre/post scripts via <code>ctx</code>.</p>
+                <pre>
+// preScript example
+ctx.request.headers['x-trace'] = '123';
+return ctx;
+
+// postScript example to extract data
+ctx.globals.session_id = ctx.response.body.sid;
+return ctx;</pre>
+            </div>
+        `;
+    }
+
     render() {
-        const selectedNode = this.selectedNode;
+        const dialogNode = this.dialogNode;
         const dataset = (this.state.datasets || []).find((item) => item.id === this.workflow.datasetId);
+        
         return html`
             <div class="shell">
                 <section class="hero">
                     <div class="title">
-                        <div class="pill">Dedicated runner workspace</div>
-                        <h1>MockDeck Runner</h1>
-                        <p class="lead">Model end-to-end API scenarios as connected nodes, chain outputs into downstream requests, run datasets from CSV or Excel, attach pre/post scripts, and inspect live plus final analytics from one place.</p>
-                        <div class="actions">
-                            <a class="btn alt" href=${this.uiBase}>Back to mock manager</a>
-                            <button @click=${this.addNode}>Add node</button>
-                            <button class="alt" @click=${this.saveWorkflow}>Save workflow</button>
-                            <button @click=${this.runWorkflow}>Run workflow</button>
+                        <zero-badge>Runner Workspace</zero-badge>
+                        <h1>End-to-End Scenarios</h1>
+                        <p class="lead">Build visual DAGs for complex end-to-end testing, parallel load execution, and chained API mock validation. Pull data inputs from CSV datasets.</p>
+                        <div class="actions" style="margin-top:14px;">
+                            <zero-button tone="alt" href=${this.uiBase}>Back to Mocks</zero-button>
+                            <zero-button tone="alt" @click=${this.saveWorkflow}>Save Design</zero-button>
+                            <zero-button @click=${this.runWorkflow}>Launch Runner 🚀</zero-button>
                         </div>
                     </div>
                     <div class="stats">
-                        <div class="stat"><strong>${this.workflow.nodes.length}</strong><span>Nodes in current flow</span></div>
-                        <div class="stat"><strong>${this.state.collectionRequests?.length || 0}</strong><span>Collection requests available</span></div>
-                        <div class="stat"><strong>${this.state.datasets?.length || 0}</strong><span>Uploaded datasets</span></div>
-                        <div class="stat"><strong>${this.state.workflows?.length || 0}</strong><span>Saved workflows</span></div>
-                        <div class="stat"><strong>${this.runState?.status || 'idle'}</strong><span>Latest run status</span></div>
+                        <zero-stat-card value=${String(this.workflow.nodes.length)} label="Workflow Steps"></zero-stat-card>
+                        <zero-stat-card value=${String(this.state.datasets?.length || 0)} label="Uploaded Datasets"></zero-stat-card>
+                        <zero-stat-card value=${String(this.state.workflows?.length || 0)} label="Saved Workflows"></zero-stat-card>
+                        <zero-stat-card value=${String(this.runState?.status || 'idle')} label="Latest Status"></zero-stat-card>
                     </div>
                 </section>
 
-                <section class="grid">
-                    <div class="stack">
-                        <div class="panel">
-                            <h3>Scenario Canvas</h3>
-                            <p>Start has only an exit connector. Every other step has a left entry connector and a right exit connector. Drag from an exit point to an entry point to create a connection. Use the small × on a line to delete it.</p>
-                            <div class="board-wrap">
+                <section class=${`runner-layout ${this.sidebarCollapsed ? 'sidebar-hidden' : ''}`}>
+                    <div class="left-col">
+                        <div class="panel" style="padding:0; display:flex; flex-direction:column;">
+                            <div style="padding:16px 20px; border-bottom:1px solid rgba(255,255,255,0.06); display:flex; justify-content:space-between;">
+                                <div class="panel-heading" style="margin:0;">Flow Canvas</div>
+                                <zero-button compact tone="alt" @click=${() => { this.sidebarCollapsed = !this.sidebarCollapsed; }}>${this.sidebarCollapsed ? 'Show Sidebar' : 'Hide Sidebar'}</zero-button>
+                            </div>
+                            <div class=${`board-wrap ${this.libraryDragOver ? 'drag-over' : ''}`}
+                                 @dragover=${this.onCanvasDragOver}
+                                 @dragleave=${this.onCanvasDragLeave}
+                                 @drop=${this.onCanvasDrop}>
                                 <div class="board">
-                                    <svg class="links" viewBox="0 0 1400 700" preserveAspectRatio="none">
+                                    <svg class="links">
                                         <defs>
                                             <marker id="arrowhead" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto" markerUnits="userSpaceOnUse">
                                                 <path d="M 0 1 L 12 7 L 0 13 Q 4 7 0 1 Z" fill="rgba(79,209,197,0.96)"></path>
@@ -967,200 +1031,119 @@ form.addEventListener('submit', (event) => {
                                             style=${`left:${node.x}px;top:${node.y}px;`}
                                             @mousedown=${(event) => this.startDrag(event, node)}
                                             @dblclick=${(event) => { event.stopPropagation(); this.openNodePopup(node); }}
-                                            @click=${() => {
-                                                this.selectedNodeId = node.id;
-                                            }}>
-                                            <span class="pill">${node.nodeType === 'start' ? 'START' : node.method}</span>
-                                            <strong>${node.name}</strong>
-                                            <small>${node.nodeType === 'start' ? 'Connect this to the first step in the flow' : (node.requestRef?.itemId ? `Collection request: ${node.requestRef.itemId}` : (node.mockId ? `Linked mock: ${node.mockId}` : (node.url || 'Set a URL or linked mock')))}</small>
-                                            <small>${node.dependsOn?.length ? `Depends on: ${node.dependsOn.join(', ')}` : 'Entry node'}</small>
-                                            ${node.nodeType !== 'start' ? html`<div class="node-entry-handle" data-node-id=${node.id} title="Entry connector">•</div>` : ''}
-                                            <div class="node-exit-handle" title="Drag from exit to entry" @pointerdown=${(event) => this.startConnectorDrag(event, node.id)}>→</div>
+                                            @click=${() => { this.selectedNodeId = node.id; }}>
+                                            
+                                            <div class="node-top">
+                                                <span class=${`node-method ${node.nodeType === 'start' ? 'start' : ''}`}>${node.nodeType === 'start' ? 'ROOT' : node.method}</span>
+                                                <span class="node-name" title=${node.name}>${node.name}</span>
+                                            </div>
+                                            
+                                            <div class="node-hint">
+                                                ${node.nodeType === 'start' ? 'Drill from here' : (node.url || node.mockId ? (node.url || 'Mock Linked') : 'Collection API')}
+                                            </div>
+
+                                            <div class="node-status">
+                                                <div class=${`status-dot ${this._getNodeStatus(node.id)}`}></div>
+                                            </div>
+
+                                            ${node.nodeType !== 'start' ? html`<div class="node-entry-handle" data-node-id=${node.id} title="Entry connector"></div>` : ''}
+                                            <div class="node-exit-handle" title="Drag to next step" @pointerdown=${(event) => this.startConnectorDrag(event, node.id)}></div>
                                         </div>
                                     `)}
                                 </div>
                             </div>
                         </div>
-
-                        <div class="panel">
-                            <h3>Live Analytics</h3>
-                            <p>Track scenario progress during execution, then review final aggregated numbers by node and overall throughput.</p>
-                            ${this.renderRunSummary()}
-                            ${this.runState?.summary?.nodeMetrics?.length ? html`
-                                <table style="margin-top:14px;">
-                                    <thead>
-                                        <tr>
-                                            <th>Node</th>
-                                            <th>Requests</th>
-                                            <th>Success</th>
-                                            <th>Failure</th>
-                                            <th>Avg</th>
-                                            <th>P95</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        ${this.runState.summary.nodeMetrics.map((metric) => html`
-                                            <tr>
-                                                <td>${metric.nodeName}</td>
-                                                <td>${metric.requests}</td>
-                                                <td>${metric.success}</td>
-                                                <td>${metric.failure}</td>
-                                                <td>${metric.avgMs} ms</td>
-                                                <td>${metric.p95Ms} ms</td>
-                                            </tr>
-                                        `)}
-                                    </tbody>
-                                </table>
-                            ` : ''}
-                            <div class="event-list" style="margin-top:14px;">
-                                ${(this.runState?.events || []).slice().reverse().map((event) => html`
-                                    <div class="event">
-                                        <strong>${event.kind}</strong>
-                                        <div>${event.nodeName || event.scenarioKey || ''}</div>
-                                        <div class="hint">${event.at}${event.statusCode ? ` • ${event.statusCode}` : ''}${event.durationMs ? ` • ${event.durationMs} ms` : ''}</div>
-                                    </div>
-                                `)}
-                            </div>
-                        </div>
                     </div>
 
-                    <div class="stack">
-                        <div class="panel">
-                            <h3>Workflow Settings</h3>
-                            <p>Configure global headers, concurrency, iterations, stop rules, and the dataset bound to the scenario.</p>
-                            <div class="cols">
-                                <label>
-                                    Workflow name
-                                    <input name="name" .value=${this.workflow.name} @input=${this.updateWorkflowField} />
-                                </label>
-                                <label>
-                                    Dataset
-                                    <select name="datasetId" .value=${this.workflow.datasetId || ''} @change=${this.updateWorkflowField}>
-                                        <option value="">None</option>
-                                        ${(this.state.datasets || []).map((item) => html`<option value=${item.id}>${item.name} (${item.rowCount} rows)</option>`)}
-                                    </select>
-                                </label>
+                    <div class="right-col">
+                        <zero-section heading="API Component Library" ?open=${true}>
+                            <div class="hint" style="margin-bottom:12px;">Drag an endpoint onto the canvas to add it to the workflow, or add a blank step.</div>
+                            <div class="actions" style="margin-bottom:12px;">
+                                <zero-button @click=${this.addNode} tone="alt">Add Manual Step</zero-button>
                             </div>
-                            <label>
-                                Description
-                                <textarea name="description" .value=${this.workflow.description || ''} @input=${this.updateWorkflowField}></textarea>
-                            </label>
-                            <div class="cols">
-                                <label>
-                                    Iterations
-                                    <input name="globals.iterations" type="number" .value=${String(this.workflow.globals.iterations)} @input=${this.updateWorkflowField} />
-                                </label>
-                                <label>
-                                    Concurrency
-                                    <input name="globals.concurrency" type="number" .value=${String(this.workflow.globals.concurrency)} @input=${this.updateWorkflowField} />
-                                </label>
+                            <div class="api-list" style="max-height: 45vh; overflow-y: auto; padding-right: 6px; display: flex; flex-direction: column; gap: 4px;">
+                                ${(this.state.collectionRequests || []).map((request) => this.renderLibraryRequest(request))}
+                                ${(this.state.mocks || [])
+                                    .filter((mock) => !(this.state.collectionRequests || []).some((request) => request.mockId === mock.id))
+                                    .map((mock) => this.renderLibraryRequest({
+                                        id: `mock-${mock.id}`,
+                                        name: mock.name,
+                                        method: mock.method,
+                                        kind: mock.type === 'proxy' ? 'proxy' : 'mock',
+                                        collectionName: 'Standalone',
+                                        mockId: mock.id,
+                                        url: `${window.location.origin}${mock.path}`
+                                    }))}
                             </div>
-                            <div class="cols">
-                                <label>
-                                    Timeout ms
-                                    <input name="globals.timeoutMs" type="number" .value=${String(this.workflow.globals.timeoutMs)} @input=${this.updateWorkflowField} />
-                                </label>
-                                <label>
-                                    Stop on error
-                                    <input name="globals.stopOnError" type="checkbox" .checked=${Boolean(this.workflow.globals.stopOnError)} @change=${this.updateWorkflowField} />
-                                </label>
-                            </div>
-                            <label>
-                                Global headers
-                                <textarea .value=${textFromObject(this.workflow.globals.headers)} @input=${this.updateGlobalHeaders}></textarea>
-                            </label>
-                        </div>
+                        </zero-section>
 
-                        <div class="panel">
-                            <h3>Selected Step Editor</h3>
-                            <p>${selectedNode ? `Editing ${selectedNode.name}. Use this as the main editor. Double-clicking a node opens a popup for quick property edits.` : 'Select a node to edit its request details, connections, mappings, and scripts. Double-click a node if you prefer popup editing.'}</p>
-                            ${this.renderNodeInspector()}
-                        </div>
+                        <zero-section heading="Design Settings" ?open=${true}>
+                            ${this.renderWorkflowSettings()}
+                        </zero-section>
 
-                        <div class="panel">
-                            <h3>Datasets</h3>
-                            <p>Upload CSV or Excel files for dynamic scenario rows. Each row becomes a runtime context as <code>row</code>.</p>
-                            <label>
-                                Upload dataset
+                        <zero-section heading="Run History & Analytics" ?open=${true}>
+                            ${this.renderAnalytics()}
+                        </zero-section>
+
+                        <zero-section heading="Datasets" ?open=${false}>
+                            <label style="margin-bottom:10px;">
+                                Upload dataset (.csv, .xlsx)
                                 <input type="file" accept=".csv,.xlsx,.xls" @change=${this.uploadDataset} />
                             </label>
-                            ${dataset ? html`<div class="hint" style="margin-top:10px;">Selected dataset: ${dataset.name} (${dataset.rowCount} rows)</div>` : ''}
+                            ${dataset ? html`<div class="hint" style="margin-bottom:10px;"><strong>Active:</strong> ${dataset.name}</div>` : ''}
                             ${(this.state.datasets || []).length ? html`
-                                <table style="margin-top:14px;">
-                                    <thead>
-                                        <tr>
-                                            <th>Name</th>
-                                            <th>Rows</th>
-                                            <th>Headers</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
+                                <table>
+                                    <thead><tr><th>Name</th><th>Rows</th><th>Actions</th></tr></thead>
                                     <tbody>
                                         ${(this.state.datasets || []).map((item) => html`
                                             <tr>
                                                 <td>${item.name}</td>
                                                 <td>${item.rowCount}</td>
-                                                <td>${(item.headers || []).join(', ')}</td>
-                                                <td><button class="warn" @click=${() => this.deleteDataset(item.id)}>Delete</button></td>
+                                                <td><zero-button tone="warn" compact @click=${() => this.deleteDataset(item.id)}>Del</zero-button></td>
                                             </tr>
                                         `)}
                                     </tbody>
                                 </table>
-                            ` : html`<div class="hint">No datasets uploaded yet.</div>`}
-                            ${this.datasetPreview.length ? html`<pre style="margin-top:14px;">${JSON.stringify(this.datasetPreview, null, 2)}</pre>` : ''}
-                        </div>
+                            ` : html`<div class="hint">No datasets.</div>`}
+                        </zero-section>
 
-                        <div class="panel">
-                            <h3>Saved Workflows</h3>
-                            <p>Switch between workflows or clean up old ones from here.</p>
+                        <zero-section heading="Saved Workflows" ?open=${false}>
                             ${(this.state.workflows || []).length ? html`
                                 <table>
-                                    <thead>
-                                        <tr>
-                                            <th>Name</th>
-                                            <th>Nodes</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
+                                    <thead><tr><th>Name</th><th>Nodes</th><th>Actions</th></tr></thead>
                                     <tbody>
                                         ${(this.state.workflows || []).map((item) => html`
                                             <tr>
                                                 <td>${item.name}</td>
                                                 <td>${item.nodeCount}</td>
-                                                <td>
-                                                    <div class="actions">
-                                                        <button class="alt" @click=${() => { this.workflow = deepClone(item); this.selectedNodeId = item.nodes?.[0]?.id || ''; }}>Open</button>
-                                                        <button class="warn" @click=${() => this.deleteWorkflow(item.id)}>Delete</button>
-                                                    </div>
+                                                <td style="display:flex;gap:4px;">
+                                                    <zero-button tone="alt" compact @click=${() => { this.workflow = deepClone(item); this.selectedNodeId = item.nodes?.[0]?.id || ''; }}>Load</zero-button>
+                                                    <zero-button tone="warn" compact @click=${() => this.deleteWorkflow(item.id)}>Del</zero-button>
                                                 </td>
                                             </tr>
                                         `)}
                                     </tbody>
                                 </table>
-                            ` : html`<div class="hint">No saved workflows yet.</div>`}
-                        </div>
+                            ` : html`<div class="hint">No workflows.</div>`}
+                        </zero-section>
 
-                        <div class="panel">
-                            <h3>Collection Requests</h3>
-                            <p>Runner nodes can point at real, mock, or proxy requests saved in collections.</p>
-                            ${(this.state.collectionRequests || []).length ? html`
-                                <table>
-                                    <thead><tr><th>Collection</th><th>Name</th><th>Kind</th></tr></thead>
-                                    <tbody>
-                                        ${(this.state.collectionRequests || []).map((request) => html`
-                                            <tr>
-                                                <td>${request.collectionName}</td>
-                                                <td>${request.name}</td>
-                                                <td>${request.kind}</td>
-                                            </tr>
-                                        `)}
-                                    </tbody>
-                                </table>
-                            ` : html`<div class="hint">No saved collection requests yet.</div>`}
-                        </div>
+                        <zero-section heading="Documentation" ?open=${false}>
+                            ${this.renderDocs()}
+                        </zero-section>
                     </div>
                 </section>
             </div>
+
+            <zero-modal id="node-dialog" heading="Step Editor" .description=${dialogNode ? `Configure ${dialogNode.name}` : ''} @close=${this.closeNodeDialog}>
+                ${dialogNode ? this.renderNodeInspector(dialogNode) : ''}
+                ${dialogNode ? html`
+                    <div class="dialog-actions" style="margin-top:20px; border-top:1px solid rgba(255,255,255,0.06); padding-top:14px;">
+                        <zero-button tone="alt" @click=${this.hideNodeDialog}>Close Dialog</zero-button>
+                        <zero-button @click=${this.hideNodeDialog}>Ok, Done</zero-button>
+                    </div>
+                ` : ''}
+            </zero-modal>
+            
             ${this.toast ? html`<div class="toast">${this.toast}</div>` : ''}
         `;
     }

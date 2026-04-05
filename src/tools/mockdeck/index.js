@@ -80,6 +80,16 @@ function defaultStore() {
     };
 }
 
+function normalizeEnvironment(input = {}, existing = null) {
+    return {
+        id: existing?.id || input.id || createId('env'),
+        name: input.name || existing?.name || 'Environment',
+        variables: normalizeHeaders(input.variables || existing?.variables || {}),
+        createdAt: existing?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+    };
+}
+
 function ensureStorage() {
     const { dataDir, assetDir, storePath } = getPaths();
     fs.mkdirSync(dataDir, { recursive: true });
@@ -327,6 +337,9 @@ function buildTemplateContext({ mock, req, bodyBuffer, params, parsedUrl, runner
         mock,
         now: new Date().toISOString(),
         runner: runnerContext || {},
+        // env is empty for standalone mock hits (no active environment context).
+        // This prevents {{env.x}} from throwing a template error; it just resolves to empty string.
+        env: runnerContext?.env || {},
         request: {
             method: req.method,
             path: parsedUrl.pathname,
@@ -605,6 +618,13 @@ function normalizeCollectionItem(input = {}, existing = null) {
 
 function normalizeCollection(input = {}, existing = null) {
     const now = new Date().toISOString();
+    const environments = Array.isArray(input.environments)
+        ? input.environments.map((env) => normalizeEnvironment(env))
+        : (existing?.environments || []).map((env) => normalizeEnvironment(env));
+    const activeEnvironmentId = input.activeEnvironmentId
+        ?? existing?.activeEnvironmentId
+        ?? environments[0]?.id
+        ?? '';
     return {
         id: existing?.id || input.id || createId('collection'),
         name: input.name || existing?.name || 'New Collection',
@@ -612,6 +632,8 @@ function normalizeCollection(input = {}, existing = null) {
         items: Array.isArray(input.items)
             ? input.items.map((item) => normalizeCollectionItem(item))
             : (existing?.items || []).map((item) => normalizeCollectionItem(item)),
+        environments,
+        activeEnvironmentId,
         createdAt: existing?.createdAt || now,
         updatedAt: now
     };
@@ -621,7 +643,8 @@ function sanitizeCollection(collection) {
     return {
         ...collection,
         requestCount: (collection.items || []).filter((item) => item.type === 'request').length,
-        folderCount: (collection.items || []).filter((item) => item.type === 'folder').length
+        folderCount: (collection.items || []).filter((item) => item.type === 'folder').length,
+        environmentCount: (collection.environments || []).length
     };
 }
 
@@ -631,6 +654,224 @@ function flattenCollectionRequests(store) {
             .filter((item) => item.type === 'request')
             .map((item) => ({ ...item, collectionId: collection.id, collectionName: collection.name }))
     );
+}
+
+function flattenCollectionEnvironments(store) {
+    return (store.collections || []).flatMap((collection) =>
+        (collection.environments || []).map((environment) => ({
+            ...environment,
+            collectionId: collection.id,
+            collectionName: collection.name,
+            isActive: collection.activeEnvironmentId === environment.id
+        }))
+    );
+}
+
+function createSampleDataset() {
+    return {
+        id: createId('dataset'),
+        name: 'Quickstart Users',
+        fileName: 'quickstart-users.csv',
+        kind: 'csv',
+        headers: ['username', 'userId'],
+        rows: [
+            { username: 'alice', userId: 101 },
+            { username: 'bob', userId: 202 }
+        ],
+        sheetName: 'Sheet1',
+        createdAt: new Date().toISOString()
+    };
+}
+
+function createSampleEnvironments() {
+    const localId = createId('env');
+    const stagingId = createId('env');
+    return {
+        activeEnvironmentId: localId,
+        environments: [
+            {
+                id: localId,
+                name: 'Local Demo',
+                variables: {
+                    base_url: 'http://127.0.0.1:8381',
+                    tenant: 'demo-local',
+                    default_timeout_ms: '15000',
+                    runner_label: 'local-seeded-flow'
+                }
+            },
+            {
+                id: stagingId,
+                name: 'Staging Demo',
+                variables: {
+                    base_url: 'https://staging.example.internal',
+                    tenant: 'demo-staging',
+                    default_timeout_ms: '20000',
+                    runner_label: 'staging-seeded-flow'
+                }
+            }
+        ]
+    };
+}
+
+function createSampleCollectionPayload() {
+    const folderId = createId('folder');
+    return [
+        {
+            id: folderId,
+            type: 'folder',
+            kind: 'folder',
+            parentId: null,
+            name: 'Quickstart Flow',
+            description: 'Sample login -> profile flow with environments, mappings, and scripts'
+        },
+        {
+            id: createId('req'),
+            type: 'request',
+            kind: 'mock',
+            parentId: folderId,
+            name: 'Login Mock',
+            description: 'Simulates authentication and returns a token that later steps reuse.',
+            method: 'POST',
+            body: '{ "username": "{{row.username}}" }',
+            mockConfig: {
+                path: '/api/sample/login',
+                statusCode: 200,
+                delayMs: 0,
+                templateBody: JSON.stringify({
+                    token: 'Bearer-{{default request.body.username "user"}}',
+                    userId: '{{default request.body.username "user"}}'
+                }, null, 2),
+                responseHeaders: { 'content-type': 'application/json; charset=utf-8' },
+                proxyTargetUrl: ''
+            }
+        },
+        {
+            id: createId('req'),
+            type: 'request',
+            kind: 'mock',
+            parentId: folderId,
+            name: 'Profile Mock',
+            description: 'Reads the authorization header from the previous step and a dataset userId query parameter.',
+            method: 'GET',
+            body: '',
+            mockConfig: {
+                path: '/api/sample/profile',
+                statusCode: 200,
+                delayMs: 0,
+                templateBody: JSON.stringify({
+                    ok: true,
+                    authorization: '{{request.headers.authorization}}',
+                    userId: '{{request.query.userId}}'
+                }, null, 2),
+                responseHeaders: { 'content-type': 'application/json; charset=utf-8' },
+                proxyTargetUrl: ''
+            }
+        },
+        {
+            id: createId('req'),
+            type: 'request',
+            kind: 'real',
+            parentId: folderId,
+            name: 'Public Users API',
+            description: 'Example real API call that can run after the mocked auth/profile chain.',
+            method: 'GET',
+            url: 'https://jsonplaceholder.typicode.com/users/{{row.userId}}',
+            headers: {},
+            body: ''
+        },
+        {
+            id: createId('req'),
+            type: 'request',
+            kind: 'real',
+            parentId: folderId,
+            name: 'Custom API Node',
+            description: 'Example custom request body that references prior step output with Handlebars.',
+            method: 'POST',
+            url: 'https://httpbin.org/anything',
+            headers: { 'content-type': 'application/json' },
+            body: '{ "username": "{{row.username}}", "token": "{{steps.login.response.body.token}}" }'
+        }
+    ];
+}
+
+function createSampleWorkflow(collection, dataset) {
+    const activeEnvironmentId = collection.activeEnvironmentId || collection.environments?.[0]?.id || '';
+    const requests = Object.fromEntries((collection.items || []).filter((item) => item.type === 'request').map((item) => [item.name, item]));
+    const workflow = normalizeWorkflow({
+        name: `${collection.name} Demo Flow`,
+        description: 'Auto-created quickstart workflow that demonstrates environments, dataset rows, mappings, and pre/post scripts with comments.',
+        datasetId: dataset.id,
+        globals: {
+            headers: { 'x-flow': 'quickstart' },
+            iterations: 1,
+            concurrency: 1,
+            timeoutMs: 15000,
+            stopOnError: false,
+            environmentId: activeEnvironmentId
+        },
+        nodes: [
+            { nodeType: 'start', name: 'Start', x: 80, y: 220 },
+            {
+                name: 'Login',
+                nodeType: 'request',
+                x: 360,
+                y: 120,
+                requestRef: { collectionId: collection.id, itemId: requests['Login Mock']?.id || '' },
+                method: 'POST',
+                body: '{ "username": "{{row.username}}" }',
+                dependsOn: [],
+                notes: 'Example: reads row.username, writes runtime variables, and shows environment access.',
+                preScript: `// The active environment is available as ctx.environment.\n// Return vars to keep values for later nodes in this scenario.\nreturn {\n  vars: {\n    activeTenant: ctx.environment?.variables?.tenant || "demo-local",\n    selectedBaseUrl: ctx.environment?.variables?.base_url || "",\n    currentUsername: ctx.row.username\n  },\n  headers: {\n    "x-runner-label": ctx.environment?.variables?.runner_label || "quickstart",\n    "x-tenant": ctx.environment?.variables?.tenant || "demo-local"\n  }\n};`,
+                postScript: `// Validate the login response and persist useful values for later steps.\nhelpers.assert(ctx.response.statusCode === 200, "Login should return HTTP 200");\nreturn {\n  vars: {\n    accessToken: ctx.response.body.token,\n    currentUserId: ctx.response.body.userId\n  }\n};`
+            },
+            {
+                name: 'Profile',
+                nodeType: 'request',
+                x: 700,
+                y: 120,
+                requestRef: { collectionId: collection.id, itemId: requests['Profile Mock']?.id || '' },
+                method: 'GET',
+                dependsOn: [],
+                notes: 'Example: receives an auth header from a mapping and reads globals set by the Login post-script.',
+                preScript: `// You can read values created in earlier scripts through ctx.globals.\nreturn {\n  headers: {\n    "x-user-context": String(ctx.globals.currentUserId || ctx.row.userId)\n  }\n};`,
+                mappings: [
+                    { sourceType: 'step', sourceNodeId: '', sourcePath: 'response.body.token', targetType: 'header', targetKey: 'authorization' },
+                    { sourceType: 'row', sourcePath: 'userId', targetType: 'query', targetKey: 'userId' }
+                ],
+                postScript: `// Assertions help turn this workflow into a real API test.\nhelpers.assert(ctx.response.ok === true, "Profile should be ok");\nreturn {\n  vars: {\n    profileAuthorizationEcho: ctx.response.body.authorization\n  }\n};`
+            },
+            {
+                name: 'Public User Fetch',
+                nodeType: 'request',
+                x: 1040,
+                y: 120,
+                requestRef: { collectionId: collection.id, itemId: requests['Public Users API']?.id || '' },
+                method: 'GET',
+                dependsOn: [],
+                notes: 'Example: final real API step showing the flow can mix mocks and live endpoints.',
+                preScript: `// Environment values can also drive downstream headers or route choices.\nreturn {\n  headers: {\n    "x-env-name": ctx.environment?.name || "Local Demo",\n    "x-last-auth": String(ctx.globals.profileAuthorizationEcho || "")\n  }\n};`,
+                postScript: `helpers.assert(ctx.response.statusCode === 200, "Public user fetch should return 200");\nreturn {};`
+            }
+        ]
+    });
+    const startId = workflow.nodes.find((node) => node.nodeType === 'start')?.id || '';
+    const loginId = workflow.nodes.find((node) => node.name === 'Login')?.id || '';
+    const profileId = workflow.nodes.find((node) => node.name === 'Profile')?.id || '';
+    const publicId = workflow.nodes.find((node) => node.name === 'Public User Fetch')?.id || '';
+    workflow.nodes = workflow.nodes.map((node) => {
+        if (node.name === 'Login') return { ...node, dependsOn: startId ? [startId] : [] };
+        if (node.name === 'Profile') return {
+            ...node,
+            dependsOn: loginId ? [loginId] : [],
+            mappings: [
+                { sourceType: 'step', sourceNodeId: loginId, sourcePath: 'response.body.token', targetType: 'header', targetKey: 'authorization' },
+                { sourceType: 'row', sourcePath: 'userId', targetType: 'query', targetKey: 'userId' }
+            ]
+        };
+        if (node.name === 'Public User Fetch') return { ...node, dependsOn: profileId ? [profileId] : [] };
+        return node;
+    });
+    return workflow;
 }
 
 function deleteMockById(store, mockId) {
@@ -647,6 +888,7 @@ function syncCollectionRequestToMock(store, item, existingItem = null) {
     }
 
     const mockExisting = item.mockId ? (store.mocks || []).find((mock) => mock.id === item.mockId) : null;
+    const proxyTargetUrl = item.kind === 'proxy' ? (item.mockConfig?.proxyTargetUrl || '') : '';
     const mockInput = {
         id: mockExisting?.id || item.mockId || existingItem?.mockId || undefined,
         name: item.name,
@@ -657,8 +899,13 @@ function syncCollectionRequestToMock(store, item, existingItem = null) {
         delayMs: Number(item.mockConfig?.delayMs ?? 0),
         responseHeaders: normalizeHeaders(item.mockConfig?.responseHeaders || {}),
         templateBody: item.mockConfig?.templateBody || DEFAULT_TEMPLATES.json,
+        // For collection-based proxy items, keepPath=false so the local route path
+        // is NOT appended to the target URL — the request forwards to targetUrl as-is.
         proxy: {
-            targetUrl: item.kind === 'proxy' ? (item.mockConfig?.proxyTargetUrl || '') : ''
+            targetUrl: proxyTargetUrl,
+            keepPath: false,
+            keepQuery: true,
+            rewritePath: '/'
         }
     };
     const normalizedMock = normalizeMock(mockInput, mockExisting);
@@ -749,7 +996,8 @@ function normalizeWorkflow(input = {}, existing = null) {
             iterations: Number(input.globals?.iterations ?? existing?.globals?.iterations ?? 1),
             concurrency: Number(input.globals?.concurrency ?? existing?.globals?.concurrency ?? 1),
             timeoutMs: Number(input.globals?.timeoutMs ?? existing?.globals?.timeoutMs ?? 15000),
-            stopOnError: input.globals?.stopOnError ?? existing?.globals?.stopOnError ?? false
+            stopOnError: input.globals?.stopOnError ?? existing?.globals?.stopOnError ?? false,
+            environmentId: input.globals?.environmentId ?? existing?.globals?.environmentId ?? ''
         },
         nodes,
         createdAt: existing?.createdAt || now,
@@ -773,6 +1021,7 @@ function buildRunnerState(store, baseOrigin) {
         mocks: (store.mocks || []).map(sanitizeMockForClient),
         collections: (store.collections || []).map(sanitizeCollection),
         collectionRequests: flattenCollectionRequests(store),
+        environments: flattenCollectionEnvironments(store),
         workflows: (store.workflows || []).map(sanitizeWorkflow),
         datasets: (store.datasets || []).map(sanitizeDataset),
         recentRuns: Array.from(activeRuns.values()).map((run) => sanitizeRun(run)),
@@ -983,6 +1232,8 @@ async function executeWorkflowRun(run, workflow, store, options = {}) {
     const concurrency = Math.max(1, Number(workflow.globals?.concurrency || 1));
     const mockLookup = new Map((store.mocks || []).map((mock) => [mock.id, mock]));
     const requestLookup = new Map(flattenCollectionRequests(store).map((item) => [item.id, item]));
+    const environmentLookup = new Map(flattenCollectionEnvironments(store).map((env) => [env.id, env]));
+    const activeEnvironment = environmentLookup.get(workflow.globals?.environmentId) || null;
 
     let cursor = 0;
     async function workerLoop() {
@@ -998,15 +1249,18 @@ async function executeWorkflowRun(run, workflow, store, options = {}) {
             row: scenario.row,
             iteration: scenario.iteration,
             steps: {},
-            globalVars: {},
+            globalVars: { ...(activeEnvironment?.variables || {}) },
+            environment: activeEnvironment,
             templateContext: {
                 row: scenario.row,
                 iteration: scenario.iteration,
                 datasetRowIndex: scenario.rowIndex,
                 steps: {},
                 last: null,
-                globals: {},
-                vars: {},
+                globals: { ...(activeEnvironment?.variables || {}) },
+                vars: { ...(activeEnvironment?.variables || {}) },
+                env: activeEnvironment?.variables || {},
+                environment: activeEnvironment || {},
                 now: new Date().toISOString()
             }
         };
@@ -1055,6 +1309,7 @@ async function executeWorkflowRun(run, workflow, store, options = {}) {
                 node,
                 scenario,
                 row: scenario.row,
+                environment: activeEnvironment,
                 request: { url: String(requestState.url), headers: { ...requestState.headers }, body: requestState.bodyText },
                 steps: runtimeContext.steps,
                 globals: runtimeContext.globalVars
@@ -1097,6 +1352,8 @@ async function executeWorkflowRun(run, workflow, store, options = {}) {
             runtimeContext.templateContext.last = runtimeContext.steps[node.id];
             runtimeContext.templateContext.globals = runtimeContext.globalVars;
             runtimeContext.templateContext.vars = runtimeContext.globalVars;
+            runtimeContext.templateContext.env = activeEnvironment?.variables || {};
+            runtimeContext.templateContext.environment = activeEnvironment || {};
 
             try {
                 const postResult = runUserScript(node.postScript, {
@@ -1104,6 +1361,7 @@ async function executeWorkflowRun(run, workflow, store, options = {}) {
                     node,
                     scenario,
                     row: scenario.row,
+                    environment: activeEnvironment,
                     request: runtimeContext.steps[node.id].request,
                     response: runtimeContext.steps[node.id].response,
                     steps: runtimeContext.steps,
@@ -1200,6 +1458,7 @@ function renderPage(viewName, payload) {
 async function startServer(port) {
     ensureStorage();
     const publicDir = path.join(__dirname, 'public');
+    const litComponentDir = path.join(__dirname, '..', '..', 'lit_component');
     const host = '127.0.0.1';
 
     const server = http.createServer(async (req, res) => {
@@ -1246,6 +1505,17 @@ async function startServer(port) {
         if (req.method === 'GET' && parsedUrl.pathname.startsWith(`${UI_BASE}/public/`)) {
             const filePath = path.join(publicDir, parsedUrl.pathname.replace(`${UI_BASE}/public/`, ''));
             if (!fs.existsSync(filePath)) {
+                notFound(res);
+                return;
+            }
+            res.writeHead(200, { 'Content-Type': getMimeType(filePath) });
+            fs.createReadStream(filePath).pipe(res);
+            return;
+        }
+
+        if (req.method === 'GET' && parsedUrl.pathname.startsWith('/lit_component/')) {
+            const filePath = path.join(litComponentDir, parsedUrl.pathname.replace('/lit_component/', ''));
+            if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
                 notFound(res);
                 return;
             }
@@ -1301,9 +1571,21 @@ async function startServer(port) {
             const store = readStore();
             const existingIndex = store.collections.findIndex((collection) => collection.id === payload.id);
             const existing = existingIndex >= 0 ? store.collections[existingIndex] : null;
-            const normalized = normalizeCollection(payload, existing);
+            const seededEnvironments = !existing && (!Array.isArray(payload.environments) || payload.environments.length === 0)
+                ? createSampleEnvironments()
+                : { environments: payload.environments, activeEnvironmentId: payload.activeEnvironmentId };
+            const seededItems = !existing && (!Array.isArray(payload.items) || payload.items.length === 0)
+                ? createSampleCollectionPayload()
+                : payload.items;
+            const normalized = normalizeCollection({ ...payload, ...seededEnvironments, items: seededItems }, existing);
+            normalized.items = normalized.items.map((item) => syncCollectionRequestToMock(store, item, null));
             if (existingIndex >= 0) store.collections[existingIndex] = normalized;
             else store.collections.unshift(normalized);
+            if (!existing) {
+                const dataset = createSampleDataset();
+                store.datasets.unshift(dataset);
+                store.workflows.unshift(createSampleWorkflow(normalized, dataset));
+            }
             writeStore(store);
             json(res, 200, { collection: sanitizeCollection(normalized) });
             return;

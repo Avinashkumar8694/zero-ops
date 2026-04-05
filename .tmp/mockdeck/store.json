@@ -1,6 +1,182 @@
 {
-  "mocks": [],
+  "mocks": [
+    {
+      "id": "afa5fb28-1ece-4668-ab30-b57c8b001217",
+      "name": "Profile Mock",
+      "method": "GET",
+      "path": "/api/sample/profile",
+      "type": "json",
+      "statusCode": 200,
+      "delayMs": 0,
+      "enabled": true,
+      "notes": "",
+      "requestHeaders": {},
+      "responseHeaders": {
+        "content-type": "application/json; charset=utf-8"
+      },
+      "templateBody": "{\n  \"ok\": true,\n  \"authorization\": \"{{request.headers.authorization}}\",\n  \"userId\": \"{{request.query.userId}}\"\n}",
+      "proxy": {
+        "targetUrl": "",
+        "keepPath": true,
+        "keepQuery": true,
+        "rewritePath": "/"
+      },
+      "media": null,
+      "createdAt": "2026-04-04T12:09:28.330Z",
+      "updatedAt": "2026-04-04T12:09:28.330Z"
+    },
+    {
+      "id": "e0748c15-b829-4ac4-aeef-ce1728348ba6",
+      "name": "Login Mock",
+      "method": "POST",
+      "path": "/api/sample/login",
+      "type": "json",
+      "statusCode": 200,
+      "delayMs": 0,
+      "enabled": true,
+      "notes": "",
+      "requestHeaders": {},
+      "responseHeaders": {
+        "content-type": "application/json; charset=utf-8"
+      },
+      "templateBody": "{\n  \"token\": \"Bearer-{{default request.body.username \\\"user\\\"}}\",\n  \"userId\": \"{{default request.body.username \\\"user\\\"}}\"\n}",
+      "proxy": {
+        "targetUrl": "",
+        "keepPath": true,
+        "keepQuery": true,
+        "rewritePath": "/"
+      },
+      "media": null,
+      "createdAt": "2026-04-04T12:09:28.330Z",
+      "updatedAt": "2026-04-04T12:09:28.330Z"
+    }
+  ],
   "collections": [
+    {
+      "id": "f8f7071a-e24f-443b-b205-ba2f6bcbc021",
+      "name": "New Collection",
+      "description": "",
+      "items": [
+        {
+          "id": "08ac1f27-afed-4acf-85de-a6ec9f9cbf4f",
+          "type": "folder",
+          "kind": "folder",
+          "parentId": null,
+          "name": "Quickstart Flow",
+          "description": "Sample login -> profile flow",
+          "method": "GET",
+          "url": "",
+          "mockId": "",
+          "folderColor": "",
+          "headers": {},
+          "body": "",
+          "mockConfig": {
+            "path": "/api/example",
+            "statusCode": 200,
+            "delayMs": 0,
+            "templateBody": "{\n  \"ok\": true,\n  \"mock\": \"{{mock.name}}\",\n  \"method\": \"{{request.method}}\",\n  \"path\": \"{{request.path}}\",\n  \"query\": \"{{json request.query}}\",\n  \"params\": \"{{json request.params}}\",\n  \"now\": \"{{now}}\"\n}",
+            "responseHeaders": {},
+            "proxyTargetUrl": ""
+          }
+        },
+        {
+          "id": "bcf091eb-88a6-4171-a44e-3686438591f8",
+          "type": "request",
+          "kind": "mock",
+          "parentId": "08ac1f27-afed-4acf-85de-a6ec9f9cbf4f",
+          "name": "Login Mock",
+          "description": "",
+          "method": "POST",
+          "url": "",
+          "mockId": "e0748c15-b829-4ac4-aeef-ce1728348ba6",
+          "folderColor": "",
+          "headers": {},
+          "body": "{ \"username\": \"{{row.username}}\" }",
+          "mockConfig": {
+            "path": "/api/sample/login",
+            "statusCode": 200,
+            "delayMs": 0,
+            "templateBody": "{\n  \"token\": \"Bearer-{{default request.body.username \\\"user\\\"}}\",\n  \"userId\": \"{{default request.body.username \\\"user\\\"}}\"\n}",
+            "responseHeaders": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "proxyTargetUrl": ""
+          }
+        },
+        {
+          "id": "66fc8530-740c-40dc-bc5b-924ff8eb266b",
+          "type": "request",
+          "kind": "mock",
+          "parentId": "08ac1f27-afed-4acf-85de-a6ec9f9cbf4f",
+          "name": "Profile Mock",
+          "description": "",
+          "method": "GET",
+          "url": "",
+          "mockId": "afa5fb28-1ece-4668-ab30-b57c8b001217",
+          "folderColor": "",
+          "headers": {},
+          "body": "",
+          "mockConfig": {
+            "path": "/api/sample/profile",
+            "statusCode": 200,
+            "delayMs": 0,
+            "templateBody": "{\n  \"ok\": true,\n  \"authorization\": \"{{request.headers.authorization}}\",\n  \"userId\": \"{{request.query.userId}}\"\n}",
+            "responseHeaders": {
+              "content-type": "application/json; charset=utf-8"
+            },
+            "proxyTargetUrl": ""
+          }
+        },
+        {
+          "id": "123a19d5-fe02-416d-bd58-9368dcd13824",
+          "type": "request",
+          "kind": "real",
+          "parentId": "08ac1f27-afed-4acf-85de-a6ec9f9cbf4f",
+          "name": "Public Users API",
+          "description": "",
+          "method": "GET",
+          "url": "https://jsonplaceholder.typicode.com/users/{{row.userId}}",
+          "mockId": "",
+          "folderColor": "",
+          "headers": {},
+          "body": "",
+          "mockConfig": {
+            "path": "/api/example",
+            "statusCode": 200,
+            "delayMs": 0,
+            "templateBody": "{\n  \"ok\": true,\n  \"mock\": \"{{mock.name}}\",\n  \"method\": \"{{request.method}}\",\n  \"path\": \"{{request.path}}\",\n  \"query\": \"{{json request.query}}\",\n  \"params\": \"{{json request.params}}\",\n  \"now\": \"{{now}}\"\n}",
+            "responseHeaders": {},
+            "proxyTargetUrl": ""
+          }
+        },
+        {
+          "id": "a486e330-c420-4011-aa54-a98ddc77a388",
+          "type": "request",
+          "kind": "real",
+          "parentId": "08ac1f27-afed-4acf-85de-a6ec9f9cbf4f",
+          "name": "Custom API Node",
+          "description": "",
+          "method": "POST",
+          "url": "https://httpbin.org/anything",
+          "mockId": "",
+          "folderColor": "",
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": "{ \"username\": \"{{row.username}}\", \"token\": \"{{steps.login.response.body.token}}\" }",
+          "mockConfig": {
+            "path": "/api/example",
+            "statusCode": 200,
+            "delayMs": 0,
+            "templateBody": "{\n  \"ok\": true,\n  \"mock\": \"{{mock.name}}\",\n  \"method\": \"{{request.method}}\",\n  \"path\": \"{{request.path}}\",\n  \"query\": \"{{json request.query}}\",\n  \"params\": \"{{json request.params}}\",\n  \"now\": \"{{now}}\"\n}",
+            "responseHeaders": {},
+            "proxyTargetUrl": ""
+          }
+        }
+      ],
+      "createdAt": "2026-04-04T12:09:28.330Z",
+      "updatedAt": "2026-04-04T12:09:28.330Z"
+    },
     {
       "id": "0ce64bdd-c3c3-41c9-9ec9-7a9228a3e493",
       "name": "Core APIs",
@@ -33,9 +209,251 @@
       "updatedAt": "2026-04-04T09:23:51.491Z"
     }
   ],
-  "logs": [],
-  "workflows": [],
-  "datasets": [],
+  "logs": [
+    {
+      "id": "f94919c3-5d86-432a-8504-e52aa23983b1",
+      "kind": "trigger",
+      "method": "GET",
+      "path": "https://jsonplaceholder.typicode.com/users/{{row.userId}}",
+      "at": "2026-04-04T12:51:06.026Z",
+      "statusCode": 404
+    },
+    {
+      "id": "7cae296e-0643-483c-8dde-92a16d1c4b9f",
+      "kind": "trigger",
+      "method": "GET",
+      "path": "http://127.0.0.1:8381/api/sample/profile",
+      "at": "2026-04-04T12:50:46.346Z",
+      "statusCode": 200
+    },
+    {
+      "id": "f6fa4713-ca34-49ef-8fe8-f01b5b3ffd80",
+      "kind": "mock-hit",
+      "mockId": "afa5fb28-1ece-4668-ab30-b57c8b001217",
+      "mockName": "Profile Mock",
+      "method": "GET",
+      "path": "/api/sample/profile",
+      "at": "2026-04-04T12:50:46.343Z"
+    },
+    {
+      "id": "c776f929-cc82-4816-afe5-6d60291e8144",
+      "kind": "trigger",
+      "method": "POST",
+      "path": "http://127.0.0.1:8381/api/sample/login",
+      "at": "2026-04-04T12:50:06.748Z",
+      "statusCode": 200
+    },
+    {
+      "id": "8e59f05f-b7ea-4bb6-95e0-2de017249ed7",
+      "kind": "mock-hit",
+      "mockId": "e0748c15-b829-4ac4-aeef-ce1728348ba6",
+      "mockName": "Login Mock",
+      "method": "POST",
+      "path": "/api/sample/login",
+      "at": "2026-04-04T12:50:06.746Z"
+    },
+    {
+      "id": "b17d5d97-346b-4b34-b02f-cdf1cecf6e3e",
+      "kind": "mock-hit",
+      "mockId": "afa5fb28-1ece-4668-ab30-b57c8b001217",
+      "mockName": "Profile Mock",
+      "method": "GET",
+      "path": "/api/sample/profile",
+      "at": "2026-04-04T12:45:01.505Z"
+    },
+    {
+      "id": "001a027b-b486-42ef-8fca-89214877f76b",
+      "kind": "mock-hit",
+      "mockId": "e0748c15-b829-4ac4-aeef-ce1728348ba6",
+      "mockName": "Login Mock",
+      "method": "POST",
+      "path": "/api/sample/login",
+      "at": "2026-04-04T12:45:01.503Z"
+    },
+    {
+      "id": "f9492494-8cd2-4933-af3a-d908c15a2730",
+      "kind": "mock-hit",
+      "mockId": "afa5fb28-1ece-4668-ab30-b57c8b001217",
+      "mockName": "Profile Mock",
+      "method": "GET",
+      "path": "/api/sample/profile",
+      "at": "2026-04-04T12:45:00.456Z"
+    },
+    {
+      "id": "9c14563a-48ff-43a7-bfd0-66fe413a83f7",
+      "kind": "mock-hit",
+      "mockId": "e0748c15-b829-4ac4-aeef-ce1728348ba6",
+      "mockName": "Login Mock",
+      "method": "POST",
+      "path": "/api/sample/login",
+      "at": "2026-04-04T12:45:00.450Z"
+    }
+  ],
+  "workflows": [
+    {
+      "id": "1fc72c20-1cb3-4abb-8a3a-24bbeba5fff1",
+      "name": "New Collection Demo Flow",
+      "description": "Auto-created quickstart workflow with mappings between steps.",
+      "datasetId": "83839aba-75e8-431d-ad37-94db389a7f00",
+      "globals": {
+        "headers": {
+          "x-flow": "quickstart"
+        },
+        "iterations": 1,
+        "concurrency": 1,
+        "timeoutMs": 15000,
+        "stopOnError": false,
+        "environmentId": ""
+      },
+      "nodes": [
+        {
+          "id": "36498507-4c32-4d02-9a19-6dd29ad9616e",
+          "nodeType": "start",
+          "name": "Start",
+          "x": 80,
+          "y": 220,
+          "enabled": true,
+          "method": "GET",
+          "url": "",
+          "mockId": "",
+          "requestRef": {
+            "collectionId": "",
+            "itemId": ""
+          },
+          "timeoutMs": 15000,
+          "headers": {},
+          "body": "",
+          "dependsOn": [],
+          "mappings": [],
+          "useGlobalHeaders": true,
+          "preScript": "",
+          "postScript": "",
+          "notes": ""
+        },
+        {
+          "id": "994ac126-746c-4139-827f-b989c0f291c0",
+          "nodeType": "request",
+          "name": "Login",
+          "x": 360,
+          "y": 120,
+          "enabled": true,
+          "method": "POST",
+          "url": "",
+          "mockId": "",
+          "requestRef": {
+            "collectionId": "f8f7071a-e24f-443b-b205-ba2f6bcbc021",
+            "itemId": "bcf091eb-88a6-4171-a44e-3686438591f8"
+          },
+          "timeoutMs": 15000,
+          "headers": {},
+          "body": "{ \"username\": \"{{row.username}}\" }",
+          "dependsOn": [
+            "36498507-4c32-4d02-9a19-6dd29ad9616e"
+          ],
+          "mappings": [],
+          "useGlobalHeaders": true,
+          "preScript": "",
+          "postScript": "helpers.assert(ctx.response.statusCode === 200, \"Login should return 200\"); return {};",
+          "notes": ""
+        },
+        {
+          "id": "ef166696-3dfc-4297-b0df-b123b4194deb",
+          "nodeType": "request",
+          "name": "Profile",
+          "x": 700,
+          "y": 120,
+          "enabled": true,
+          "method": "GET",
+          "url": "",
+          "mockId": "",
+          "requestRef": {
+            "collectionId": "f8f7071a-e24f-443b-b205-ba2f6bcbc021",
+            "itemId": "66fc8530-740c-40dc-bc5b-924ff8eb266b"
+          },
+          "timeoutMs": 15000,
+          "headers": {},
+          "body": "",
+          "dependsOn": [
+            "994ac126-746c-4139-827f-b989c0f291c0"
+          ],
+          "mappings": [
+            {
+              "id": "1e71a6c2-b957-42f3-919e-a3694bdc0923",
+              "sourceType": "step",
+              "sourceNodeId": "994ac126-746c-4139-827f-b989c0f291c0",
+              "sourcePath": "response.body.token",
+              "targetType": "header",
+              "targetKey": "authorization"
+            },
+            {
+              "id": "f0a2684d-b9ce-42c0-8f3f-92bbd047fd23",
+              "sourceType": "row",
+              "sourceNodeId": "",
+              "sourcePath": "userId",
+              "targetType": "query",
+              "targetKey": "userId"
+            }
+          ],
+          "useGlobalHeaders": true,
+          "preScript": "",
+          "postScript": "helpers.assert(ctx.response.ok === true, \"Profile should be ok\"); return {};",
+          "notes": ""
+        },
+        {
+          "id": "9fb79103-b9e1-4888-9f0f-6896422f4e95",
+          "nodeType": "request",
+          "name": "Public User Fetch",
+          "x": 1040,
+          "y": 120,
+          "enabled": true,
+          "method": "GET",
+          "url": "",
+          "mockId": "",
+          "requestRef": {
+            "collectionId": "f8f7071a-e24f-443b-b205-ba2f6bcbc021",
+            "itemId": "123a19d5-fe02-416d-bd58-9368dcd13824"
+          },
+          "timeoutMs": 15000,
+          "headers": {},
+          "body": "",
+          "dependsOn": [
+            "ef166696-3dfc-4297-b0df-b123b4194deb"
+          ],
+          "mappings": [],
+          "useGlobalHeaders": true,
+          "preScript": "",
+          "postScript": "return {};",
+          "notes": ""
+        }
+      ],
+      "createdAt": "2026-04-04T12:09:28.331Z",
+      "updatedAt": "2026-04-04T12:45:00.427Z"
+    }
+  ],
+  "datasets": [
+    {
+      "id": "83839aba-75e8-431d-ad37-94db389a7f00",
+      "name": "Quickstart Users",
+      "fileName": "quickstart-users.csv",
+      "kind": "csv",
+      "headers": [
+        "username",
+        "userId"
+      ],
+      "rows": [
+        {
+          "username": "alice",
+          "userId": 101
+        },
+        {
+          "username": "bob",
+          "userId": 202
+        }
+      ],
+      "sheetName": "Sheet1",
+      "createdAt": "2026-04-04T12:09:28.331Z"
+    }
+  ],
   "settings": {
     "port": 8381
   }

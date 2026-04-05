@@ -28,6 +28,12 @@ body {
         linear-gradient(180deg, #09111b 0%, #101926 45%, #0c1420 100%);
     color: var(--text);
     font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+html {
+    font-size: 15px;
 }
 
 button,
