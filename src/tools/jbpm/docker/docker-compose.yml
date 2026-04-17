@@ -1,0 +1,64 @@
+name: zero-flow
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      - "16686:16686"
+      - "14268:14268"
+      - "6831:6831/udp"
+    restart: unless-stopped
+
+  db:
+    image: postgres:13
+    container_name: zero-flow-db
+    environment:
+      - POSTGRES_DB=zero
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=123456
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d zero"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  zero-flow-engine:
+    image: quay.io/kiegroup/jbpm-server-full:7.67.0.Final
+    container_name: zero-flow-engine
+    platform: linux/amd64
+    ports:
+      - "8080:8080"
+      - "8001:8001"
+      - "9990:9990"
+    environment:
+      - JBPM_DB_DRIVER=postgres
+      - JBPM_DB_HOST=db
+      - JBPM_DB_PORT=5432
+      - JBPM_DB_NAME=zero
+      - JBPM_DB_USER=admin
+      - JBPM_DB_PASSWORD=123456
+      - JBPM_DB_SCHEMA=public
+      - KIE_ADMIN_USER=${KIE_ADMIN_USER:-admin}
+      - KIE_ADMIN_PWD=${KIE_ADMIN_PWD:-admin}
+      - JAEGER_AGENT_HOST=jaeger
+      - JAEGER_SAMPLER_TYPE=const
+      - JAEGER_SAMPLER_PARAM=1
+      - JAVA_OPTS=${JAVA_OPTS:--Xms512m -Xmx2048m -Djava.net.preferIPv4Stack=true} -Dkie.maven.settings.custom=/opt/jboss/.m2/settings.xml
+    depends_on:
+      db:
+        condition: service_healthy
+      jaeger:
+        condition: service_started
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/business-central"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - ./settings.xml:/opt/jboss/.m2/settings.xml:ro
+    restart: unless-stopped

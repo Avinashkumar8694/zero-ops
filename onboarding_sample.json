@@ -1,0 +1,69 @@
+{
+  "name": "EnterpriseOnboardingFlow",
+  "version": "1.0",
+  "variables": {
+    "employeeName": "John Doe",
+    "department": "Engineering",
+    "yearsExperience": 5
+  },
+  "steps": [
+    {
+      "id": "start",
+      "type": "START_EVENT",
+      "dependencies": []
+    },
+    {
+      "id": "verifyUser",
+      "type": "REST",
+      "dependencies": ["start"],
+      "config": {
+        "url": "https://api.example.com/verify",
+        "method": "POST",
+        "body": "{\"name\": \"${employeeName}\"}"
+      },
+      "outputMapping": {
+        "isVerified": "$.verified",
+        "userId": "$.id"
+      }
+    },
+    {
+      "id": "seniorityCheck",
+      "type": "XOR_GATEWAY",
+      "dependencies": ["verifyUser"],
+      "paths": [
+        { "target": "seniorOnboarding", "condition": "${yearsExperience} >= 5" },
+        { "target": "standardOnboarding", "condition": "${yearsExperience} < 5" }
+      ]
+    },
+    {
+      "id": "seniorOnboarding",
+      "type": "SCRIPT",
+      "dependencies": ["seniorityCheck"],
+      "config": {
+        "script": "console.log('Running Senior Management Onboarding for ${employeeName}')"
+      }
+    },
+    {
+      "id": "standardOnboarding",
+      "type": "SCRIPT",
+      "dependencies": ["seniorityCheck"],
+      "config": {
+        "script": "console.log('Running Standard Onboarding for ${employeeName}')"
+      }
+    },
+    {
+      "id": "waitAfterOnboarding",
+      "type": "TIMER_EVENT",
+      "joinType": "XOR",
+      "dependencies": ["seniorOnboarding", "standardOnboarding"],
+      "config": {
+        "duration": 2000
+      }
+    },
+    {
+      "id": "finish",
+      "type": "END_EVENT",
+      "dependencies": ["waitAfterOnboarding"]
+    }
+  ]
+}
