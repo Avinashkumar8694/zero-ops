@@ -15,19 +15,19 @@ class KIEClient {
   }
 
   /**
-   * Starts a new Generic Case instance.
+   * Starts a new Generic Process instance.
    */
-  async startCase(caseDefinitionId, caseFile = {}) {
-    const url = `${this.baseURL}/containers/${this.containerId}/cases/${caseDefinitionId}/instances`;
-    const response = await axios.post(url, caseFile, { auth: this.auth });
-    return response.data; // The Case Instance ID
+  async startProcess(processId, variables = {}) {
+    const url = `${this.baseURL}/containers/${this.containerId}/processes/${processId}/instances`;
+    const response = await axios.post(url, variables, { auth: this.auth });
+    return response.data; // The Process Instance ID
   }
 
   /**
-   * Injects a dynamic task into a running case.
+   * Injects a dynamic task into a running process instance.
    */
-  async injectDynamicTask(caseId, node) {
-    const url = `${this.baseURL}/containers/${this.containerId}/cases/instances/${caseId}/tasks`;
+  async injectDynamicTask(processInstanceId, node) {
+    const url = `${this.baseURL}/containers/${this.containerId}/processes/instances/${processInstanceId}/tasks`;
     const payload = {
       name: node.id,
       nodeType: 'UniversalHandler',
@@ -42,10 +42,10 @@ class KIEClient {
   }
 
   /**
-   * Retrieves tasks for a case instance.
+   * Retrieves tasks for a process instance.
    */
-  async getTasks(caseId) {
-    const url = `${this.baseURL}/queries/tasks/instances/case/${caseId}`;
+  async getTasks(processInstanceId) {
+    const url = `${this.baseURL}/queries/tasks/instances/process/${processInstanceId}`;
     const response = await axios.get(url, { auth: this.auth });
     return response.data.taskSummary || [];
   }

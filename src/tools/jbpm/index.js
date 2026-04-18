@@ -23,6 +23,7 @@ export default async function (program) {
     .description('Run a dynamic JSON workflow')
     .argument('<file>', 'Path to the JSON workflow definition')
     .option('--container <id>', 'KIE Container ID')
+    .option('--data <json>', 'Custom input data (JSON string)')
     .option('--url <url>', 'KIE Server URL')
     .option('--user <user>', 'KIE Username')
     .option('--pass <pass>', 'KIE Password')
@@ -35,6 +36,19 @@ export default async function (program) {
         }
 
         const definition = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        
+        // Merge custom input data if provided
+        if (options.data) {
+          try {
+            const customData = JSON.parse(options.data);
+            definition.variables = { ...definition.variables, ...customData };
+            console.log('Merged custom input variables:', Object.keys(customData));
+          } catch (e) {
+            console.error('Error parsing --data JSON:', e.message);
+            process.exit(1);
+          }
+        }
+
         const resolved = config.getResolvedConfig();
         
         const kieConfig = {
@@ -56,59 +70,60 @@ export default async function (program) {
 
   program
     .command('build')
-    .description('Build the Java Generic KJAR using Maven (supports Docker fallback)')
-    .action(() => {
+    .description('Build the Java Generic KJAR using Maven')
+    .argument('[name]', 'Optional project name (artifactId)')
+    .argument('[version]', 'Optional project version')
+    .action((name, version) => {
       const kjarPath = path.resolve(__dirname, 'java', 'generic-case-kjar');
+      const pomFile = path.join(kjarPath, 'pom.xml');
+      
+      if (name || version) {
+        console.log(`Updating pom.xml: Name=${name || 'no change'}, Version=${version || 'no change'}...`);
+        let pomContent = fs.readFileSync(pomFile, 'utf8');
+        if (name) pomContent = pomContent.replace(/<artifactId>.*?<\/artifactId>/, `<artifactId>${name}</artifactId>`);
+        if (version) pomContent = pomContent.replace(/<version>.*?<\/version>/, `<version>${version}</version>`);
+        fs.writeFileSync(pomFile, pomContent);
+      }
+
       console.log(`Building KJAR in ${kjarPath}...`);
       
       try {
-        // 1. Try Local Maven
         execSync('mvn -v', { stdio: 'ignore' }); 
-        console.log('Using local Maven...');
         execSync('mvn clean install', { cwd: kjarPath, stdio: 'inherit' });
-        console.log('\nBuild Successful (Local)!');
       } catch (err) {
-        // 2. Fallback to Docker Maven
-        console.log('Local Maven not found. Attempting Docker-based build...');
-        try {
-          execSync('docker -v', { stdio: 'ignore' });
-          const dockerCmd = `docker run --rm -v "${kjarPath}":/usr/src/mymaven -w /usr/src/mymaven maven:3.8.6-openjdk-11 mvn clean install`;
-          execSync(dockerCmd, { stdio: 'inherit' });
-          console.log('\nBuild Successful (Docker)!');
-        } catch (dockerErr) {
-          console.error('\nBuild Failed! Neither Maven nor Docker were found in your PATH.');
-          console.error('Please install Maven or Docker to use the build command.');
-          process.exit(1);
-        }
+        console.log('Local Maven failed. Falling back to Docker build...');
+        const dockerCmd = `docker run --rm -v "${kjarPath}":/usr/src/mymaven -w /usr/src/mymaven maven:3.8.6-openjdk-11 mvn clean install`;
+        execSync(dockerCmd, { stdio: 'inherit' });
       }
     });
 
   program
     .command('deploy')
     .description('Deploy the Generic KJAR to KIE Server')
-    .option('--id <id>', 'Container ID to create')
-    .action(async (options) => {
+    .argument('[containerId]', 'Container ID to create')
+    .argument('[name]', 'Project name (artifactId)')
+    .argument('[version]', 'Project version')
+    .action(async (containerId, name, version) => {
       try {
         const resolved = config.getResolvedConfig();
+        const kjarPath = path.resolve(__dirname, 'java', 'generic-case-kjar');
+        const pomFile = path.join(kjarPath, 'pom.xml');
+        const pomContent = fs.readFileSync(pomFile, 'utf8');
+
+        const finalName = name || pomContent.match(/<artifactId>(.*?)<\/artifactId>/)[1];
+        const finalVersion = version || pomContent.match(/<version>(.*?)<\/version>/)[1];
+        const finalContainerId = containerId || resolved.container;
+
         const kie = new KIEClient({
           baseURL: resolved.url,
           username: resolved.user,
           password: resolved.pass,
-          containerId: options.id || resolved.container
+          containerId: finalContainerId
         });
 
-        console.log(`Deploying container [${options.id || resolved.container}] via Universal REST...`);
+        console.log(`Deploying [${finalName}:${finalVersion}] to container [${finalContainerId}]...`);
         
-        const kjarPath = path.resolve(__dirname, 'java', 'generic-case-kjar');
-        const pomFile = path.join(kjarPath, 'pom.xml');
-        
-        // Extract version from POM
-        const pomContent = fs.readFileSync(pomFile, 'utf8');
-        const versionMatch = pomContent.match(/<version>(.*?)<\/version>/);
-        const version = versionMatch ? versionMatch[1] : '1.0.0';
-        
-        const jarFile = path.join(kjarPath, 'target', `generic-case-kjar-${version}.jar`);
-
+        const jarFile = path.join(kjarPath, 'target', `${finalName}-${finalVersion}.jar`);
         if (!fs.existsSync(jarFile)) {
           throw new Error(`Built JAR not found: ${jarFile}. Please run "build" first.`);
         }
@@ -116,26 +131,68 @@ export default async function (program) {
         const jarBuffer = fs.readFileSync(jarFile);
         const pomBuffer = fs.readFileSync(pomFile);
 
-        // 1. Upload POM to Business Central Maven Repo
-        console.log('Pushing POM to Maven API...');
-        await kie.uploadArtifact("com.zero.jbpm", "generic-case-kjar", version, pomBuffer, true);
+        await kie.uploadArtifact("com.zero.jbpm", finalName, finalVersion, pomBuffer, true);
+        await kie.uploadArtifact("com.zero.jbpm", finalName, finalVersion, jarBuffer, false);
 
-        // 2. Upload JAR to Business Central Maven Repo
-        console.log('Pushing JAR to Maven API...');
-        await kie.uploadArtifact("com.zero.jbpm", "generic-case-kjar", version, jarBuffer, false);
-
-        // 3. Trigger REST Deployment
-        console.log('Registering container on KIE Server...');
-        await kie.createContainer(options.id || resolved.container, {
+        await kie.createContainer(finalContainerId, {
           "group-id": "com.zero.jbpm",
-          "artifact-id": "generic-case-kjar",
-          "version": version
+          "artifact-id": finalName,
+          "version": finalVersion
         });
 
-        console.log('Deployment Successful (Universal API Mode)!');
+        console.log('Deployment Successful!');
       } catch (err) {
         console.error('Deployment Failed:', err.response?.data || err.message);
         process.exit(1);
+      }
+    });
+
+  program
+    .command('list')
+    .description('List all execution servers and deployments')
+    .action(async () => {
+      try {
+        const resolved = config.getResolvedConfig();
+        const kie = new KIEClient({
+          baseURL: resolved.url,
+          username: resolved.user,
+          password: resolved.pass
+        });
+
+        const bcBaseURL = resolved.url.split('/kie-server')[0] + '/business-central/rest/controller';
+        
+        console.log('\n--- Execution Servers (Controller View) ---');
+        const serversResponse = await fetch(`${bcBaseURL}/management/servers`, {
+          headers: { 
+            'Authorization': `Basic ${Buffer.from(`${resolved.user}:${resolved.pass}`).toString('base64')}`,
+            'Accept': 'application/json'
+          }
+        });
+        const servers = await serversResponse.json();
+        
+        if (servers?.['server-template']) {
+          const templates = Array.isArray(servers['server-template']) ? servers['server-template'] : [servers['server-template']];
+          templates.forEach(t => {
+            console.log(`\nServer ID: ${t['server-id']} [${t.mode}]`);
+            if (t['container-specs']) {
+              const specs = Array.isArray(t['container-specs']) ? t['container-specs'] : [t['container-specs']];
+              console.log('  Containers:');
+              specs.forEach(s => {
+                const rid = s['release-id'];
+                console.log(`    - ${s['container-id']} (${rid['group-id']}:${rid['artifact-id']}:${rid['version']}) [${s.status}]`);
+              });
+            }
+          });
+        }
+
+        console.log('\n--- Runtime Containers (KIE Server View) ---');
+        const containers = await kie.getContainers();
+        containers.forEach(c => {
+          console.log(`- ${c['container-id']} [${c.status}] (Version: ${c['release-id'].version})`);
+        });
+
+      } catch (err) {
+        console.error('Listing Failed:', err.message);
       }
     });
 

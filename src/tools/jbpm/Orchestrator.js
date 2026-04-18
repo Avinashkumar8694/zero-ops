@@ -14,7 +14,7 @@ class Orchestrator {
     this.secrets = new SecretResolver(apiSecrets);
     this.executionState = {
       instanceId: `id_${Date.now()}`,
-      jbpmCaseId: null,
+      processInstanceId: null,
       status: 'RUNNING',
       nodeStatus: {},
       variables: { ...definition.variables }
@@ -32,9 +32,9 @@ class Orchestrator {
   async run() {
     console.log(`Starting workflow: ${this.definition.name}`);
     
-    // 1. Start Case
-    this.executionState.jbpmCaseId = await this.kie.startCase('GenericCase', this.executionState.variables);
-    console.log(`jBPM Case Started: ${this.executionState.jbpmCaseId}`);
+    // 1. Start Process
+    this.executionState.processInstanceId = await this.kie.startProcess('GenericFlow', this.executionState.variables);
+    console.log(`jBPM Process Started: ${this.executionState.processInstanceId}`);
 
     while (!DependencyResolver.isWorkflowComplete(this.definition, this.executionState)) {
       // 2. Resolve Ready Nodes
@@ -120,7 +120,7 @@ class Orchestrator {
       // Resolve variables in config
       const resolvedConfig = this.interpolate(node.config);
       
-      await this.kie.injectDynamicTask(this.executionState.jbpmCaseId, {
+      await this.kie.injectDynamicTask(this.executionState.processInstanceId, {
         ...node,
         config: resolvedConfig
       });
@@ -172,7 +172,7 @@ class Orchestrator {
     process.stdout.write('.');
     await new Promise(resolve => setTimeout(resolve, 2000));
     
-    const tasks = await this.kie.getTasks(this.executionState.jbpmCaseId);
+    const tasks = await this.kie.getTasks(this.executionState.processInstanceId);
     for (const task of tasks) {
       if (task.status === 'Completed' && this.executionState.nodeStatus[task.name] === 'DISPATCHED') {
          console.log(`\nNode ${task.name} completed. Syncing outputs...`);

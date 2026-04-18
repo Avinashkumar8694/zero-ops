@@ -54,7 +54,6 @@
     {
       "id": "waitAfterOnboarding",
       "type": "TIMER_EVENT",
-      "joinType": "XOR",
       "dependencies": ["seniorOnboarding", "standardOnboarding"],
       "config": {
         "duration": 2000
