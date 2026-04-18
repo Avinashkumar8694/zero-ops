@@ -1,0 +1,733 @@
+<!-- Zero-BPM Business Studio V5 (Industrial Mode) -->
+<link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.0.2/dist/assets/diagram-js.css" />
+<link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.0.2/dist/assets/bpmn-font/css/bpmn.css" />
+
+<style>
+    .studio-container {
+        height: calc(100vh - 100px);
+        background: var(--bg);
+        border-radius: 20px;
+        overflow: hidden;
+        position: relative;
+        border: 1px solid var(--border);
+        box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    }
+
+    #canvas { 
+        width: 100%; 
+        height: 100%; 
+        background-color: #0d1117;
+        background-image: 
+            linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        background-size: 40px 40px;
+    }
+
+    /* Industrial 2-Column Palette */
+    .djs-palette { 
+        background: rgba(22, 27, 34, 0.95) !important; 
+        backdrop-filter: blur(12px);
+        border-radius: 12px !important; 
+        border: 1px solid var(--border) !important; 
+        top: 20px !important; 
+        left: 20px !important; 
+        width: 180px !important; 
+        padding: 0 !important;
+        box-shadow: 0 12px 48px rgba(0,0,0,0.6) !important;
+        display: flex !important;
+        flex-direction: column;
+        max-height: calc(100vh - 140px);
+        overflow-y: auto !important;
+        overflow-x: hidden;
+        border: 1px solid var(--border) !important;
+        pointer-events: auto !important;
+        touch-action: pan-y !important;
+        overscroll-behavior: contain;
+    }
+
+    .djs-palette .entry { 
+        width: 100% !important; 
+        height: 44px !important; 
+        display: flex !important;
+        align-items: center !important;
+        gap: 12px;
+        padding: 0 16px !important;
+        color: var(--text-dim) !important;
+        transition: all 0.2s;
+        cursor: pointer;
+        border-radius: 0 !important;
+        border-bottom: 1px solid rgba(255,255,255,0.03);
+        font-size: 11px !important;
+        font-weight: 500;
+        justify-content: flex-start !important;
+    }
+    
+    .djs-palette .entry:hover { 
+        color: var(--accent) !important; 
+        background: rgba(255,255,255,0.05) !important; 
+    }
+    
+    .djs-palette .entry::after {
+        content: attr(title);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .djs-palette .entry[data-action^="create."] {
+        font-weight: 700;
+    }
+
+    /* Hide the default bpmn icons since we use labels + custom icons */
+    .djs-palette .entry > span { display: none !important; }
+    .djs-palette .entry > img { flex-shrink: 0; }
+    .djs-palette .entry:hover { color: var(--accent) !important; background: rgba(255,255,255,0.05) !important; }
+    .djs-palette .entry.active { 
+        color: var(--primary) !important; 
+        background: rgba(37, 99, 235, 0.1) !important; 
+        border-right: 3px solid var(--primary);
+    }
+
+    .palette-cat-label {
+        font-size: 8px;
+        font-weight: 900;
+        color: var(--accent);
+        text-align: left;
+        padding: 16px 16px 8px 16px;
+        letter-spacing: 1.5px;
+        opacity: 0.6;
+        text-transform: uppercase;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+
+    /* Node Anchor Styling (Prevent decoupled drag feel) */
+    .djs-label { font-weight: 700 !important; font-size: 11px !important; fill: #8b949e !important; }
+    .djs-visual rect { stroke-width: 2px !important; stroke: #30363d !important; fill: #161b22 !important; }
+    .djs-visual circle { stroke-width: 2px !important; stroke: #30363d !important; fill: #161b22 !important; }
+
+    /* Context Pad Cleanup (Pruning Clutter) */
+    .djs-context-pad .entry { background: rgba(22, 27, 34, 0.9) !important; color: white !important; border-radius: 4px !important; }
+    .djs-context-pad .entry:hover { background: var(--primary) !important; }
+    /* Hide redundant/messy suggested nodes */
+    .djs-context-pad [data-action="append.intermediate-event"],
+    .djs-context-pad [data-action="append.text-annotation"],
+    .djs-context-pad [data-action="replace"] { display: none !important; }
+
+    /* Industrial Vertical Modal */
+    .modal-stack { display: flex; flex-direction: column; gap: 20px; margin-top: 16px; max-height: 70vh; overflow-y: auto; padding-right: 8px; }
+    .prop-group { border: 1px solid var(--border); border-radius: 12px; background: rgba(255,255,255,0.02); overflow: hidden; margin-bottom: 20px; }
+    .prop-group-header { background: rgba(255,255,255,0.05); padding: 10px 16px; font-size: 10px; font-weight: 900; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border); }
+    .prop-group-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+
+    /* Key-Value Widget */
+    .kv-table { display: flex; flex-direction: column; gap: 8px; }
+    .kv-row { display: grid; grid-template-columns: 1fr 1fr 40px; gap: 8px; align-items: center; }
+    .kv-btn { background: rgba(255,255,255,0.1); border: none; color: white; border-radius: 4px; height: 36px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+    .kv-btn:hover { background: var(--error); }
+    .kv-add-btn { background: rgba(34, 197, 94, 0.1); color: #4ade80; border: 1px dashed #4ade80; padding: 10px; border-radius: 8px; text-align: center; cursor: pointer; font-size: 11px; font-weight: 700; transition: all 0.2s; }
+    .kv-add-btn:hover { background: rgba(34, 197, 94, 0.2); }
+
+    .doc-pane { padding: 20px; background: rgba(56, 189, 248, 0.03); border: 1px solid rgba(56, 189, 248, 0.15); border-radius: 12px; margin-top: 10px; }
+    .doc-copy-box { background: #010409; padding: 12px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #4ade80; border: 1px solid var(--border); cursor: pointer; margin-top: 8px; }
+</style>
+
+<div class="studio-container">
+    <div style="position: absolute; top: 20px; right: 20px; z-index: 100; display: flex; gap: 12px; align-items: center;">
+        <div style="background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(8px); border: 1px solid var(--border); padding: 8px 20px; border-radius: 10px; font-size: 11px; display: flex; align-items: center; gap: 12px;">
+            <div style="color: var(--text-dim);">PROJECT: <span style="color: white; font-weight: 700;"><%= projectName %></span></div>
+            <div style="width: 1px; height: 16px; background: var(--border);"></div>
+            <div style="color: var(--text-dim);">ARTIFACT: <span style="color: var(--accent); font-weight: 700;"><%= intent.name %> (v<%= intent.version %>)</span></div>
+        </div>
+        <div id="header-actions"></div>
+    </div>
+
+    <!-- Reactive Tooltip Overlay -->
+    <div id="zero-tooltip" style="position: fixed; display: none; z-index: 1000; width: 280px; background: rgba(22, 27, 34, 0.98); border: 1px solid var(--primary); padding: 16px; border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); backdrop-filter: blur(10px); pointer-events: none; transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
+        <div id="tt-label" style="font-size: 13px; font-weight: 900; color: white; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;"></div>
+        <div id="tt-desc" style="font-size: 11px; color: var(--text-dim); line-height: 1.5; margin-bottom: 12px;"></div>
+        <div id="tt-badge" style="display: inline-block; font-size: 9px; font-weight: 900; padding: 2px 8px; border-radius: 4px; background: var(--primary); color: white; text-transform: uppercase;"></div>
+    </div>
+
+    <!-- Policy Violation Notification Overlay -->
+    <div id="policy-alert" style="position: fixed; top: 100px; left: 50%; transform: translateX(-50%) translateY(-20px); z-index: 2000; background: rgba(153, 27, 27, 0.95); border-left: 4px solid #ef4444; color: white; padding: 16px 24px; border-radius: 8px; box-shadow: 0 30px 60px rgba(0,0,0,0.5); backdrop-filter: blur(10px); display: none; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); gap: 16px; align-items: center;">
+        <i class="fas fa-exclamation-triangle" style="font-size: 20px; color: #fecaca;"></i>
+        <div>
+            <div style="font-weight: 900; font-size: 13px; letter-spacing: 0.5px;">INDUSTRIAL POLICY VIOLATION</div>
+            <div id="policy-msg" style="font-size: 11px; opacity: 0.9; margin-top: 2px;">Multiple start nodes are prohibited for process integrity.</div>
+        </div>
+    </div>
+
+    <!-- Industrial Loader Overlay -->
+    <div id="zero-loader">
+        <div class="spinner"></div>
+        <div id="loader-msg">Synchronizing with Registry...</div>
+    </div>
+
+    <div id="canvas"></div>
+</div>
+
+<script src="https://unpkg.com/bpmn-js@17.0.2/dist/bpmn-modeler.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="/widgets.js"></script>
+<script>
+    // Zero-BPM Industrial Moddle Extension
+    const zeroModdle = {
+        "name": "Zero",
+        "uri": "http://zero-bpm.ai/schema/bpmn",
+        "prefix": "zero",
+        "xml": { "tagAlias": "lowerCase" },
+        "types": [
+            {
+                "name": "ExtElement",
+                "extends": ["bpmn:BaseElement"],
+                "properties": [
+                    { "name": "nodeId", "isAttr": true, "type": "String" }
+                ]
+            }
+        ]
+    };
+
+    const modeler = new BpmnJS({ 
+        container: '#canvas',
+        moddleExtensions: {
+            zero: zeroModdle
+        }
+    });
+    let selectedElement = null;
+    let propertyMap = <%- asset && asset.json_config ? JSON.stringify(asset.json_config) : '{}' %>;
+    const nodeRegistry = <%- JSON.stringify(nodeRegistryContext) %>;
+    
+    const intent = <%- JSON.stringify(intent) %>;
+    const projectName = "<%= projectName %>";
+    const projectAssets = <%- JSON.stringify(projectAssets || []) %>;
+    const existingXml = <%- asset ? JSON.stringify(asset.bpmn_xml) : 'null' %>;
+
+    // Logic: Documentation is now transactionally hydrated from the unified registry singleton.
+
+    async function init() {
+        try {
+            await modeler.importXML(existingXml || getDefaultXml());
+            document.getElementById('header-actions').innerHTML = `
+                <button onclick="openProjectSettingsFromStudio()" class="action-btn" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border);"><i class="fas fa-cog"></i> Settings</button>
+                <button onclick="persistProcess(false)" class="action-btn" style="background: rgba(255,255,255,0.1); border: 1px solid var(--border);"><i class="fas fa-save"></i> Save Draft</button>
+                <button onclick="persistProcess(true)" class="action-btn" style="background: var(--success); box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3);"><i class="fas fa-rocket"></i> Release & Deploy v${intent.version}</button>
+            `;
+            
+            // Wait for palette to be ready
+            setTimeout(() => {
+                const palette = modeler.get('palette');
+                const canvas = modeler.get('canvas');
+                setupCategorizedPalette();
+                // Optimization: Zoom to fit for seeded assets
+                canvas.zoom('fit-viewport');
+            }, 200);
+
+            // Industrial Singleton Entry Enforcer (Constraint Engine)
+            modeler.on('commandStack.shape.create.canExecute', (e) => {
+                const { shape } = e.context;
+                if (shape.type === 'bpmn:StartEvent') {
+                    const starts = modeler.get('elementRegistry').filter(e => e.type === 'bpmn:StartEvent');
+                    if (starts.length >= 1) {
+                        showPolicyAlert("Zero-BPM Industrial Policy: Single Entry Point Required. Multiple genesis nodes are prohibited for asset stability.");
+                        return false; 
+                    }
+                }
+            });
+
+            // Fail-Safe Post-Execution Policy Enforcement
+            modeler.on('shape.added', (e) => {
+                const shape = e.element;
+                if (shape.type === 'bpmn:StartEvent') {
+                    const starts = modeler.get('elementRegistry').filter(e => e.type === 'bpmn:StartEvent');
+                    if (starts.length > 1) {
+                        // Defer removal to avoid 'illegal invocation' during command execution
+                        setTimeout(() => {
+                            try {
+                                modeler.get('modeling').removeShape(shape);
+                                showPolicyAlert("Zero-BPM Industrial Policy: Single Entry Point Required. Redundant start node has been transactionally purged.");
+                            } catch (err) { console.error('Enforcement Failure:', err); }
+                        }, 0);
+                    }
+                }
+            });
+
+            modeler.on('element.dblclick', (e) => {
+                selectedElement = e.element;
+                if (e.element.type === 'bpmn:Process') {
+                    // Open Global Service Definitions
+                    openPropertyModal('process-definitions');
+                    return;
+                }
+                openPropertyModal();
+            });
+
+            // Industrial Auto-Tagging for Connections
+            modeler.on('connection.added', (e) => {
+                if (e.element.type === 'bpmn:SequenceFlow') {
+                    e.element.businessObject.set('zero:nodeId', 'sequence-flow');
+                }
+            });
+        } catch (err) { console.error('Initialization Failure:', err); }
+    }
+
+    function getDefaultXml() {
+        const id = intent.name.replace(/\s+/g, '-');
+        return `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="${id}" name="${intent.name}" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1" name="Initiated" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1"><bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="${id}"><bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1"><dc:Bounds x="173" y="102" width="36" height="36" /></bpmndi:BPMNShape></bpmndi:BPMNPlane></bpmndi:BPMNDiagram>
+</bpmn:definitions>`;
+    }
+
+    // Apply CSS-based visual parity for specialized nodes
+    const style = document.createElement('style');
+    style.innerHTML = `
+        .djs-element.rest-task .djs-visual rect { fill: #f0f7ff !important; stroke: #0066cc !important; }
+        .djs-element.slack-task .djs-visual rect { fill: #fdf2f8 !important; stroke: #db2777 !important; }
+        .djs-element.email-task .djs-visual rect { fill: #ecfdf5 !important; stroke: #10b981 !important; }
+        .djs-element.database-task .djs-visual rect { fill: #fff7ed !important; stroke: #f97316 !important; }
+        .djs-element.business-rule-task .djs-visual rect { fill: #faf5ff !important; stroke: #a855f7 !important; }
+        /* High-fidelity visual hardening */
+    `;
+    document.head.appendChild(style);
+
+    function setupCategorizedPalette() {
+        const palette = document.querySelector('.djs-palette');
+        console.log(`[Zero-BPM] Palette Hydration Activated. Registry Size: ${Object.keys(nodeRegistry).length}`);
+        if (!palette) {
+            console.error('[Zero-BPM] Palette DOM not found!');
+            return;
+        }
+        const entries = Array.from(palette.querySelectorAll('.entry'));
+        
+        // Non-Destructive Lifecycle: Hide instead of wipe to preserve Modeler state
+        entries.forEach(e => e.style.display = 'none');
+        palette.querySelectorAll('.palette-cat-label, .entry-custom').forEach(e => e.remove());
+
+        // Gesture Isolation: Stop propagation of scrolls to canvas
+        const stopScroll = (e) => e.stopPropagation();
+        palette.addEventListener('wheel', stopScroll, { passive: false });
+        palette.addEventListener('touchstart', stopScroll, { passive: true });
+        palette.addEventListener('touchmove', stopScroll, { passive: false });
+
+        // 1. Core Tools (Hand, Lasso, Connect)
+        const coreHeader = document.createElement('div');
+        coreHeader.className = 'palette-cat-label';
+        coreHeader.innerText = 'CANVAS TOOLS';
+        palette.appendChild(coreHeader);
+        
+        ['hand-tool', 'lasso-tool', 'global-connect-tool'].forEach(act => {
+            const existing = entries.find(e => e.getAttribute('data-action') === act);
+            if (existing) {
+                existing.title = 'Canvas Tool: ' + act.split('-')[0].toUpperCase();
+                palette.appendChild(existing);
+            }
+        });
+
+        // 2. Dynamic Categories from Registry
+        const cats = {};
+        Object.values(nodeRegistry).forEach(pkg => {
+            if (!cats[pkg.category]) cats[pkg.category] = [];
+            cats[pkg.category].push(pkg);
+        });
+
+        // Logical Ordering of Categories
+        const order = ['EVENT', 'GATEWAY', 'TASK', 'SUITE', 'SYSTEM'];
+        order.forEach(catName => {
+            if (!cats[catName]) return;
+            
+            const catHeader = document.createElement('div');
+            catHeader.className = 'palette-cat-label';
+            catHeader.innerText = catName;
+            palette.appendChild(catHeader);
+
+            cats[catName].forEach(pkg => {
+                const entry = addCustomPaletteEntry(palette, pkg.bpmnType, pkg.icon || 'bpmn-icon-task', pkg.label, pkg.bpmnOptions, pkg.id);
+                
+                // Active Tooltip Listeners
+                entry.onmouseenter = (e) => {
+                    const tooltip = document.getElementById('zero-tooltip');
+                    const label = document.getElementById('tt-label');
+                    const desc = document.getElementById('tt-desc');
+                    const badge = document.getElementById('tt-badge');
+                    
+                    label.innerHTML = `<img src="${pkg.icon}" style="width: 16px; height: 16px; filter: brightness(0) invert(1);"> ${pkg.label}`;
+                    desc.innerText = pkg.documentation.desc;
+                    badge.innerText = pkg.category;
+                    
+                    tooltip.style.display = 'block';
+                    const rect = entry.getBoundingClientRect();
+                    tooltip.style.left = (rect.right + 20) + 'px';
+                    tooltip.style.top = rect.top + 'px';
+                    tooltip.style.transform = 'scale(1)';
+                };
+                
+                entry.onmouseleave = () => {
+                    const tooltip = document.getElementById('zero-tooltip');
+                    if (tooltip) {
+                        tooltip.style.display = 'none';
+                        tooltip.style.transform = 'scale(0.9)';
+                    }
+                };
+            });
+        });
+    }
+
+    function addCustomPaletteEntry(palette, type, icon, title, options = {}, pkgId) {
+        const entry = document.createElement('div');
+        entry.className = 'entry entry-custom';
+        
+        // Use standard title attribute as fallback but primarily for our custom tooltip engine
+        entry.title = title;
+        entry.innerHTML = `<i class="fas ${icon}"></i> <span>${title}</span>`;
+        
+        entry.onclick = (e) => {
+            const create = modeler.get('create');
+            const elementFactory = modeler.get('elementFactory');
+            const shape = elementFactory.createShape({ type, ...options });
+            
+            // Industrial Tagging: Bind the registry package ID to the architectural model
+            shape.businessObject.set('zero:nodeId', pkgId);
+            shape.businessObject.nodeId = pkgId; // Legacy fallback
+            
+            create.start(e, shape);
+        };
+        entry.setAttribute('data-action', 'create.' + pkgId);
+        
+        palette.appendChild(entry);
+        return entry;
+    }
+
+    function openPropertyModal(liveState = null, forcedPkgId = null) {
+        const bo = selectedElement.businessObject;
+        const type = bo.$type;
+        const pkgId = forcedPkgId || bo.get('zero:nodeId') || bo.nodeId || (selectedElement.type.includes(':') ? selectedElement.type : type);
+        const pkg = nodeRegistry[pkgId] || nodeRegistry[type] || nodeRegistry['bpmn:' + type.split(':')[1]];
+        
+        if (!propertyMap[bo.id]) propertyMap[bo.id] = {};
+        
+        // Hydrate liveState from existing configuration for exhaustive visibility
+        if (!liveState) liveState = { ...propertyMap[bo.id] };
+
+        // Visibility & Field Orchestration
+        let fieldsHtml = '';
+        if (pkg && pkg.fields) {
+            pkg.fields.forEach(f => {
+                // Visibility Engine: Evaluate conditional display rules
+                if (f.visibility) {
+                    try {
+                        const show = new Function('triggerType', `return ${f.visibility}`)(liveState.triggerType);
+                        if (!show) return;
+                    } catch (e) {}
+                }
+                fieldsHtml += renderField(f, liveState[f.key], bo.id, liveState);
+            });
+        }
+
+        const html = `
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <i class="fas ${pkg ? pkg.icon : 'fa-cog'}" style="font-size: 24px; color: var(--accent);"></i>
+                    <h2 style="margin: 0;">${pkg ? pkg.label : 'Node Configuration'}</h2>
+                </div>
+                <div style="font-size: 10px; color: var(--text-dim); margin-top: 8px; font-family: monospace; opacity: 0.6;">UUID: ${bo.id} | TYPE: ${type}</div>
+            </div>
+            
+            <div class="modal-stack" oninput="refreshPropertyModal()" onchange="refreshPropertyModal()" style="max-height: 50vh; overflow-y: auto; padding-right: 8px;">
+                <div class="form-group">
+                    <label class="form-label">Global Alias / Identity</label>
+                    <input type="text" id="m-node-name" class="form-input" value="${bo.name || ''}" oninput="syncNameFromModal(this.value)" placeholder="e.g. Audit-Log-Task">
+                </div>
+                ${fieldsHtml}
+                
+                <div class="doc-pane" style="margin-top: 24px; border-top: 1px solid var(--border); padding-top: 20px;">
+                    <div class="doc-block">
+                        <span class="doc-label" style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;"><i class="fas fa-book-open"></i> Operational Context</span>
+                        <div class="doc-content custom-markdown" style="font-size: 13px; line-height: 1.6; padding: 16px; background: rgba(0,0,0,0.1); border-radius: 8px; color: var(--text-dim); max-height: 200px; overflow-y: auto;">
+                            ${pkg && pkg.readme ? marked.parse(pkg.readme) : '<p style="opacity:0.6;">Industrial documentation not provisioned for this primitive.</p>'}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border);">
+                <button onclick="ZeroModal.close()" class="action-btn" style="background: transparent; color: var(--text-dim);">Discard</button>
+                <button onclick="saveAndClose('${bo.id}')" class="action-btn" style="background: var(--primary); min-width: 140px; justify-content: center;">Commit Parameters</button>
+            </div>
+        `;
+
+        ZeroModal.open(html);
+    }
+
+    function refreshPropertyModal() {
+        // Capture current values from the modal elements
+        const bo = selectedElement.businessObject;
+        const pkgId = bo.get('zero:nodeId') || bo.nodeId || bo.$type;
+        const pkg = nodeRegistry[pkgId];
+        
+        const liveState = {};
+        if (pkg) {
+            pkg.fields.forEach(f => {
+                const logic = ZeroWidgets.getExtractionLogic(f.type, bo.id, f.key);
+                try { liveState[f.key] = eval(logic); } catch(e) {}
+            });
+        }
+        
+        // Re-open (re-render) with the captured live state
+        openPropertyModal(liveState);
+    }
+
+    function discoverSuggestions(f) {
+        const suggestions = [];
+        if (f.variableRef) {
+            // Suggestion Engine: Scan for defined variables in the architecture
+            const elementRegistry = modeler.get('elementRegistry');
+            const processes = elementRegistry.filter(e => e.type === 'bpmn:Process');
+            const starts = elementRegistry.filter(e => e.type === 'bpmn:StartEvent');
+            
+            [...processes, ...starts].forEach(node => {
+                const config = propertyMap[node.id] || {};
+                const vars = config.variableDefinitions || config.variables || {};
+                Object.keys(vars).forEach(v => { if(!suggestions.includes(v)) suggestions.push(v); });
+            });
+        }
+        if (f.flowRef) {
+            // Suggestion Engine: Scan for available project assets
+            projectAssets.forEach(a => { if(!suggestions.includes(a)) suggestions.push(a); });
+        }
+        return suggestions;
+    }
+
+    function renderField(f, currentVal, nodeId, liveState = {}) {
+        const suggestions = discoverSuggestions(f);
+        const datalistId = `list-${nodeId}-${f.key}`;
+        
+        let html = ZeroWidgets.render(f.type, {
+            ...f,
+            value: currentVal !== undefined ? currentVal : (f.default || ''),
+            nodeId: nodeId
+        }, liveState);
+
+        // Intelligence Overlay: Inject datalist if suggestions exist
+        if (suggestions.length > 0) {
+            const listHtml = `<datalist id="${datalistId}">${suggestions.map(s => `<option value="${s}">`).join('')}</datalist>`;
+            // Inject list attribute into the first input found in the widget HTML
+            html = html.replace('<input ', `<input list="${datalistId}" `) + listHtml;
+        }
+        
+        return html;
+    }
+
+    function saveAndClose(elementId) {
+        const bo = selectedElement.businessObject;
+        const pkgId = bo.get('zero:nodeId') || bo.nodeId || bo.$type;
+        const pkg = nodeRegistry[pkgId];
+        
+        const config = {};
+        if (pkg) {
+            pkg.fields.forEach(f => {
+                const extractionLogic = ZeroWidgets.getExtractionLogic(f.type, elementId, f.key);
+                config[f.key] = eval(extractionLogic);
+            });
+        }
+        
+        propertyMap[elementId] = config;
+        ZeroModal.close();
+        
+        // Final UI feedback
+        const canvas = modeler.get('canvas');
+        canvas.addMarker(elementId, 'jbpm-configured');
+        console.log(`[Zero-BPM] Parameters Committed for ${elementId}`, config);
+    }
+
+    function addKVRow(key) {
+        const container = document.getElementById(`kv-${key}`);
+        const row = document.createElement('div');
+        row.className = 'kv-row';
+        row.innerHTML = `
+            <input type="text" class="form-input kv-key" placeholder="Key">
+            <input type="text" class="form-input kv-val" placeholder="Value">
+            <button class="kv-btn" onclick="this.parentElement.remove()"><i class="fas fa-trash"></i></button>
+        `;
+        container.appendChild(row);
+    }
+
+    function syncNameFromModal(val) { modeler.get('modeling').updateProperties(selectedElement, { name: val }); }
+
+    const ZeroLoader = {
+        show: (msg) => {
+            document.getElementById('loader-msg').innerText = msg || 'Orchestrating Persistence...';
+            document.getElementById('zero-loader').style.display = 'flex';
+        },
+        hide: () => {
+            document.getElementById('zero-loader').style.display = 'none';
+        }
+    };
+
+    async function persistProcess(isDeploy = false) {
+        const validation = validateOrchestration();
+        
+        if (isDeploy && !validation.success) {
+            const errorList = validation.errors.map(err => `<li style="margin-bottom: 8px;"><b style="color: #ef4444;">[${err.nodeId}]</b> ${err.message}</li>`).join('');
+            const errorHtml = `
+                <div class="modal-header">
+                    <h2 style="color: #ef4444;"><i class="fas fa-shield-alt"></i> Pre-Flight Audit Failed</h2>
+                    <p>Standard architectural rules prevent development of this asset in its current state.</p>
+                </div>
+                <div style="padding: 24px; background: rgba(0,0,0,0.2); border-radius: 8px; margin: 20px 0;">
+                    <ul style="list-style: none; padding: 0; margin: 0; font-size: 13px; line-height: 1.6;">
+                        ${errorList}
+                    </ul>
+                </div>
+                <div style="display: flex; justify-content: flex-end;">
+                    <button onclick="ZeroModal.close()" class="action-btn" style="background: var(--primary);">Return to Orchestrator</button>
+                </div>
+            `;
+            ZeroModal.open(errorHtml);
+            return;
+        }
+
+        ZeroLoader.show(isDeploy ? 'Releasing to Production Tier...' : 'Synchronizing Draft with Repository...');
+        
+        try {
+            const { xml } = await modeler.saveXML({ format: true });
+            const res = await fetch('/api/deploy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: intent.name, projectName, xml, json: propertyMap, version: intent.version })
+            });
+            
+            ZeroLoader.hide();
+            
+            if (res.ok) {
+                if (isDeploy) {
+                    const successHtml = `
+                        <div class="modal-header" style="text-align: center; border-bottom: none; padding-bottom: 0;">
+                            <div style="width: 64px; height: 64px; background: var(--success); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
+                                <i class="fas fa-rocket" style="font-size: 32px; color: white;"></i>
+                            </div>
+                            <h2 style="color: var(--success);">Deployment Successful</h2>
+                            <p style="opacity: 0.6; font-size: 13px; margin-top: 8px;">Version ${intent.version} of <b>${intent.name}</b> has been released.</p>
+                        </div>
+                        <div style="display: flex; gap: 12px; justify-content: center; margin-top: 32px;">
+                            <button onclick="window.location.href = '/projects/${projectName}/assets'" class="action-btn" style="background: var(--primary);">View Dashboard</button>
+                            <button onclick="ZeroModal.close()" class="action-btn" style="background: rgba(255,255,255,0.1);">Close</button>
+                        </div>
+                    `;
+                    ZeroModal.open(successHtml);
+                } else {
+                    const warnMsg = !validation.success ? '<p style="color: #fbbf24; font-size: 12px; margin-top: 8px;"><i class="fas fa-exclamation-triangle"></i> Draft saved with validation warnings.</p>' : '';
+                    const saveHtml = `
+                        <div class="modal-header" style="text-align: center; border-bottom: none;">
+                            <div style="width: 48px; height: 48px; background: rgba(56, 189, 248, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; color: var(--accent);">
+                                <i class="fas fa-check" style="font-size: 20px;"></i>
+                            </div>
+                            <h2>Progress Persisted</h2>
+                            <p style="opacity: 0.6; font-size: 13px;">Tactical state successfully synchronized with the Project Repository.</p>
+                            ${warnMsg}
+                        </div>
+                        <div style="display: flex; justify-content: center; margin-top: 24px;">
+                            <button onclick="ZeroModal.close()" class="action-btn" style="background: var(--primary);">Continue Orchestration</button>
+                        </div>
+                    `;
+                    ZeroModal.open(saveHtml);
+                }
+            }
+        } catch (e) {
+            ZeroLoader.hide();
+            alert('Persistence Failure: ' + e.message);
+        }
+    }
+
+    async function openProjectSettingsFromStudio() {
+        const res = await fetch(`/api/projects/${projectName}/settings`);
+        const { metadata } = await res.json();
+        const html = `
+            <div class="modal-header">
+                <h2>Studio Governance</h2>
+                <p>Establishing standards for project: <strong>${projectName}</strong></p>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Active Release Version</label>
+                <input type="text" id="p-version" class="form-input" value="${metadata.version || '1.0.0'}">
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 32px;">
+                <button onclick="ZeroModal.close()" class="action-btn" style="background: transparent;">Cancel</button>
+                <button onclick="saveProjectSettingsInStudio()" class="action-btn" style="background: var(--primary);">Update Standards</button>
+            </div>
+        `;
+        ZeroModal.open(html);
+    }
+
+    async function saveProjectSettingsInStudio() {
+        const version = document.getElementById('p-version').value;
+        const metadata = { version };
+        const res = await fetch(`/api/projects/${projectName}/settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ metadata })
+        });
+        if (res.ok) location.reload();
+    }
+
+    function validateOrchestration() {
+        const errors = [];
+        const elementRegistry = modeler.get('elementRegistry');
+        const nodes = elementRegistry.filter(e => e.type !== 'label' && e.type !== 'bpmn:Process' && e.type !== 'bpmn:SequenceFlow');
+
+        // 1. Singleton Start Event Verification
+        const starts = elementRegistry.filter(e => e.type === 'bpmn:StartEvent');
+        if (starts.length === 0) errors.push({ nodeId: 'PROCESS', message: 'Process must have a Start Event.' });
+        
+        // 2. Connectivity & Contract Audit
+        nodes.forEach(node => {
+            const bo = node.businessObject;
+            const pkgId = bo.get('zero:nodeId') || bo.nodeId || node.type;
+            const pkg = nodeRegistry[pkgId] || nodeRegistry[node.type] || nodeRegistry['bpmn:' + node.type.split(':')[1]];
+            
+            // Isolated Node Detection
+            const incoming = node.incoming || [];
+            const outgoing = node.outgoing || [];
+            
+            if (node.type !== 'bpmn:StartEvent' && incoming.length === 0) {
+                errors.push({ nodeId: node.id, message: `Node is isolated (no entry path defined).` });
+            }
+            if (node.type !== 'bpmn:EndEvent' && outgoing.length === 0) {
+                errors.push({ nodeId: node.id, message: `Node is isolated (no exit path defined).` });
+            }
+
+            // Mandatory Field Contract Enforcement
+            if (pkg && pkg.fields) {
+                const config = propertyMap[node.id] || {};
+                pkg.fields.forEach(f => {
+                    if (f.required) {
+                        const val = config[f.key];
+                        if (val === undefined || val === '' || (typeof val === 'object' && Object.keys(val).length === 0)) {
+                            errors.push({ nodeId: bo.name || node.id, message: `Missing mandatory field: ${f.label}` });
+                        }
+                    }
+                });
+            }
+        });
+
+        return { success: errors.length === 0, errors };
+    }
+    function showPolicyAlert(msg) {
+        const alert = document.getElementById('policy-alert');
+        const text = document.getElementById('policy-msg');
+        text.innerText = msg;
+        alert.style.display = 'flex';
+        alert.style.transform = 'translateX(-50%) translateY(0)';
+        alert.style.opacity = '1';
+        
+        setTimeout(() => {
+            alert.style.opacity = '0';
+            alert.style.transform = 'translateX(-50%) translateY(-20px)';
+            setTimeout(() => { alert.style.display = 'none'; }, 300);
+        }, 4000);
+    }
+
+    init();
+</script>

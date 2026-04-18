@@ -1,0 +1,8 @@
+{
+    "name": "slack-task",
+    "version": "1.0.0",
+    "bpmnType": "bpmn:ServiceTask",
+    "category": "SYSTEM",
+    "label": "Slack Ops",
+    "description": "Orchestrates chat-ops notifications and interactive alerts via Slack Webhooks or Bolt API."
+}

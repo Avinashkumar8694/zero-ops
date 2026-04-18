@@ -1,0 +1,8 @@
+{
+    "name": "start-event",
+    "version": "1.0.0",
+    "bpmnType": "bpmn:StartEvent",
+    "category": "EVENT",
+    "label": "Start Process",
+    "description": "Genesis node. Defines the trigger and initial state of the process."
+}

@@ -1,0 +1,207 @@
+<div style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 24px; gap: 12px;">
+    <button onclick="document.getElementById('import-input').click()" class="action-btn" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); color: var(--text-dim);">
+        <i class="fas fa-file-import"></i> Import Bundle
+    </button>
+    <input type="file" id="import-input" style="display: none" onchange="importProject(this)">
+    <button onclick="showNewProjectModal()" class="action-btn" style="background: var(--primary); box-shadow: 0 4px 20px rgba(37, 99, 235, 0.3);">
+        <i class="fas fa-plus-circle"></i> Create New Project
+    </button>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 24px;">
+    <% projects.forEach(project => { %>
+        <div class="glass-card" 
+             style="position: relative; cursor: pointer; display: flex; flex-direction: column;" 
+             onclick="window.location.href='/projects/<%= project.name %>/assets'"
+             data-id="<%= project.id %>"
+             data-name="<%= project.name %>"
+             data-project='<%= JSON.stringify(project).replace(/'/g, "&#39;") %>'>
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px;">
+                <div style="width: 52px; height: 52px; background: linear-gradient(135deg, rgba(37, 99, 235, 0.2), rgba(56, 189, 248, 0.1)); border: 1px solid var(--primary); border-radius: 14px; display: flex; align-items: center; justify-content: center; color: var(--accent); font-size: 24px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                    <i class="fas fa-cubes"></i>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="status-badge" style="background: rgba(56, 189, 248, 0.1); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.2);"><%= project.namespace %></span>
+                    <div style="display: flex; gap: 4px;">
+                        <button onclick="event.stopPropagation(); showEditProjectModal(this.closest('.glass-card').dataset.project)" class="icon-btn edit-btn" style="width: 28px; height: 28px; font-size: 11px; background: rgba(255,255,255,0.03);" title="Edit Metadata">
+                            <i class="fas fa-pencil-alt"></i>
+                        </button>
+                        <button onclick="event.stopPropagation(); confirmDeleteProject(this.closest('.glass-card').dataset.id, this.closest('.glass-card').dataset.name)" class="icon-btn delete-btn" style="width: 28px; height: 28px; font-size: 11px; background: rgba(239, 68, 68, 0.05); color: #ef4444;" title="Delete Project">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <h3 style="margin: 0 0 10px 0; font-size: 20px; font-weight: 700; color: white;"><%= project.name %></h3>
+            <p style="color: var(--text-dim); font-size: 13px; line-height: 1.6; margin-bottom: 28px; flex: 1; opacity: 0.8;">
+                <%= project.description || 'Enterprise orchestration container for versioned business processes and tactical service integration sets.' %>
+            </p>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); padding-top: 20px; font-size: 11px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px;">
+                <span title="Project Orchestrator"><i class="fas fa-id-badge" style="color: var(--accent); margin-right: 6px;"></i> <%= project.owner %></span>
+                <span><i class="fas fa-clock" style="margin-right: 4px;"></i> <%= new Date(project.created_at).toLocaleDateString() %></span>
+            </div>
+
+            <div style="margin-top: 20px; display: flex; gap: 12px;">
+                <button onclick="event.stopPropagation(); exportProject('<%= project.name %>')" style="background: transparent; border: 1px solid var(--border); color: var(--text-dim); padding: 6px 14px; border-radius: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.borderColor= 'var(--accent)'; this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'; this.style.color='var(--text-dim)'">
+                    <i class="fas fa-download"></i> Export Bundle
+                </button>
+            </div>
+        </div>
+    <% }); %>
+
+    <% if (projects.length === 0) { %>
+        <div style="grid-column: 1 / -1; padding: 120px 60px; text-align: center; background: rgba(255,255,255,0.01); border: 1px dashed var(--border); border-radius: 20px; backdrop-filter: blur(4px);">
+            <div style="width: 80px; height: 80px; background: rgba(255,255,255,0.03); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 32px auto;">
+                <i class="fas fa-folder-open" style="font-size: 32px; color: var(--text-dim); opacity: 0.4;"></i>
+            </div>
+            <h2 style="color: white; font-weight: 800; margin-bottom: 12px;">Worksurface Empty</h2>
+            <p style="color: var(--text-dim); max-width: 400px; margin: 0 auto 32px auto; line-height: 1.6;">Initialize your enterprise orchestration layer by provisioning your first organizational project or importing a pre-configured architecture bundle.</p>
+            <button onclick="showNewProjectModal()" class="action-btn" style="background: var(--primary); margin: 0 auto; padding: 12px 32px; box-shadow: 0 4px 20px rgba(37, 99, 235, 0.3);">Initialize First Project</button>
+        </div>
+    <% } %>
+</div>
+
+<script>
+    function showNewProjectModal() {
+        const html = `
+            <div class="modal-header">
+                <h2>Initialize Enterprise Project</h2>
+                <p>Provisions a versioned container for process artifacts and tactical orchestration sets.</p>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Project Identity</label>
+                <input type="text" id="p-name" class="form-input" placeholder="e.g. Finance-Operations-v1">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Namespace / Space</label>
+                <input type="text" id="p-space" class="form-input" value="default">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Project Description</label>
+                <textarea id="p-desc" class="form-input" style="height: 100px; resize: none;"></textarea>
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 32px;">
+                <button onclick="ZeroModal.close()" class="action-btn" style="background: transparent; color: var(--text-dim);">Cancel</button>
+                <button onclick="submitProject('new')" class="action-btn" style="background: var(--primary); min-width: 140px; justify-content: center;">Confirm Provisioning</button>
+            </div>
+        `;
+        ZeroModal.open(html);
+    }
+
+    function showEditProjectModal(projectData) {
+        const project = typeof projectData === 'string' ? JSON.parse(projectData) : projectData;
+        const html = `
+            <div class="modal-header">
+                <h2>Edit Project Metadata</h2>
+                <p>Update organizational context and naming for the project container.</p>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Project Identity</label>
+                <input type="text" id="p-name" class="form-input" value="${project.name}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Namespace / Space</label>
+                <input type="text" id="p-space" class="form-input" value="${project.namespace}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Project Description</label>
+                <textarea id="p-desc" class="form-input" style="height: 100px; resize: none;">${project.description || ''}</textarea>
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 32px;">
+                <button onclick="ZeroModal.close()" class="action-btn" style="background: transparent; color: var(--text-dim);">Cancel</button>
+                <button onclick="submitProject('edit', ${project.id})" class="action-btn" style="background: var(--accent); color: #000; min-width: 140px; justify-content: center;">Save Changes</button>
+            </div>
+        `;
+        ZeroModal.open(html);
+    }
+
+    function confirmDeleteProject(id, name) {
+        const html = `
+            <div class="modal-header">
+                <h2 style="color: #ef4444;">Severe Action Required</h2>
+                <p>You are about to transactionally DESTRUCT project container: <strong>${name}</strong>.</p>
+            </div>
+            <div style="padding: 24px; background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px; color: var(--text-dim); font-size: 13px; line-height: 1.6; margin-top: 20px;">
+                <p style="margin: 0;"><i class="fas fa-exclamation-triangle" style="color: #ef4444; margin-right: 8px;"></i> This action will cascadedly DELETE all associated BPMN artifacts, process configurations, and version history. This cannot be undone.</p>
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 32px;">
+                <button onclick="ZeroModal.close()" class="action-btn" style="background: transparent; color: var(--text-dim);">Dismiss</button>
+                <button onclick="deleteProject(${id})" class="action-btn" style="background: #ef4444; min-width: 140px; justify-content: center;">Confirm Destruction</button>
+            </div>
+        `;
+        ZeroModal.open(html);
+    }
+
+    async function submitProject(type, id) {
+        const name = document.getElementById('p-name').value;
+        const namespace = document.getElementById('p-space').value;
+        const description = document.getElementById('p-desc').value;
+
+        if (!name) return alert('Project Identity is required.');
+
+        const url = type === 'new' ? '/api/projects' : `/api/projects/${id}`;
+        const method = 'POST'; // We use POST for both create and update here as per routes
+
+        try {
+            const res = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, namespace, description })
+            });
+
+            if (res.ok) {
+                location.reload();
+            } else {
+                const err = await res.json();
+                alert('Operation Failed: ' + (err.error || 'System error'));
+            }
+        } catch (e) {
+            alert('Network Error during operation.');
+        }
+    }
+
+    async function deleteProject(id) {
+        try {
+            const res = await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                location.reload();
+            } else {
+                const err = await res.json();
+                alert('Destruction Failed: ' + (err.error || 'System error'));
+            }
+        } catch (e) {
+            alert('Network Error during destruction.');
+        }
+    }
+
+    async function exportProject(name) {
+        const res = await fetch(`/api/projects/${name}/export`);
+        const bundle = await res.json();
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(bundle, null, 2));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href",     dataStr);
+        downloadAnchorNode.setAttribute("download", `${name}_bundle.json`);
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+    }
+
+    async function importProject(input) {
+        const file = input.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const bundle = JSON.parse(e.target.result);
+            const res = await fetch('/api/projects/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(bundle)
+            });
+            if (res.ok) location.reload();
+            else alert('Import failed.');
+        };
+        reader.readAsText(file);
+    }
+</script>

@@ -1,0 +1,8 @@
+{
+    "name": "message-start-event",
+    "version": "1.0.0",
+    "bpmnType": "bpmn:StartEvent",
+    "category": "EVENT",
+    "label": "Message Start",
+    "description": "Orchestrates process triggers based on inbound external signals."
+}

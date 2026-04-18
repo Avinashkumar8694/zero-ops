@@ -1,0 +1,8 @@
+{
+    "name": "user-task",
+    "version": "1.0.0",
+    "bpmnType": "bpmn:UserTask",
+    "category": "TASK",
+    "label": "Human Interaction",
+    "description": "Suspends orchestration until a human actor completes the worklist item."
+}

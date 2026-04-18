@@ -1,0 +1,8 @@
+{
+    "name": "inclusive-gateway",
+    "version": "1.0.0",
+    "bpmnType": "bpmn:InclusiveGateway",
+    "category": "GATEWAY",
+    "label": "Inclusive Branch",
+    "description": "Orchestrates multi-choice logical splits."
+}

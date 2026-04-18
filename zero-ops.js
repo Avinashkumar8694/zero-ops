@@ -39,20 +39,38 @@ if (args.length > 0 && !args[0].startsWith('-') && args[0] !== 'help') {
 }
 
 if (toolName) {
-    const toolModulePath = path.join(__dirname, 'src', 'tools', toolName, 'index.js');
+    const toolModulePathJS = path.join(__dirname, 'src', 'tools', toolName, 'index.js');
+    const toolModulePathTS = path.join(__dirname, 'src', 'tools', toolName, 'index.ts');
+    
+    let toolModulePath = fs.existsSync(toolModulePathTS) ? toolModulePathTS : toolModulePathJS;
+
     if (fs.existsSync(toolModulePath)) {
-        import(pathToFileURL(toolModulePath).href).then(async mod => {
-            if (typeof mod.default === 'function') {
-                await mod.default(program, toolName);
-                program.parse(process.argv);
-            } else {
-                console.error(`Error: Tool module '${toolName}' does not export a default function.`);
+        // --- Self-Bootstrapping Logic ---
+        // If we are loading a .ts file but node doesn't have a loader registered, re-spawn with tsx
+        if (toolModulePath.endsWith('.ts') && !process.env.TSX_READY) {
+            const { spawn } = await import('child_process');
+            console.log(`[Zero-Ops] Bootstrapping TypeScript environment for '${toolName}'...`);
+            
+            const child = spawn('npx', ['tsx', fileURLToPath(import.meta.url), toolName, ...process.argv.slice(2)], {
+                stdio: 'inherit',
+                env: { ...process.env, TSX_READY: 'true' }
+            });
+            
+            child.on('exit', (code) => process.exit(code || 0));
+        } else {
+            import(pathToFileURL(toolModulePath).href).then(async mod => {
+                if (typeof mod.default === 'function') {
+                    await mod.default(program, toolName);
+                    program.parse(process.argv);
+                } else {
+                    console.error(`Error: Tool module '${toolName}' does not export a default function.`);
+                    process.exit(1);
+                }
+            }).catch(err => {
+                console.error(`Failed to load tool '${toolName}': ${err.message}`);
                 process.exit(1);
-            }
-        }).catch(err => {
-            console.error(`Failed to load tool '${toolName}': ${err.message}`);
-            process.exit(1);
-        });
+            });
+        }
     } else {
         console.error(`Error: Tool '${toolName}' is not installed or recognized.`);
         console.log(`Available tools:`);

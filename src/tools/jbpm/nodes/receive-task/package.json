@@ -1,0 +1,8 @@
+{
+    "name": "receive-task",
+    "version": "1.0.0",
+    "bpmnType": "bpmn:ReceiveTask",
+    "category": "TASK",
+    "label": "Wait for Signal",
+    "description": "Suspends execution until an inbound message or signal is received."
+}

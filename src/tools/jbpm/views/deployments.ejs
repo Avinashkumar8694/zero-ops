@@ -1,0 +1,206 @@
+<div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 40px;">
+    <div>
+        <h1 style="font-size: 28px; margin: 0 0 8px 0; font-weight: 800; letter-spacing: -1px;">Asset Repository</h1>
+        <p style="color: var(--text-dim); margin: 0; font-size: 14px;">Project Context: <strong style="color: var(--accent);"><%= project || 'Global' %></strong></p>
+    </div>
+    <div style="display: flex; gap: 12px;">
+        <button onclick="showProjectSettings()" class="action-btn" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border);">
+            <i class="fas fa-cog"></i> Project Settings
+        </button>
+        <button onclick="showNewAssetModal()" class="action-btn" style="background: var(--primary); box-shadow: 0 4px 20px rgba(37, 99, 235, 0.3);">
+            <i class="fas fa-plus"></i> Initialize New Asset
+        </button>
+    </div>
+</div>
+
+<div class="glass-card" style="padding: 0; overflow: hidden;">
+    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+        <thead>
+            <tr style="text-align: left; color: var(--text-dim); background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--border);">
+                <th style="padding: 16px 24px;">Artifact & Version</th>
+                <th>Namespace</th>
+                <th>Release State</th>
+                <th>Modified</th>
+                <th style="text-align: right; padding-right: 24px;">Orchestration</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% if (assets && assets.length > 0) { %>
+                <% assets.forEach(asset => { %>
+                    <tr style="border-bottom: 1px solid var(--border); transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.015)'" onmouseout="this.style.background='transparent'">
+                        <td style="padding: 20px 24px;">
+                            <div style="font-weight: 700; display: flex; align-items: center; gap: 12px; color: white;">
+                                <div style="width: 36px; height:36px; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--accent);">
+                                    <i class="fas fa-file-invoice"></i>
+                                </div>
+                                <div>
+                                    <div style="font-size: 14px;"><%= asset.workflow_name %></div>
+                                    <div style="font-size: 10px; color: var(--text-dim); opacity: 0.6; margin-top: 2px;">ID: <%= asset.id %> | v<%= asset.version || '1.0.0' %></div>
+                                </div>
+                            </div>
+                        </td>
+                        <td><span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent);"><%= asset.namespace || 'default' %></span></td>
+                        <td>
+                            <% if (asset.is_active) { %>
+                                <span class="status-badge" style="background: rgba(34, 197, 94, 0.1); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.2);">Deployed</span>
+                            <% } else { %>
+                                <span class="status-badge" style="background: rgba(239, 68, 68, 0.1); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.2);">Draft</span>
+                            <% } %>
+                        </td>
+                        <td style="color: var(--text-dim);"><%= new Date(asset.created_at).toLocaleDateString() %></td>
+                        <td style="text-align: right; padding-right: 24px;">
+                            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                                <a href="/projects/<%= project %>/modeler?assetId=<%= asset.id %>" title="Launch Modeler" class="action-btn" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border); padding: 8px 12px; font-size: 12px; color: white; text-decoration: none;">
+                                    <i class="fas fa-edit"></i> Edit
+                                </a>
+                                <button onclick="renameAsset('<%= asset.id %>', '<%= asset.workflow_name %>')" title="Rename Artifact" style="background: transparent; border: 1px solid var(--border); color: var(--text-dim); padding: 8px 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--accent)'; this.style.color='white'">
+                                    <i class="fas fa-pen-nib"></i>
+                                </button>
+                                <button onclick="deleteAsset('<%= asset.id %>', '<%= asset.workflow_name %>')" title="Destroy Asset" style="background: transparent; border: 1px solid var(--border); color: var(--text-dim); padding: 8px 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--success)'; this.style.color='#f87171'">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                <% }); %>
+            <% } else { %>
+                <tr>
+                    <td colspan="5" style="padding: 100px; text-align: center; color: var(--text-dim);">
+                        <i class="fas fa-ghost" style="font-size: 48px; margin-bottom: 24px; opacity: 0.1;"></i>
+                        <p style="margin: 0; font-size: 16px; font-weight: 600;">Repository Empty</p>
+                        <p style="margin: 8px 0 0 0; opacity: 0.6;">Initialize your first process artifact to begin orchestration.</p>
+                    </td>
+                </tr>
+            <% } %>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    function showNewAssetModal() {
+        const html = `
+            <div class="modal-header">
+                <h2>Initialize Process Asset</h2>
+                <p>Register a new BPMN orchestration definition in <strong><%= project %></strong>.</p>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Asset Identity (Slug)</label>
+                <input type="text" id="a-name" class="form-input" placeholder="e.g. order-fulfillment-service">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Initial Version</label>
+                <input type="text" id="a-version" class="form-input" value="1.0.0">
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 32px;">
+                <button onclick="ZeroModal.close()" class="action-btn" style="background: transparent; color: var(--text-dim);">Cancel</button>
+                <button onclick="submitNewAsset()" class="action-btn" style="background: var(--primary); min-width: 140px; justify-content: center;">Initialize & Open</button>
+            </div>
+        `;
+        ZeroModal.open(html);
+    }
+
+    function submitNewAsset() {
+        const name = document.getElementById('a-name').value;
+        const version = document.getElementById('a-version').value;
+        if (!name) return alert('Asset name is required.');
+        // Redirect to modeler with fresh intent
+        window.location.href = `/projects/<%= project %>/modeler?newName=${name}&newVersion=${version}`;
+    }
+
+    async function renameAsset(id, currentName) {
+        const html = `
+            <div class="modal-header">
+                <h2>Rename Artifact</h2>
+                <p>Establishing new visual identity for <strong>${currentName}</strong>.</p>
+            </div>
+            <div class="form-group">
+                <label class="form-label">New Artifact Name</label>
+                <input type="text" id="new-a-name" class="form-input" value="${currentName}">
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 32px;">
+                <button onclick="ZeroModal.close()" class="action-btn" style="background: transparent; color: var(--text-dim);">Cancel</button>
+                <button onclick="submitRename('${id}')" class="action-btn" style="background: var(--primary);">Apply Identity</button>
+            </div>
+        `;
+        ZeroModal.open(html);
+    }
+
+    async function submitRename(id) {
+        const newName = document.getElementById('new-a-name').value;
+        if (!newName) return;
+        const res = await fetch(`/api/assets/${id}/rename`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ newName })
+        });
+        if (res.ok) location.reload();
+        else alert('Rename failed.');
+    }
+
+    async function deleteAsset(id, name) {
+        const html = `
+            <div class="modal-header">
+                <h2 style="color: #ef4444;"><i class="fas fa-trash-alt"></i> Orchestration Warning</h2>
+                <p>Establishing irreversible destruction sequence for <strong>${name}</strong>.</p>
+            </div>
+            <div style="padding: 24px; background: rgba(153, 27, 27, 0.1); border: 1px solid rgba(153, 27, 27, 0.2); border-radius: 8px; margin: 20px 0;">
+                <p style="font-size: 13px; color: #fecaca; margin: 0; line-height: 1.5;">
+                    Warning: This operation will transactionally purge the BPMN definition and all associated configurations. This action cannot be reversed within the Zero-BPM registry.
+                </p>
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button onclick="ZeroModal.close()" class="action-btn" style="background: transparent; color: var(--text-dim);">Cancel</button>
+                <button onclick="submitDestruction('${id}')" class="action-btn" style="background: #991b1b; color: white;">Confirm Destruction</button>
+            </div>
+        `;
+        ZeroModal.open(html);
+    }
+
+    async function submitDestruction(id) {
+        const res = await fetch(`/api/assets/${id}`, { method: 'DELETE' });
+        if (res.ok) location.reload();
+        else {
+             ZeroModal.open(`<div class="modal-header"><h2 style="color: #ef4444;">Destruction Failed</h2><p>An unexpected database conflict prevented asset termination.</p></div>`);
+        }
+    }
+
+    async function showProjectSettings() {
+        const res = await fetch(`/api/projects/<%= project %>/settings`);
+        const { metadata } = await res.json();
+        
+        const html = `
+            <div class="modal-header">
+                <h2>Project Orchestration Hub</h2>
+                <p>Managing global standards for project: <strong><%= project %></strong></p>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Semantic Version (Active Release)</label>
+                <input type="text" id="p-version" class="form-input" value="${metadata.version || '1.0.0'}">
+                <p style="font-size: 10px; color: var(--text-dim); margin-top: 4px;">Next deployments will default to this version.</p>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Environment Tags</label>
+                <div style="padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; font-family: monospace; font-size: 11px;">
+                    { "env": "${metadata.env || 'production'}", "region": "${metadata.region || 'us-east-1'}" }
+                </div>
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 32px;">
+                <button onclick="ZeroModal.close()" class="action-btn" style="background: transparent;">Cancel</button>
+                <button onclick="saveProjectSettings()" class="action-btn" style="background: var(--primary);">Persist Governance</button>
+            </div>
+        `;
+        ZeroModal.open(html);
+    }
+
+    async function saveProjectSettings() {
+        const version = document.getElementById('p-version').value;
+        const metadata = { version }; 
+        const res = await fetch(`/api/projects/<%= project %>/settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ metadata })
+        });
+        if (res.ok) ZeroModal.close();
+        else alert('Persistence failed.');
+    }
+</script>

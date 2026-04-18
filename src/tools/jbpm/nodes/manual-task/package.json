@@ -1,0 +1,8 @@
+{
+    "name": "manual-task",
+    "version": "1.0.0",
+    "bpmnType": "bpmn:ManualTask",
+    "category": "TASK",
+    "label": "Physical Action",
+    "description": "Orchestrates offline, physical actions required during a process."
+}

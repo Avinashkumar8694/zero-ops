@@ -1,0 +1,8 @@
+{
+    "name": "call-activity",
+    "version": "1.0.0",
+    "bpmnType": "bpmn:CallActivity",
+    "category": "SUITE",
+    "label": "Sub-Process",
+    "description": "Orchestrates modular process execution by calling independent definitions."
+}

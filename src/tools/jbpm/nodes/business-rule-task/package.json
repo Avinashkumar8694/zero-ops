@@ -1,0 +1,8 @@
+{
+    "name": "business-rule-task",
+    "version": "1.0.0",
+    "bpmnType": "bpmn:BusinessRuleTask",
+    "category": "TASK",
+    "label": "Decision Table",
+    "description": "Orchestrates decision-table evaluation via tactical DMN integration."
+}

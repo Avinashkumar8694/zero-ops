@@ -1,0 +1,8 @@
+{
+    "name": "timer-start-event",
+    "version": "1.0.0",
+    "bpmnType": "bpmn:StartEvent",
+    "category": "EVENT",
+    "label": "Timer Start",
+    "description": "Orchestrates scheduled process triggers using Cron or Interval cycles."
+}

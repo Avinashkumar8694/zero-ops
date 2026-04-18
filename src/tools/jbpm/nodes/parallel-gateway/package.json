@@ -1,0 +1,8 @@
+{
+    "name": "parallel-gateway",
+    "version": "1.0.0",
+    "bpmnType": "bpmn:ParallelGateway",
+    "category": "GATEWAY",
+    "label": "Parallel Fork",
+    "description": "Orchestrates multi-threaded execution splits."
+}

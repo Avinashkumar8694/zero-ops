@@ -1,0 +1,92 @@
+<div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 40px;">
+    <div>
+        <h1 style="font-size: 28px; margin: 0 0 8px 0; font-weight: 800; letter-spacing: -1px;">Operational Intelligence</h1>
+        <p style="color: var(--text-dim); margin: 0; font-size: 14px;">High-fidelity oversight of system throughput and orchestration health.</p>
+    </div>
+    <div style="display: flex; gap: 12px;">
+        <button onclick="location.reload()" class="action-btn" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border);">
+            <i class="fas fa-sync-alt"></i> Refresh Metrics
+        </button>
+    </div>
+</div>
+
+<!-- KPI Dashboard -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; margin-bottom: 40px;">
+    <div class="glass-card" style="padding: 24px; position: relative; overflow: hidden; border-left: 4px solid #38bdf8;">
+        <div style="font-size: 12px; color: var(--text-dim); text-transform: uppercase; font-weight: 700; letter-spacing: 1px;">Active Instances</div>
+        <div style="font-size: 32px; font-weight: 800; margin: 12px 0; color: white;"><%= stats.overview.active_instances %></div>
+        <div style="font-size: 11px; color: #4ade80;"><i class="fas fa-arrow-up"></i> System status: Healthy</div>
+        <i class="fas fa-microchip" style="position: absolute; right: -10px; bottom: -10px; font-size: 80px; opacity: 0.03; color: white;"></i>
+    </div>
+    
+    <div class="glass-card" style="padding: 24px; position: relative; overflow: hidden; border-left: 4px solid #a855f7;">
+        <div style="font-size: 12px; color: var(--text-dim); text-transform: uppercase; font-weight: 700; letter-spacing: 1px;">Pending Tasks</div>
+        <div style="font-size: 32px; font-weight: 800; margin: 12px 0; color: white;"><%= stats.overview.pending_tasks %></div>
+        <div style="font-size: 11px; color: var(--text-dim);">Across all organizational units</div>
+        <i class="fas fa-tasks" style="position: absolute; right: -10px; bottom: -10px; font-size: 80px; opacity: 0.03; color: white;"></i>
+    </div>
+
+    <div class="glass-card" style="padding: 24px; position: relative; overflow: hidden; border-left: 4px solid #22c55e;">
+        <div style="font-size: 12px; color: var(--text-dim); text-transform: uppercase; font-weight: 700; letter-spacing: 1px;">Success Rate</div>
+        <% 
+            const totalFinished = (stats.overview.completed_instances || 0) + (stats.overview.failed_instances || 0);
+            const rate = totalFinished > 0 ? ((stats.overview.completed_instances / totalFinished) * 100).toFixed(1) : '100.0';
+        %>
+        <div style="font-size: 32px; font-weight: 800; margin: 12px 0; color: white;"><%= rate %>%</div>
+        <div style="font-size: 11px; color: #4ade80;"><%= stats.overview.completed_instances %> total completions</div>
+        <i class="fas fa-check-circle" style="position: absolute; right: -10px; bottom: -10px; font-size: 80px; opacity: 0.03; color: white;"></i>
+    </div>
+
+    <div class="glass-card" style="padding: 24px; position: relative; overflow: hidden; border-left: 4px solid var(--accent);">
+        <div style="font-size: 12px; color: var(--text-dim); text-transform: uppercase; font-weight: 700; letter-spacing: 1px;">Managed Projects</div>
+        <div style="font-size: 32px; font-weight: 800; margin: 12px 0; color: white;"><%= stats.overview.total_projects %></div>
+        <div style="font-size: 11px; color: var(--text-dim);">Enterprise namespaces</div>
+        <i class="fas fa-briefcase" style="position: absolute; right: -10px; bottom: -10px; font-size: 80px; opacity: 0.03; color: white;"></i>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 340px; gap: 24px;">
+    <!-- Distribution Chart -->
+    <div class="glass-card" style="padding: 32px;">
+        <h3 style="margin-top: 0; margin-bottom: 24px;">Execution Distribution</h3>
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+            <% stats.distribution.forEach(dist => { %>
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <div style="width: 100px; font-size: 12px; color: var(--text-dim);"><%= dist.status %></div>
+                    <div style="flex: 1; height: 12px; background: rgba(255,255,255,0.05); border-radius: 6px; overflow: hidden;">
+                        <% 
+                            let color = '#38bdf8';
+                            if (dist.status === 'COMPLETED') color = '#22c55e';
+                            if (dist.status === 'ABORTED' || dist.status === 'ERROR') color = '#ef4444';
+                            const percentage = (dist.count / (stats.overview.active_instances + stats.overview.completed_instances) * 100) || 0;
+                        %>
+                        <div style="width: <%= percentage %>%; height: 100%; background: <%= color %>; box-shadow: 0 0 10px <%= color %>;"></div>
+                    </div>
+                    <div style="width: 40px; font-size: 12px; text-align: right; font-weight: 700;"><%= dist.count %></div>
+                </div>
+            <% }) %>
+        </div>
+    </div>
+
+    <!-- Active Units -->
+    <div class="glass-card" style="padding: 24px;">
+        <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 16px;">System Health</h3>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 8px;">
+                <span style="font-size: 12px;">Database Pool</span>
+                <span style="font-size: 10px; color: #4ade80; font-weight: 800;">CONNECTED</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 8px;">
+                <span style="font-size: 12px;">Orchestration Engine</span>
+                <span style="font-size: 10px; color: #4ade80; font-weight: 800;">ACTIVE</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 8px;">
+                <span style="font-size: 12px;">Auth Gateway</span>
+                <span style="font-size: 10px; color: #4ade80; font-weight: 800;">SECURE</span>
+            </div>
+        </div>
+        <div style="margin-top: 24px; padding: 16px; background: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.1); border-radius: 12px;">
+            <p style="margin: 0; font-size: 11px; color: var(--text-dim); line-height: 1.5;">Operational metrics are aggregated in real-time from the tactical persistence layer. High-frequency updates are cached for 60 seconds.</p>
+        </div>
+    </div>
+</div>

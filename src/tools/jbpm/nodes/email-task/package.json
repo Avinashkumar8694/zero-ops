@@ -1,0 +1,8 @@
+{
+    "name": "email-task",
+    "version": "1.0.0",
+    "bpmnType": "bpmn:ServiceTask",
+    "category": "TASK",
+    "label": "Email Dispatch",
+    "description": "Orchestrates outbound e-mail communication via SMTP or cloud providers."
+}

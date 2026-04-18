@@ -1,0 +1,8 @@
+{
+    "name": "terminate-event",
+    "version": "1.0.0",
+    "bpmnType": "bpmn:EndEvent",
+    "category": "EVENT",
+    "label": "Terminate instance",
+    "description": "Orchestrates the immediate, global termination of all active process threads."
+}

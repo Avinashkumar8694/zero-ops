@@ -1,0 +1,8 @@
+{
+    "name": "end-event",
+    "version": "1.0.0",
+    "bpmnType": "bpmn:EndEvent",
+    "category": "EVENT",
+    "label": "End Process",
+    "description": "Terminal node. Marks the successful completion of a process branch."
+}

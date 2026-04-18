@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zero-BPM Console | <%= title %></title>
+    <!-- Premium Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --primary: #2563eb;
+            --bg: #0f172a;
+            --sidebar-bg: #1e293b;
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+            --accent: #38bdf8;
+            --success: #22c55e;
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: var(--bg); 
+            color: var(--text-main); 
+            margin: 0; 
+            display: flex; 
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+            font-size: 13px; /* Slightly smaller base */
+        }
+
+        /* Top Navbar Styling */
+        .navbar {
+            height: 54px; /* Reduced from 64px */
+            background: var(--sidebar-bg);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .brand {
+            font-size: 18px; /* Reduced */
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        /* Hover Navigation System */
+        .nav-menu {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            height: 100%;
+        }
+
+        .nav-dropdown {
+            position: relative;
+            height: 100%;
+            display: flex;
+            align-items: center;
+        }
+
+        .nav-trigger {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 0 16px; /* Reduced */
+            height: 100%;
+            color: var(--text-dim);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 13px; /* Reduced */
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .nav-dropdown:hover .nav-trigger {
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+        }
+
+        .nav-dropdown:hover .dropdown-content {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .dropdown-content {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            width: 240px;
+            background: #1e293b;
+            border: 1px solid var(--border);
+            border-radius: 0 0 12px 12px;
+            padding: 8px; /* Reduced */
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(10px);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px; /* Reduced */
+            border-radius: 6px;
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 12px; /* Reduced */
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .dropdown-item:hover {
+            background: var(--primary);
+            color: white;
+        }
+
+        .dropdown-item i { width: 16px; text-align: center; }
+
+        /* Main Content Container */
+        .main-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: var(--bg);
+        }
+
+        .page-header {
+            padding: 16px 32px; /* Tightened */
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(15, 23, 42, 0.4);
+        }
+
+        .content {
+            flex: 1;
+            padding: 32px; /* Tightened from 40px */
+            overflow-y: auto;
+        }
+
+        /* Premium Card Components */
+        .glass-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .glass-card:hover {
+            transform: translateY(-4px) scale(1.01);
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--accent);
+            box-shadow: 0 12px 48px rgba(56, 189, 248, 0.15);
+        }
+
+        .status-badge {
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 9px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Tactical Modal System */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .modal-overlay.active { display: flex; opacity: 1; }
+
+        .modal-content {
+            background: #1e293b;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            width: 100%;
+            max-width: 500px;
+            padding: 32px;
+            box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+            transform: scale(0.95);
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .modal-overlay.active .modal-content { transform: scale(1); }
+
+        .modal-header { margin-bottom: 24px; }
+        .modal-header h2 { margin: 0; font-size: 20px; font-weight: 700; }
+        .modal-header p { margin: 4px 0 0 0; color: var(--text-dim); font-size: 13px; }
+
+        .form-group { margin-bottom: 20px; }
+        .form-label { display: block; margin-bottom: 8px; font-size: 11px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; }
+        .form-input {
+            width: 100%;
+            background: rgba(0,0,0,0.2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            color: white;
+            font-family: inherit;
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+        .form-input:focus { border-color: var(--primary); outline: none; }
+
+        .action-btn {
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .action-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+    </style>
+</head>
+<body>
+    <!-- Top Navbar -->
+    <nav class="navbar">
+        <a href="/" class="brand">
+            <i class="fas fa-layer-group"></i>
+            <span>Zero-BPM <span style="font-weight: 300; font-size: 12px; opacity: 0.6; color: white;">V4 STUDIO</span></span>
+        </a>
+
+        <div class="nav-menu">
+            <div class="nav-dropdown">
+                <a class="nav-trigger"><i class="fas fa-cubes"></i> Studio Tools <i class="fas fa-chevron-down" style="font-size: 10px; opacity: 0.5;"></i></a>
+                <div class="dropdown-content">
+                    <a href="/" class="dropdown-item"><i class="fas fa-chart-line"></i> Dashboard Home</a>
+                    <% if (user.role === 'admin' || user.permissions.includes('ANALYTICS_VIEW')) { %>
+                        <a href="/analytics" class="dropdown-item"><i class="fas fa-chart-pie"></i> Operational Intelligence</a>
+                    <% } %>
+                    <% if (user.role === 'admin' || user.permissions.includes('PROCESS_MONITOR')) { %>
+                        <a href="/instances" class="dropdown-item"><i class="fas fa-history"></i> Process Monitoring</a>
+                    <% } %>
+                    <a href="/tasks" class="dropdown-item"><i class="fas fa-check-double"></i> My Worklist</a>
+                    <% if (user.role === 'admin' || user.permissions.includes('PROCESS_VIEW')) { %>
+                        <a href="/deployments" class="dropdown-item"><i class="fas fa-cloud-upload-alt"></i> Deployment Center</a>
+                    <% } %>
+                </div>
+            </div>
+
+            <div class="nav-dropdown">
+                <a class="nav-trigger"><i class="fas fa-shield-alt"></i> Governance</a>
+                <div class="dropdown-content">
+                    <% if (user.role === 'admin' || user.permissions.includes('IAM_ADMIN')) { %>
+                        <a href="/users" class="dropdown-item"><i class="fas fa-users-cog"></i> Identity Management</a>
+                        <a href="/permissions" class="dropdown-item"><i class="fas fa-th-list"></i> Access Matrix</a>
+                    <% } %>
+                    <% if (user.role === 'admin' || user.permissions.includes('AUDIT_VIEW')) { %>
+                        <a href="/audit" class="dropdown-item"><i class="fas fa-shield-halved"></i> Security Logs</a>
+                    <% } %>
+                    <a href="/settings" class="dropdown-item"><i class="fas fa-cog"></i> Tool Settings</a>
+                </div>
+            </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 20px;">
+            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
+                <span style="font-size: 13px; font-weight: 700;"><%= user.full_name %></span>
+                <span style="font-size: 9px; color: var(--accent); font-weight: 800; text-transform: uppercase;">
+                    <%= user.role %> | <%= (user.groups || []).join(', ') || 'Global' %>
+                </span>
+            </div>
+            <a href="/logout" style="text-decoration: none; color: var(--text-dim); font-size: 18px; transition: color 0.2s;" onmouseover="this.style.color='var(--success)'" onmouseout="this.style.color='var(--text-dim)'">
+                <i class="fas fa-power-off"></i>
+            </a>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <div class="main-container">
+        <% if (title !== 'System Overview') { %>
+            <div class="page-header">
+                <h1 style="font-size: 22px; font-weight: 700; margin: 0; letter-spacing: -0.5px;"><%= title %></h1>
+                <div id="header-actions"></div>
+            </div>
+        <% } %>
+
+        <main class="content">
+            <% if (locals.messages && messages.success) { %>
+                <div style="background: rgba(34, 197, 94, 0.1); border: 1px solid var(--success); color: var(--success); padding: 16px; border-radius: 8px; margin-bottom: 24px;">
+                    <i class="fas fa-circle-check"></i> <%= messages.success %>
+                </div>
+            <% } %>
+            <%- body %>
+        </main>
+    </div>
+    <!-- Shared Global Modal Frame -->
+    <div id="global-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <script>
+        const ZeroModal = {
+            open: (html) => {
+                const overlay = document.getElementById('global-modal');
+                document.getElementById('modal-body').innerHTML = html;
+                overlay.classList.add('active');
+            },
+            close: () => {
+                document.getElementById('global-modal').classList.remove('active');
+            }
+        };
+
+        // Close on backdrop click
+        document.getElementById('global-modal').onclick = (e) => {
+            if (e.target === document.getElementById('global-modal')) ZeroModal.close();
+        };
+    </script>
+</body>
+</html>

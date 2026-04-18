@@ -1,0 +1,8 @@
+{
+    "name": "exclusive-gateway",
+    "version": "1.0.0",
+    "bpmnType": "bpmn:ExclusiveGateway",
+    "category": "GATEWAY",
+    "label": "Exclusive Junction",
+    "description": "A decision point where only one outgoing path is chosen based on conditions."
+}

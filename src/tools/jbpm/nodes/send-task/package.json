@@ -1,0 +1,8 @@
+{
+    "name": "send-task",
+    "version": "1.0.0",
+    "bpmnType": "bpmn:SendTask",
+    "category": "TASK",
+    "label": "Send Signal",
+    "description": "Orchestrates outbound notifications via E-mail, SMS, or Message Queues."
+}

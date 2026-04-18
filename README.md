@@ -221,6 +221,28 @@ zero-ops excel-compare config get
 ```
 > 📚 **Detailed Documentation**: See the [Full Excel Compare README](./src/tools/excel-compare/README.md) for advanced usage and CLI architecture.
 
+### Zero-BPM Orchestration (`jbpm`)
+A high-performance, native Node.js workflow orchestration suite. Zero-BPM provides enterprise-grade BPMN execution, drag-and-drop modeling, and high-fidelity auditing directly in your Node.js ecosystem.
+
+**Key Features:**
+- **Native TypeScript Engine**: Stable, event-driven state machine for dynamic JSON flows.
+- **Visual Modeler**: Integrated `bpmn-js` for professional drag-and-drop project creation.
+- **High-Fidelity Auditing**: Detailed tracking of every node transition and variable change in PostgreSQL.
+- **Namespacing**: Logical grouping of workflows (HR, IT, Payments).
+
+**Quick Commands:**
+```bash
+# Setup the audit database
+zero-ops jbpm engine setup
+
+# Launch the visual dashboard (Port 3000)
+zero-ops jbpm engine dashboard
+
+# Run a JSON workflow natively
+zero-ops jbpm engine run ./my-flow.json
+```
+> 📚 **Detailed Documentation**: See the [Full Zero-BPM README](./src/tools/jbpm/README.md) for architecture and advanced CLI commands.
+
 ### Telegram Remote Control
 Control `zero-ops` from your Telegram app.
 

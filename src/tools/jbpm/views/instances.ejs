@@ -1,0 +1,77 @@
+<div class="glass-card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px;">
+        <div>
+            <h2 style="margin: 0;">Lifecycle Monitoring</h2>
+            <p style="color: var(--text-dim); font-size: 14px; margin: 4px 0 0 0;">Total Active Instances: <strong><%= (instances || []).filter(i => i.status === 'RUNNING').length %></strong></p>
+        </div>
+        <div style="display: flex; gap: 12px;">
+            <button onclick="location.reload()" class="action-btn" style="background: var(--card-bg); border: 1px solid var(--border); padding: 8px 16px; font-size: 13px;">
+                <i class="fas fa-sync"></i> Refresh
+            </button>
+        </div>
+    </div>
+
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="text-align: left; color: var(--text-dim); border-bottom: 1px solid var(--border);">
+                <th style="padding: 12px 16px;">Instance ID</th>
+                <th>Process Definition</th>
+                <th>Owner</th>
+                <th>Start Time</th>
+                <th>Status</th>
+                <th style="text-align: right; padding-right: 16px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% if (instances && instances.length > 0) { %>
+                <% instances.forEach(instance => { %>
+                    <tr style="border-bottom: 1px solid var(--border); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
+                        <td style="padding: 20px 16px; font-family: monospace; color: var(--accent);"><%= instance.instance_id %></td>
+                        <td>
+                            <div style="font-weight: 600;"><%= instance.workflow_name %></div>
+                            <div style="font-size: 12px; color: var(--text-dim);">Namespace: <%= instance.namespace %></div>
+                        </td>
+                        <td><span style="font-size: 13px;"><i class="fas fa-user-circle"></i> <%= instance.owner %></span></td>
+                        <td style="font-size: 13px;"><%= new Date(instance.start_time).toLocaleString() %></td>
+                        <td>
+                            <% if (instance.status === 'RUNNING') { %>
+                                <span class="status-badge" style="background: rgba(34, 197, 94, 0.2); color: #22c55e;">Running</span>
+                            <% } else if (instance.status === 'COMPLETED') { %>
+                                <span class="status-badge" style="background: rgba(37, 99, 235, 0.2); color: #60a5fa;">Completed</span>
+                            <% } else { %>
+                                <span class="status-badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171;"><%= instance.status %></span>
+                            <% } %>
+                        </td>
+                        <td style="text-align: right; padding-right: 16px;">
+                            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                                <a href="/instances/detail/<%= instance.instance_id %>" style="text-decoration: none; background: transparent; border: 1px solid var(--accent); color: var(--accent); padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 600;">
+                                    <i class="fas fa-search"></i> Inspect
+                                </a>
+                                <% if (instance.status === 'RUNNING' && (user.role === 'admin' || (user.permissions || []).includes('PROCESS_ABORT'))) { %>
+                                    <button onclick="abortInstance('<%= instance.instance_id %>')" style="background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; color: #f87171; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer;">
+                                        <i class="fas fa-stop-circle"></i> Abort
+                                    </button>
+                                <% } %>
+                            </div>
+                        </td>
+                    </tr>
+                <% }); %>
+            <% } else { %>
+                <tr>
+                    <td colspan="6" style="padding: 60px; text-align: center; color: var(--text-dim);">
+                        <i class="fas fa-monitor-heart-rate" style="font-size: 40px; margin-bottom: 16px; display: block; opacity: 0.3;"></i>
+                        No active process instances found.
+                    </td>
+                </tr>
+            <% } %>
+        </tbody>
+    </table>
+</div>
+<script>
+async function abortInstance(id) {
+    if (!confirm(`Are you sure you want to FORCE TERMINATE instance ${id}? This action is irreversible.`)) return;
+    const res = await fetch(`/api/instances/${id}/abort`, { method: 'POST' });
+    if (res.ok) location.reload();
+    else alert('Abort operation failed.');
+}
+</script>

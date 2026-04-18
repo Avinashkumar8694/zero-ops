@@ -1,0 +1,8 @@
+{
+    "name": "error-event",
+    "version": "1.0.0",
+    "bpmnType": "bpmn:EndEvent",
+    "category": "EVENT",
+    "label": "Error End",
+    "description": "Terminal Error primitive for transactional process failure orchestration."
+}

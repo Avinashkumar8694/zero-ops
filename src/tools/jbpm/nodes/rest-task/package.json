@@ -1,0 +1,8 @@
+{
+    "name": "rest-task",
+    "version": "1.0.0",
+    "bpmnType": "bpmn:ServiceTask",
+    "category": "TASK",
+    "label": "REST Service Invocation",
+    "description": "Orchestrates API calls with dynamic headers and JSONPath mapping."
+}

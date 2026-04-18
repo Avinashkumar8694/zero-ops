@@ -1,0 +1,8 @@
+{
+    "name": "event-based-gateway",
+    "version": "1.0.0",
+    "bpmnType": "bpmn:EventBasedGateway",
+    "category": "GATEWAY",
+    "label": "Signal Decision",
+    "description": "Orchestrates race conditions between multiple event signals."
+}

@@ -1,105 +1,76 @@
-# jBPM Generic Flow Interpreter - Enterprise Solution Document
+# Zero-BPM: Native Node.js Workflow Orchestration - Solution Document
 
 ## 1. Executive Summary
-The **Zero-Flow Generic Interpreter** is an enterprise-grade workflow orchestration engine built on jBPM. It moves process logic away from static, compiled BPMN files and into dynamic, data-driven JSON configurations. This allows organizations to build, deploy, and update complex business processes in real-time with zero downtime and no recompilation.
+**Zero-BPM** is a high-performance, native Node.js workflow orchestration engine designed to provide the full power of enterprise BPM (jBPM/Camunda) with the agility and simplicity of the JavaScript ecosystem. It replaces the heavy Java-based KIE Execution Plane with a lightweight, event-driven state machine that offers 100% functional parity in auditing, monitoring, and visual path tracking.
 
 ---
 
-## 2. System Architecture
-The solution consists of three primary layers: the **Control Plane** (Node.js Orchestrator), the **Execution Plane** (jBPM), and the **Persistence/Observation Plane** (PostgreSQL & Jaeger).
+## 2. The "Grand Unification" Architecture
+The system is now a unified Node.js application that manages both orchestration and execution, utilizing PostgreSQL as a single source of truth for both state and audit history.
 
 ```mermaid
 graph TB
-    subgraph Control_Plane ["Control Plane (Node.js)"]
-        CLI[Zero-Ops CLI] -- "JSON DSL" --> ORCH[Orchestrator Engine]
-        ORCH -- "State Check" --> REDIS[(Local State Cache)]
+    subgraph Control_Execution_Plane ["Zero-BPM Core (Node.js)"]
+        CLI[Zero-Ops CLI] -- "JSON DSL" --> ENGINE[Execution Engine]
+        ENGINE -- "Active State" --> SM[State Machine]
+        SM -- "Callback" --> HANDLERS[Universal WorkItem Handlers]
     end
 
-    subgraph Execution_Plane ["Execution Plane (jBPM)"]
-        KIE[KIE Server / Business Central]
-        KJAR[Generic Case KJAR] -- "Handlers" --> KIE
+    subgraph Monitoring_Plane ["Monitoring & UI (EJS)"]
+        DASH[Dashboard Service] -- "SQL Queries" --> DB
+        DIAG[Diagram Renderer] -- "bpmn-js" --> DASH
     end
 
     subgraph Persistence_Plane ["Persistence & Observability"]
         DB[(PostgreSQL)]
-        JG[Jaeger Tracing]
+        TRACER[Native Jaeger Tracing]
     end
 
-    CLI -- "REST API" --> KIE
-    KIE -- "JDBC" --> DB
-    KIE -- "UDP Spans" --> JG
-    ORCH -- "Dynamic Task Injection" --> KIE
+    ENGINE -- "Direct Sync" --> DB
+    HANDLERS -- "SQL Audit" --> DB
+    SM -- "Opentracing" --> TRACER
 ```
 
 ---
 
-## 3. The Runtime Rendering Logic
-The "Renderer" is a state-machine that interprets the JSON DSL and translates it into a sequence of jBPM Ad-hoc task injections.
+## 3. High-Fidelity Persistence Schema
+Zero-BPM replicates the granular auditing of jBPM through a native PostgreSQL schema. This ensures total history tracking and path visualization (the "blue line" tracking).
 
-### 3.1 The Interpretation Pipeline
-```mermaid
-sequenceDiagram
-    participant U as User/CLI
-    participant O as Orchestrator
-    participant K as KIE Server (jBPM)
-    participant D as PostgreSQL
-
-    U->>O: Submit JSON Workflow
-    O->>O: Validate Schema & Cycle Detection
-    O->>K: POST /cases (Start Generic Case)
-    K->>D: Persist Case Instance
-    O->>O: Identify entry points (nodes with 0 deps)
-
-    loop Rendering Cycle
-        O->>O: Calculate 'Ready' Nodes
-        O->>K: POST /tasks (Inject Dynamic Task)
-        K->>K: Execute Universal Handler
-        K->>O: Signal Task Completion (Callback)
-        O->>O: Update Dependency Graph
-    end
-
-    O->>U: Final Status & Result Mapping
-```
+| Node-Native Table | jBPM Parity | Functional Support |
+| :--- | :--- | :--- |
+| `zero_instances` | `ProcessInstanceLog` | Tracks overall instance health (Running/Error/Completed). |
+| `zero_nodes` | `NodeInstanceLog` | **Visual Parity**: Records every node entry/exit with timestamps. Used to draw the animated blue path. |
+| `zero_variables` | `VariableInstanceLog` | Stores every change to variables, allowing you to "tavel back in time" to see state at any point. |
+| `zero_tasks` | `Task` | Manages Wait-States and Human Interaction flow. |
 
 ---
 
-## 4. Core Algorithms
+## 4. Operational Parity Features
 
-### 4.1 Dependency Satisfaction Algorithm
-The Orchestrator maintains a status registry for all nodes in the DSL.
-- **Trigger Condition**: A node $N$ is eligible for execution if and only if $\forall D \in Dependencies(N), Status(D) = \text{'COMPLETED'}$.
-- **Parallelism**: Multiple nodes meeting the trigger condition are injected simultaneously.
+### 4.1 Native State Rehydration
+Zero-BPM avoids "memory-only" execution. If the Node.js server crashes:
+1.  The Engine queries `zero_instances` for "In-Progress" workflows.
+2.  It cross-references `zero_nodes` to find the last successfully completed step.
+3.  It re-initializes the state machine precisely at the crash point and resumes execution.
 
-### 4.2 State Rehydration (Fault Tolerance)
-To handle Orchestrator crashes or restarts:
-1.  On startup, the Orchestrator queries the KIE Server: `GET /cases/instances/{id}/tasks`.
-2.  It retrieves the set of already completed tasks.
-3.  It updates its local status registry to reflect the actual state in the database.
-4.  It resumes the Rendering Cycle from the next available `Ready` nodes.
+### 4.2 Universal Plugin System
+The `UniversalHandler` is no longer a Java class. It is a **Node.js Plugin system** where developers can add custom logic (REST, Shell, Lambda, Email) as standard JS modules.
 
-### 4.3 Variable Scoping & Interpolation
-- **Input Scoping**: Before task injection, the orchestrator resolves variables using the pattern `${scope.variable}`.
-- **JSONPath Extraction**: Upon task completion, the orchestrator applies JSONPath filters defined in the `outputMapping` to save results into the global Case File.
+### 4.3 Automatic BPMN Compilation
+To provide the "BPMN Experience," the CLI automatically translates JSON flows into standard BPMN2 XML. This XML is stored in the database and used by the **Diagram Renderer** to show live execution tracking.
 
 ---
 
-## 5. Infrastructure & Deployment
-The system is fully containerized for Apple Silicon (ARM) and AMD64 hosts.
-
-### 5.1 Docker Setup
-- **[docker-compose.yml](./docker/docker-compose.yml)**: Orchestrates jBPM, Jaeger, and persistence.
-- **[.env](./docker/.env)**: Centralized configuration for PostgreSQL (including custom schema support).
-
----
-
-## 6. Comprehensive Node Specification
-Refer to the specialized technical guides for configuration schemas:
-- **[Full Node Library](./docs/nodes/)**: Detailed guide for all 23+ supported node types.
+## 5. UI & Monitoring (Visual Parity)
+Zero-BPM uses a server-side rendered **EJS Dashboard** to provide:
+- **Live Monitoring**: Real-time view of running instances.
+- **Historic Walkthrough**: Ability to click on a finished process and see the highlighted diagram of the path taken.
+- **Error Diagnostics**: Deep linking from failed nodes to log entries in the database.
 
 ---
 
-## 7. End-to-End Operational Lifecycle
-1.  **DSL Phase**: Construct JSON configuration.
-2.  **Setup Phase**: Deploy Generic KJAR and start Docker containers.
-3.  **Initiation**: `zero-ops jbpm run <file>`.
-4.  **Audit**: Monitor execution via Jaeger UI at `http://localhost:16686`.
+## 6. Implementation Lifecycle
+1.  **Design**: Define JSON Flow.
+2.  **Generate**: Node.js calculates the BPMN2 XML and stores it in Postgres.
+3.  **Execute**: `node zero-ops engine run <flow>`.
+4.  **Observe**: Open `http://localhost:3000/dashboard` to see the animated execution tracking.

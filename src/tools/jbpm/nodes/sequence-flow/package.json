@@ -1,0 +1,8 @@
+{
+    "name": "sequence-flow",
+    "version": "1.0.0",
+    "bpmnType": "bpmn:SequenceFlow",
+    "category": "SYSTEM",
+    "label": "Transition Logic",
+    "description": "Defines the logical transition between nodes using boolean expressions."
+}

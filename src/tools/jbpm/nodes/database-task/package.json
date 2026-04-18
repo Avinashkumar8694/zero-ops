@@ -1,0 +1,8 @@
+{
+    "name": "database-task",
+    "version": "1.0.0",
+    "bpmnType": "bpmn:ServiceTask",
+    "category": "SYSTEM",
+    "label": "Data Bridge",
+    "description": "Orchestrates direct database operations (SQL/NoSQL) via tactical connection strings."
+}

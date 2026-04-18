@@ -1,0 +1,8 @@
+{
+    "name": "script-task",
+    "version": "1.0.0",
+    "bpmnType": "bpmn:ScriptTask",
+    "category": "TASK",
+    "label": "Automation Script",
+    "description": "Executes Javascript logic snippets for variable calculation and manipulation."
+}
