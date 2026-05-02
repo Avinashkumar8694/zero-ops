@@ -1394,7 +1394,7 @@
 
     async function fetchAssetContract(name) {
         try {
-            const data = await (await fetch(`/api/assets/contract/${encodeURIComponent(name)}`)).json();
+            const data = await (await fetch(`/api/assets/contract/${encodeURIComponent(name)}?projectName=${encodeURIComponent(projectName)}`)).json();
             if (data.success) { assetContractCache[name] = data; refreshPropertyModal(); }
         } catch(e) {}
     }

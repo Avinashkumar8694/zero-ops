@@ -120,7 +120,7 @@ Most real mappings should use:
 
 Example trigger call:
 ```bash
-curl -X POST http://localhost:3000/api/engine/processes/order-intake/start \
+curl -X POST http://localhost:3000/api/engine/deployments/sales::1.0.0/processes/order-intake/start \
   -H 'Content-Type: application/json' \
   -d '{
     "data": {
@@ -398,7 +398,7 @@ Use this when an SSD app, admin UI, or internal service explicitly starts the pr
 
 Typical API:
 ```bash
-curl -X POST http://localhost:3000/api/engine/processes/order-intake/start \
+curl -X POST http://localhost:3000/api/engine/deployments/sales::1.0.0/processes/order-intake/start \
   -H 'Content-Type: application/json' \
   -d '{
     "data": {
@@ -446,7 +446,7 @@ Use this when an external system calls your process over HTTP.
 
 Typical API:
 ```bash
-curl -X POST http://localhost:3000/api/engine/processes/customer-webhook/start \
+curl -X POST http://localhost:3000/api/engine/deployments/integration::1.0.0/processes/customer-webhook/start \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer demo-token' \
   -d '{
@@ -892,14 +892,16 @@ Response:
 If the start call only returns an acknowledgement, later process data should be read using runtime APIs.
 
 Typical flow:
-1. start process through `/api/engine/processes/:processName/start`
+1. start process through `/api/engine/deployments/:deploymentId/processes/:processName/start`
 2. receive `instanceId`
 3. use instance APIs to inspect status, logs, and variables
 4. use task APIs if human work is created
 5. use signal APIs if the process is waiting for external continuation
 
 Typical endpoints:
-- `POST /api/engine/processes/:processName/start`
+- `GET /api/engine/deployments`
+- `GET /api/engine/deployments/:deploymentId/processes`
+- `POST /api/engine/deployments/:deploymentId/processes/:processName/start`
 - `GET /api/engine/processes/instances`
 - `GET /api/engine/processes/instances/:instanceId`
 - `GET /api/engine/tasks`

@@ -562,16 +562,21 @@ const activeCount = (instances || []).filter(item => item.status === 'RUNNING' |
         return getProjectUnits(projectName).find(unit => unit.workflow_name === workflowName) || null;
     }
 
+    function buildDeploymentId(projectName, version) {
+        return `${projectName}::${version}`;
+    }
+
     function renderStartFormFields(projectName, workflowName, version) {
         const unit = getUnit(projectName, workflowName);
         const versionConfig = unit?.versions?.find(item => item.version === version) || unit?.versions?.[0] || null;
         const inputs = versionConfig?.contract?.inputs || [];
         const host = document.getElementById('dynamic-start-fields');
         const helper = document.getElementById('selected-endpoint');
+        const deploymentId = projectName && version ? buildDeploymentId(projectName, version) : null;
 
         helper.textContent = workflowName
-            ? `/api/engine/processes/${workflowName}/start`
-            : '/api/engine/processes/{processName}/start';
+            ? `/api/engine/deployments/${deploymentId}/processes/${workflowName}/start`
+            : '/api/engine/deployments/{deploymentId}/processes/{processName}/start';
 
         if (!host) return;
 
@@ -597,7 +602,7 @@ const activeCount = (instances || []).filter(item => item.status === 'RUNNING' |
         unitSelect.innerHTML = `<option value="">Select deployment</option>` + units.map(unit => `<option value="${unit.workflow_name}">${unit.workflow_name}</option>`).join('');
         versionSelect.innerHTML = `<option value="">Select version</option>`;
         document.getElementById('dynamic-start-fields').innerHTML = `<div class="hint-card">Select a deployment and version to generate the input form from the process contract.</div>`;
-        document.getElementById('selected-endpoint').textContent = '/api/engine/processes/{processName}/start';
+        document.getElementById('selected-endpoint').textContent = '/api/engine/deployments/{deploymentId}/processes/{processName}/start';
     }
 
     function onWorkflowChange() {
@@ -651,7 +656,7 @@ const activeCount = (instances || []).filter(item => item.status === 'RUNNING' |
                 </div>
                 <div>
                     <label class="form-label">Engine Endpoint</label>
-                    <div class="hint-card" id="selected-endpoint">/api/engine/processes/{processName}/start</div>
+                    <div class="hint-card" id="selected-endpoint">/api/engine/deployments/{deploymentId}/processes/{processName}/start</div>
                 </div>
                 <div class="launch-full">
                     <label class="form-label">Process Inputs</label>
@@ -681,12 +686,11 @@ const activeCount = (instances || []).filter(item => item.status === 'RUNNING' |
             data[input.dataset.key] = parseInputValue(input.value);
         });
 
-        const response = await fetch(`/api/engine/processes/${encodeURIComponent(workflowName)}/start`, {
+        const deploymentId = buildDeploymentId(projectName, version);
+        const response = await fetch(`/api/engine/deployments/${encodeURIComponent(deploymentId)}/processes/${encodeURIComponent(workflowName)}/start`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                version,
-                meta: { projectName },
                 data
             })
         });

@@ -239,7 +239,10 @@ class Engine {
     this.executionState.nodeStatus[node.id] = 'DISPATCHED';
     await this.persistence.logNode(this.executionState.instanceId, node, 'ENTERED', `Invoking child process ${targetProcess}`);
 
-    const asset = await this.persistence.getLatestAssetByName(targetProcess);
+    const parentProject = this.executionState.metadata?.assetProject || null;
+    const asset = parentProject
+      ? await this.persistence.getLatestAssetByProjectAndName(parentProject, targetProcess)
+      : await this.persistence.getLatestAssetByName(targetProcess);
     if (!asset) {
       throw new Error(`Target process '${targetProcess}' was not found.`);
     }

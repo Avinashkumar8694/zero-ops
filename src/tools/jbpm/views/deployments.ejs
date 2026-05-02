@@ -6,6 +6,7 @@ const projectCount = (projects || []).length;
 const liveCount = projectAssets.filter(asset => asset.is_active).length;
 const currentVersions = versions || [];
 const currentContract = contract || { inputs: [], outputs: [], locals: [] };
+const selectedDeploymentId = selectedProject && selectedAsset ? `${selectedProject}::${selectedAsset.version || '1.0.0'}` : null;
 %>
 
 <style>
@@ -655,7 +656,7 @@ const currentContract = contract || { inputs: [], outputs: [], locals: [] };
                             </div>
                             <div style="font-size:36px; font-weight:800; color:#101828;"><%= selectedAsset.is_active ? '1' : '0' %></div>
                             <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:center; text-align:center;">
-                                <span style="font-size:14px; color:var(--primary); font-weight:700;">/api/engine/processes/<%= selectedAsset.workflow_name %>/start</span>
+                                <span style="font-size:14px; color:var(--primary); font-weight:700;">/api/engine/deployments/<%= selectedDeploymentId %>/processes/<%= selectedAsset.workflow_name %>/start</span>
                                 <span style="font-size:13px; color:var(--text-dim);">v<%= selectedAsset.version || '1.0.0' %></span>
                             </div>
                         </div>
@@ -733,7 +734,7 @@ const currentContract = contract || { inputs: [], outputs: [], locals: [] };
                                     <td><strong><%= selectedAsset.workflow_name %></strong></td>
                                     <td><%= selectedProject || 'default' %></td>
                                     <td>v<%= selectedAsset.version || '1.0.0' %></td>
-                                    <td><code>/api/engine/processes/<%= selectedAsset.workflow_name %>/start</code></td>
+                                    <td><code>/api/engine/deployments/<%= selectedDeploymentId %>/processes/<%= selectedAsset.workflow_name %>/start</code></td>
                                 </tr>
                             </tbody>
                         </table>

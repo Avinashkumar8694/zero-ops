@@ -10,7 +10,8 @@ export function buildOpenApiSpec(baseUrl: string) {
         'Important:',
         '- Endpoints under `/api/engine/...` are the API-first custom engine surface exposed by the dashboard runtime.',
         '- Operational endpoints under `/api/...` are also available for deployment, contracts, and administrative actions.',
-        '- The Swagger UI documents how SSD/low-code applications can trigger processes, work with tasks, send signals, and inspect runtime state.'
+        '- The Swagger UI documents how SSD/low-code applications can trigger processes, work with tasks, send signals, and inspect runtime state.',
+        '- Authentication is supported with either the browser session cookie or HTTP Basic Auth for API clients.'
       ].join('\n')
     },
     servers: [
@@ -20,15 +21,65 @@ export function buildOpenApiSpec(baseUrl: string) {
       { name: 'Custom Engine', description: 'API-first custom engine contract for process execution, tasks, signals, and runtime inspection.' },
       { name: 'Operations', description: 'Implemented dashboard-backed APIs for deployment, contracts, tasks, and instance control.' }
     ],
+    security: [
+      { basicAuth: [] },
+      { cookieAuth: [] }
+    ],
     paths: {
-      '/api/engine/processes/{processName}/start': {
+      '/api/engine/deployments': {
+        get: {
+          tags: ['Custom Engine'],
+          summary: 'List executable deployments',
+          description: 'Returns deployment/container style runtime units. In this engine a deployment is scoped by project and version, and can contain multiple process assets.',
+          parameters: [
+            { name: 'projectName', in: 'query', required: false, schema: { type: 'string' } }
+          ],
+          responses: {
+            '200': {
+              description: 'List of deployments',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'array',
+                    items: { $ref: '#/components/schemas/EngineDeployment' }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      '/api/engine/deployments/{deploymentId}/processes': {
+        get: {
+          tags: ['Custom Engine'],
+          summary: 'List process definitions in a deployment',
+          parameters: [
+            { name: 'deploymentId', in: 'path', required: true, schema: { type: 'string' } }
+          ],
+          responses: {
+            '200': {
+              description: 'Processes in the selected deployment',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'array',
+                    items: { $ref: '#/components/schemas/EngineProcessDefinition' }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      '/api/engine/deployments/{deploymentId}/processes/{processName}/start': {
         post: {
           tags: ['Custom Engine'],
-          summary: 'Start a process instance',
+          summary: 'Start a process instance inside a deployment',
           description: [
-            'API-first process execution endpoint.',
+            'Deployment-scoped process execution endpoint.',
             '',
-            'Use this endpoint when an SSD app, external API gateway, automation worker, or low-code service needs to trigger a modeled process.',
+            'This is the preferred jBPM-style runtime contract for Zero-BPM.',
+            'A deployment can contain multiple process assets. The runtime target is resolved by `deploymentId + processName`.',
             '',
             'Normalized inbound request context:',
             '- `$.data` for request body payload',
@@ -41,6 +92,43 @@ export function buildOpenApiSpec(baseUrl: string) {
             '- Start Event `outboundMapping` defines an immediate acknowledgement response.',
             '- End Event `outputMapping` defines the final business response when the process completes synchronously.',
             '- For long-running or human-task flows, return an acknowledgement plus `instanceId`, then inspect the instance or tasks APIs.'
+          ].join('\n'),
+          parameters: [
+            { name: 'deploymentId', in: 'path', required: true, schema: { type: 'string' } },
+            { name: 'processName', in: 'path', required: true, schema: { type: 'string' } }
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/StartProcessRequest' }
+              }
+            }
+          },
+          responses: {
+            '200': {
+              description: 'Process response or immediate start acknowledgement',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/EngineStartResponse' }
+                }
+              }
+            }
+          }
+        }
+      },
+      '/api/engine/processes/{processName}/start': {
+        post: {
+          tags: ['Custom Engine'],
+          deprecated: true,
+          summary: 'Legacy process start by process name',
+          description: [
+            'Backward-compatible start endpoint.',
+            '',
+            'This route is ambiguous when multiple projects contain the same process name.',
+            'Prefer `/api/engine/deployments/{deploymentId}/processes/{processName}/start` for all new integrations.',
+            '',
+            'If this endpoint must be used, pass `projectName` in the request body to reduce ambiguity.'
           ].join('\n'),
           parameters: [
             { name: 'processName', in: 'path', required: true, schema: { type: 'string' } }
@@ -365,10 +453,24 @@ export function buildOpenApiSpec(baseUrl: string) {
       }
     },
     components: {
+      securitySchemes: {
+        basicAuth: {
+          type: 'http',
+          scheme: 'basic',
+          description: 'Use a Zero-BPM username and password for API clients, scripts, and Swagger testing.'
+        },
+        cookieAuth: {
+          type: 'apiKey',
+          in: 'cookie',
+          name: 'connect.sid',
+          description: 'Use the browser session cookie after logging into the Zero-BPM console.'
+        }
+      },
       schemas: {
         StartProcessRequest: {
           type: 'object',
           example: {
+            projectName: 'sales',
             data: {
               customerId: 'C-1001',
               amount: 4500,
@@ -389,6 +491,8 @@ export function buildOpenApiSpec(baseUrl: string) {
             }
           },
           properties: {
+            projectName: { type: 'string', description: 'Legacy name-based start helper. Prefer deploymentId-scoped APIs instead.' },
+            version: { type: 'string', description: 'Legacy name-based version selector. Prefer deploymentId-scoped APIs instead.' },
             data: { type: 'object', additionalProperties: true, description: 'Primary request body payload. Use `$.data` in inbound mappings.' },
             headers: { type: 'object', additionalProperties: true, description: 'Request headers. Use `$.headers` in inbound mappings.' },
             query: { type: 'object', additionalProperties: true, description: 'Query parameters. Use `$.query` in inbound mappings.' },
@@ -419,12 +523,39 @@ export function buildOpenApiSpec(baseUrl: string) {
           properties: {
             instanceId: { type: 'string' },
             workflowName: { type: 'string' },
+            deploymentId: { type: 'string', nullable: true },
             namespace: { type: 'string' },
             status: { type: 'string' },
             startTime: { type: 'string', format: 'date-time' },
             endTime: { type: 'string', format: 'date-time', nullable: true },
             owner: { type: 'string', nullable: true },
             metadata: { type: 'object', additionalProperties: true }
+          }
+        },
+        EngineDeployment: {
+          type: 'object',
+          properties: {
+            deploymentId: { type: 'string', example: 'sales::1.0.0' },
+            projectName: { type: 'string' },
+            version: { type: 'string' },
+            status: { type: 'string', example: 'ACTIVE' },
+            assetCount: { type: 'integer' },
+            processes: {
+              type: 'array',
+              items: { type: 'string' }
+            },
+            createdAt: { type: 'string', format: 'date-time', nullable: true }
+          }
+        },
+        EngineProcessDefinition: {
+          type: 'object',
+          properties: {
+            processName: { type: 'string' },
+            version: { type: 'string' },
+            projectName: { type: 'string' },
+            deploymentId: { type: 'string' },
+            assetId: { type: 'integer' },
+            isActive: { type: 'boolean' }
           }
         },
         EngineProcessInstanceDetail: {

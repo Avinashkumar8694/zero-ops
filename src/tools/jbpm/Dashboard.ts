@@ -97,9 +97,21 @@ class Dashboard {
   }
 
   private setupRoutes() {
+    const buildDeploymentId = (projectName: string | null | undefined, version: string | null | undefined) =>
+      `${String(projectName || 'default')}::${String(version || '1.0.0')}`;
+
+    const parseDeploymentId = (deploymentId: string) => {
+      const [projectName, version] = String(deploymentId || '').split('::');
+      if (!projectName || !version) {
+        throw new Error(`Invalid deploymentId '${deploymentId}'. Expected format '<project>::<version>'.`);
+      }
+      return { projectName, version };
+    };
+
     const toEngineInstance = (row: any) => ({
       instanceId: row.instance_id,
       workflowName: row.workflow_name,
+      deploymentId: buildDeploymentId(row.metadata?.assetProject || row.project_name, row.metadata?.assetVersion),
       namespace: row.namespace,
       status: row.status,
       startTime: row.start_time,
@@ -121,6 +133,16 @@ class Dashboard {
       formData: row.form_data || {},
       createdAt: row.created_at,
       completedAt: row.completed_at
+    });
+
+    const toEngineDeployment = (row: any) => ({
+      deploymentId: buildDeploymentId(row.project_name, row.version),
+      projectName: row.project_name,
+      version: row.version,
+      status: row.is_active ? 'ACTIVE' : 'INACTIVE',
+      assetCount: Number(row.asset_count || 0),
+      processes: row.process_names || [],
+      createdAt: row.created_at
     });
 
     const toVariableSnapshot = (rows: any[]) =>
@@ -151,33 +173,91 @@ class Dashboard {
 
     // 0. Global Template Context Hygiene
     this.app.use((req: any, res: Response, next: any) => {
-      res.locals.user = req.session?.user || null;
+      res.locals.user = req.session?.user || req.authUser || null;
       res.locals.nodeRegistry = NODE_REGISTRY; // Global access for Studio
       res.locals.messages = {}; // Initialize flash/status messages
       next();
     });
 
-    // Auth Middleware: Basic session check
-    const checkAuth = (req: any, res: any, next: any) => {
+    const isApiRequest = (req: any) => String(req.path || '').startsWith('/api/');
+
+    const sendUnauthorized = (req: any, res: any) => {
+      if (isApiRequest(req)) {
+        res.setHeader('WWW-Authenticate', 'Basic realm="Zero-BPM API"');
+        return res.status(401).json({
+          success: false,
+          error: 'Authentication required. Use session cookie or Basic Auth.'
+        });
+      }
+      return res.redirect('/login');
+    };
+
+    const sendForbidden = (req: any, res: any, permissionKey: string) => {
+      if (isApiRequest(req)) {
+        return res.status(403).json({
+          success: false,
+          error: `Missing required permission '${permissionKey}'.`
+        });
+      }
+      return res.status(403).render('error', {
+        title: 'Access Denied',
+        message: `Your current role/group profile lacks the '${permissionKey}' capability.`,
+        layout: 'layout'
+      });
+    };
+
+    const authenticateBasicAuth = async (req: any) => {
+      const header = String(req.get('authorization') || '');
+      if (!header.startsWith('Basic ')) return null;
+      try {
+        const encoded = header.slice('Basic '.length).trim();
+        const decoded = Buffer.from(encoded, 'base64').toString('utf8');
+        const separator = decoded.indexOf(':');
+        if (separator < 0) return null;
+        const username = decoded.slice(0, separator);
+        const password = decoded.slice(separator + 1);
+        const user = await this.persistence.verifyUser(username, password);
+        if (!user) return null;
+        const permissions = await this.persistence.getEffectivePermissions(username);
+        return { ...user, permissions };
+      } catch (err) {
+        return null;
+      }
+    };
+
+    // Auth Middleware: session cookie for console, basic auth for API clients
+    const checkAuth = async (req: any, res: any, next: any) => {
       if (req.session && req.session.user) return next();
-      res.redirect('/login');
+
+      const basicUser = await authenticateBasicAuth(req);
+      if (basicUser) {
+        req.authUser = basicUser;
+        return next();
+      }
+
+      return sendUnauthorized(req, res);
     };
 
     // RBAC v2 Middleware: Granular Permission Check
     const requirePermission = (permissionKey: string) => {
-      return (req: any, res: any, next: any) => {
-        if (!req.session || !req.session.user) return res.redirect('/login');
-        
-        const perms = req.session.user.permissions || [];
-        if (req.session.user.role === 'admin' || perms.includes(permissionKey)) {
+      return async (req: any, res: any, next: any) => {
+        const activeUser = req.session?.user || req.authUser || null;
+        if (!activeUser) {
+          const basicUser = await authenticateBasicAuth(req);
+          if (basicUser) {
+            req.authUser = basicUser;
+          }
+        }
+
+        const user = req.session?.user || req.authUser || null;
+        if (!user) return sendUnauthorized(req, res);
+
+        const perms = user.permissions || [];
+        if (user.role === 'admin' || perms.includes(permissionKey)) {
           return next();
         }
-        
-        res.status(403).render('error', { 
-          title: 'Access Denied', 
-          message: `Your current role/group profile lacks the '${permissionKey}' capability.`,
-          layout: 'layout'
-        });
+
+        return sendForbidden(req, res, permissionKey);
       };
     };
 
@@ -392,12 +472,85 @@ class Dashboard {
       }
     });
 
+    this.app.get('/api/engine/deployments', checkAuth, async (req: Request, res: Response) => {
+      try {
+        const projectName = typeof req.query.projectName === 'string' ? req.query.projectName : undefined;
+        const deployments = await this.persistence.listDeploymentUnits(projectName);
+        res.json(deployments.map(toEngineDeployment));
+      } catch (err: any) {
+        res.status(500).json({ success: false, error: err.message });
+      }
+    });
+
+    this.app.get('/api/engine/deployments/:deploymentId/processes', checkAuth, async (req: Request, res: Response) => {
+      try {
+        const { projectName, version } = parseDeploymentId(req.params.deploymentId);
+        const assets = await this.persistence.getDeploymentAssets(projectName, version);
+        res.json(assets.map((asset: any) => ({
+          processName: asset.workflow_name,
+          version: asset.version,
+          projectName: asset.project_name,
+          deploymentId: req.params.deploymentId,
+          assetId: asset.id,
+          isActive: Boolean(asset.is_active)
+        })));
+      } catch (err: any) {
+        res.status(400).json({ success: false, error: err.message });
+      }
+    });
+
+    this.app.post('/api/engine/deployments/:deploymentId/processes/:processName/start', checkAuth, async (req: Request, res: Response) => {
+      try {
+        const { projectName, version } = parseDeploymentId(req.params.deploymentId);
+        const asset = await this.persistence.getAssetByProjectNameAndVersion(projectName, req.params.processName, version);
+        if (!asset) {
+          return res.status(404).json({
+            success: false,
+            error: `Process '${req.params.processName}' was not found in deployment '${req.params.deploymentId}'.`
+          });
+        }
+
+        const triggerContext = {
+          data: req.body?.data || {},
+          headers: req.body?.headers || {},
+          query: req.body?.query || {},
+          params: req.body?.params || {},
+          meta: req.body?.meta || {}
+        };
+
+        const result = await EngineRunner.startAsset(asset, triggerContext, {
+          owner: req.session.user.username,
+          projectName: asset.project_name || projectName,
+          metadata: {
+            deploymentId: req.params.deploymentId
+          }
+        });
+
+        return res.json({
+          success: true,
+          instanceId: result.state.instanceId,
+          status: result.state.metadata?.finalOutput ? 'COMPLETED' : (result.immediateOutput.status || (result.state.nodeStatus && Object.values(result.state.nodeStatus).includes('WAITING' as any) ? 'WAITING' : 'RUNNING')),
+          output: result.state.metadata?.finalOutput || result.immediateOutput || {},
+          variables: result.state.variables
+        });
+      } catch (err: any) {
+        res.status(500).json({ success: false, error: err.message });
+      }
+    });
+
     this.app.post('/api/engine/processes/:processName/start', checkAuth, async (req: Request, res: Response) => {
       try {
         const requestedVersion = typeof req.body?.version === 'string' ? req.body.version : null;
-        const asset = requestedVersion
-          ? await this.persistence.getAssetByNameAndVersion(req.params.processName, requestedVersion)
-          : await this.persistence.getLatestAssetByName(req.params.processName);
+        const requestedProject = typeof req.body?.projectName === 'string'
+          ? req.body.projectName
+          : (typeof req.body?.meta?.projectName === 'string' ? req.body.meta.projectName : null);
+        const asset = requestedProject
+          ? (requestedVersion
+              ? await this.persistence.getAssetByProjectNameAndVersion(requestedProject, req.params.processName, requestedVersion)
+              : await this.persistence.getLatestAssetByProjectAndName(requestedProject, req.params.processName))
+          : (requestedVersion
+              ? await this.persistence.getAssetByNameAndVersion(req.params.processName, requestedVersion)
+              : await this.persistence.getLatestAssetByName(req.params.processName));
         if (!asset) {
           return res.status(404).json({ success: false, error: `Process '${req.params.processName}' was not found.` });
         }
@@ -412,7 +565,10 @@ class Dashboard {
 
         const result = await EngineRunner.startAsset(asset, triggerContext, {
           owner: req.session.user.username,
-          projectName: asset.project_name || req.body?.meta?.projectName || null
+          projectName: asset.project_name || requestedProject || null,
+          metadata: {
+            deploymentId: buildDeploymentId(asset.project_name || requestedProject, asset.version)
+          }
         });
 
         res.json({
@@ -879,7 +1035,10 @@ class Dashboard {
     this.app.get('/api/assets/contract/:name', checkAuth, async (req: Request, res: Response) => {
       const { name } = req.params;
       try {
-        const asset = await this.persistence.getLatestAssetByName(name);
+        const requestedProject = typeof req.query.projectName === 'string' ? req.query.projectName : null;
+        const asset = requestedProject
+          ? await this.persistence.getLatestAssetByProjectAndName(requestedProject, name)
+          : await this.persistence.getLatestAssetByName(name);
         if (!asset || !asset.json_config) return res.json({ success: true, inputs: [], outputs: [] });
 
         const contract = extractAssetContract(asset.json_config);

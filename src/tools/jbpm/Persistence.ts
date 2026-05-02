@@ -70,6 +70,9 @@ class Persistence {
       await this.pool.query(`ALTER TABLE zero_assets ADD COLUMN IF NOT EXISTS project_name VARCHAR(255) REFERENCES zero_projects(name)`);
       await this.pool.query(`ALTER TABLE zero_assets ADD COLUMN IF NOT EXISTS namespace VARCHAR(100) DEFAULT 'default'`);
       await this.pool.query(`ALTER TABLE zero_assets ADD COLUMN IF NOT EXISTS version VARCHAR(50)`);
+      await this.pool.query(`ALTER TABLE zero_assets DROP CONSTRAINT IF EXISTS zero_assets_workflow_name_version_key`);
+      await this.pool.query(`DROP INDEX IF EXISTS zero_assets_workflow_name_version_key`);
+      await this.pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS zero_assets_project_workflow_version_key ON zero_assets(project_name, workflow_name, version)`);
 
       // zero_tasks updates (CRITICAL FIX)
       await this.pool.query(`ALTER TABLE zero_tasks ADD COLUMN IF NOT EXISTS potential_groups JSONB DEFAULT '[]'`);
@@ -248,7 +251,7 @@ class Persistence {
     const query = `
       INSERT INTO zero_assets (workflow_name, project_name, bpmn_xml, json_config, version)
       VALUES ($1, $2, $3, $4, $5)
-      ON CONFLICT (workflow_name, version) DO UPDATE SET bpmn_xml = $3, json_config = $4
+      ON CONFLICT (project_name, workflow_name, version) DO UPDATE SET bpmn_xml = $3, json_config = $4
       RETURNING *
     `;
     const result = await this.pool.query(query, [workflowName, projectName, bpmnXml, JSON.stringify(jsonConfig), version]);
@@ -281,6 +284,18 @@ class Persistence {
       return result.rows[0] || null;
   }
 
+  async getLatestAssetByProjectAndName(projectName: string, name: string): Promise<any> {
+    const query = `
+      SELECT *
+      FROM zero_assets
+      WHERE project_name = $1 AND workflow_name = $2
+      ORDER BY version DESC, created_at DESC
+      LIMIT 1
+    `;
+    const result = await this.pool.query(query, [projectName, name]);
+    return result.rows[0] || null;
+  }
+
   async getAssetByNameAndVersion(name: string, version: string): Promise<any> {
     const result = await this.pool.query(`
       SELECT *
@@ -290,6 +305,54 @@ class Persistence {
       LIMIT 1
     `, [name, version]);
     return result.rows[0] || null;
+  }
+
+  async getAssetByProjectNameAndVersion(projectName: string, name: string, version: string): Promise<any> {
+    const result = await this.pool.query(`
+      SELECT *
+      FROM zero_assets
+      WHERE project_name = $1 AND workflow_name = $2 AND version = $3
+      ORDER BY created_at DESC
+      LIMIT 1
+    `, [projectName, name, version]);
+    return result.rows[0] || null;
+  }
+
+  async listDeploymentUnits(projectName?: string): Promise<any[]> {
+    const filters: string[] = [];
+    const values: any[] = [];
+    if (projectName) {
+      values.push(projectName);
+      filters.push(`project_name = $${values.length}`);
+    }
+
+    const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const query = `
+      SELECT
+        project_name,
+        version,
+        BOOL_OR(COALESCE(is_active, FALSE)) AS is_active,
+        COUNT(*) AS asset_count,
+        MAX(created_at) AS created_at,
+        ARRAY_AGG(workflow_name ORDER BY workflow_name) AS process_names
+      FROM zero_assets
+      ${whereClause}
+      GROUP BY project_name, version
+      ORDER BY MAX(created_at) DESC
+    `;
+    const result = await this.pool.query(query, values);
+    return result.rows;
+  }
+
+  async getDeploymentAssets(projectName: string, version: string): Promise<any[]> {
+    const query = `
+      SELECT *
+      FROM zero_assets
+      WHERE project_name = $1 AND version = $2
+      ORDER BY workflow_name ASC, created_at DESC
+    `;
+    const result = await this.pool.query(query, [projectName, version]);
+    return result.rows;
   }
 
   async getAsset(id: number): Promise<any> {
@@ -516,6 +579,10 @@ class Persistence {
         SELECT bpmn_xml, json_config
         FROM zero_assets a
         WHERE a.workflow_name = i.workflow_name
+          AND (
+            COALESCE(i.metadata->>'assetProject', '') = ''
+            OR a.project_name = i.metadata->>'assetProject'
+          )
           AND (
             COALESCE(i.metadata->>'assetVersion', '') = ''
             OR a.version = i.metadata->>'assetVersion'
