@@ -1,20 +1,20 @@
-# Timer Start (V1.0.0)
+# Timer Start Event
 
-Temporal Entry primitive for scheduled process orchestration.
+Starts a process on a time cycle or schedule.
 
-## Overview
-The Timer Start event allows a process to be triggered automatically based on a time-based schedule. It supports recurring cycles (Cron), specific dates (Fixed), or durations (Relative).
+## What This Node Does
+Creates a new process instance based on a timer expression such as a CRON-like schedule.
 
-## Technical Parameters
-| Field | Description | Type |
-|-------|-------------|------|
-| `timerCycle` | The scheduling expression (ISO-8601 or Cron). | Text |
+## Properties
+- `timerCycle`: CRON or timer cycle expression.
 
-## Data Movement
-1. **Scheduling**: The Zero-Scheduler monitors the expression.
-2. **Trigger**: Once the condition is met, a new process instance is transactionally initialized.
-3. **Variable Init**: Execution begins without input variables unless defaults are set.
+## Example
+```json
+{
+  "timerCycle": "0 0 * * *"
+}
+```
 
-## Example: Daily Sync
-- `timerCycle`: `0 0 * * *` (Daily at Midnight)
-- `timerCycle`: `R/PT1H` (Every Hour)
+## Validation Notes
+- Use a valid schedule expression that your runtime understands.
+- Use the generic start event if you want schedule plus richer variable contract configuration.

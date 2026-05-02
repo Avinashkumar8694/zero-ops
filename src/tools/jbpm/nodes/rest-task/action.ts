@@ -33,9 +33,18 @@ export const action: NodeAction = async (ctx) => {
         
         // 2. Perform Response Mapping via JSONPath
         if (responseMap && typeof responseMap === 'object') {
-            for (const [path, targetVar] of Object.entries(responseMap)) {
+            for (const [path, targetConfig] of Object.entries(responseMap)) {
                 try {
                     const value = jp.value(response.data, path as string);
+                    const targetVar = typeof targetConfig === 'object' && targetConfig !== null
+                        ? (targetConfig as any).target
+                        : targetConfig;
+
+                    if (!targetVar) {
+                        ctx.logger(`[REST] Mapping skipped for ${path}; no target variable defined.`);
+                        continue;
+                    }
+
                     outputs[targetVar as string] = value;
                     ctx.logger(`[REST] Mapped ${path} -> ${targetVar}`);
                 } catch (e) {

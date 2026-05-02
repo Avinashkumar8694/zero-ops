@@ -10,20 +10,30 @@
     
     <style>
         :root {
-            --primary: #2563eb;
-            --bg: #0f172a;
-            --sidebar-bg: #1e293b;
-            --card-bg: rgba(255, 255, 255, 0.05);
-            --text-main: #f8fafc;
-            --text-dim: #94a3b8;
-            --accent: #38bdf8;
-            --success: #22c55e;
-            --border: rgba(255, 255, 255, 0.1);
+            --primary: #1994ff;
+            --primary-deep: #0b6dcf;
+            --bg: #f4f6fb;
+            --page-bg: #eef2f8;
+            --panel: #ffffff;
+            --panel-soft: #f8fafc;
+            --sidebar-bg: #ffffff;
+            --nav-panel: #ffffff;
+            --card-bg: #ffffff;
+            --text-main: #111827;
+            --text-dim: #667085;
+            --text-soft: #98a2b3;
+            --accent: #1994ff;
+            --success: #12b76a;
+            --warning: #f79009;
+            --danger: #f04438;
+            --border: #dbe3ee;
+            --border-strong: #c6d1df;
+            --shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
         }
 
         body { 
             font-family: 'Inter', sans-serif; 
-            background: var(--bg); 
+            background: var(--page-bg); 
             color: var(--text-main); 
             margin: 0; 
             display: flex; 
@@ -35,15 +45,16 @@
 
         /* Top Navbar Styling */
         .navbar {
-            height: 54px; /* Reduced from 64px */
-            background: var(--sidebar-bg);
+            height: 64px;
+            background: rgba(255, 255, 255, 0.94);
             border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0 20px;
+            padding: 0 24px;
             z-index: 1000;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(18px);
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
         }
 
         .brand {
@@ -52,15 +63,21 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            color: var(--accent);
+            color: var(--text-main);
             text-decoration: none;
+        }
+
+        .brand-subtitle {
+            font-weight: 500;
+            font-size: 12px;
+            color: var(--text-dim);
         }
 
         /* Hover Navigation System */
         .nav-menu {
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 8px;
             height: 100%;
         }
 
@@ -71,23 +88,30 @@
             align-items: center;
         }
 
+        .nav-dropdown.menu-root {
+            position: static;
+        }
+
         .nav-trigger {
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 0 16px; /* Reduced */
-            height: 100%;
-            color: var(--text-dim);
+            padding: 0 16px;
+            height: 42px;
+            border-radius: 12px;
+            color: #344054;
             text-decoration: none;
-            font-weight: 600;
-            font-size: 13px; /* Reduced */
-            transition: all 0.2s;
+            font-weight: 700;
+            font-size: 13px;
+            transition: all 0.18s ease;
             cursor: pointer;
+            border: 1px solid transparent;
         }
 
         .nav-dropdown:hover .nav-trigger {
-            background: rgba(255, 255, 255, 0.05);
-            color: white;
+            background: #f8fbff;
+            color: var(--primary-deep);
+            border-color: #d7e8fb;
         }
 
         .nav-dropdown:hover .dropdown-content {
@@ -98,42 +122,257 @@
 
         .dropdown-content {
             position: absolute;
-            top: 100%;
+            top: calc(100% + 10px);
             left: 0;
-            width: 240px;
-            background: #1e293b;
+            width: 1120px;
+            background: rgba(255, 255, 255, 0.98);
             border: 1px solid var(--border);
-            border-radius: 0 0 12px 12px;
-            padding: 8px; /* Reduced */
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            border-radius: 20px;
+            padding: 26px;
+            display: block;
+            box-shadow: 0 28px 80px rgba(15, 23, 42, 0.16);
             opacity: 0;
             visibility: hidden;
             transform: translateY(10px);
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(20px);
+        }
+
+        .nav-dropdown.menu-root .dropdown-content {
+            left: 50%;
+            right: auto;
+            transform: translate(-50%, 10px);
+            max-width: min(1120px, calc(100vw - 32px));
+            width: min(1120px, calc(100vw - 32px));
+        }
+
+        .nav-dropdown.menu-root:hover .dropdown-content {
+            transform: translate(-50%, 0);
+        }
+
+        .menu-dashboard {
+            display: grid;
+            grid-template-columns: 1.15fr 0.85fr;
+            gap: 24px;
+            align-items: start;
+        }
+
+        .menu-hero {
+            background: linear-gradient(135deg, #f7fbff 0%, #eff6ff 100%);
+            border: 1px solid #dbeafe;
+            border-radius: 18px;
+            padding: 22px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
+        }
+
+        .menu-eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--primary-deep);
+            background: rgba(25, 148, 255, 0.08);
+            border: 1px solid rgba(25, 148, 255, 0.12);
+            border-radius: 999px;
+            padding: 7px 10px;
+            margin-bottom: 14px;
+        }
+
+        .menu-hero h3 {
+            margin: 0 0 10px 0;
+            font-size: 24px;
+            line-height: 1.15;
+            letter-spacing: -0.03em;
+            color: #0f172a;
+        }
+
+        .menu-hero p {
+            margin: 0;
+            color: #475467;
+            line-height: 1.6;
+            font-size: 13px;
+            max-width: 560px;
+        }
+
+        .menu-hero-actions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 18px;
+        }
+
+        .menu-feature {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            text-decoration: none;
+            border-radius: 16px;
+            padding: 16px;
+            background: white;
+            border: 1px solid rgba(25, 148, 255, 0.12);
+            box-shadow: 0 10px 24px rgba(25, 148, 255, 0.08);
+            transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+        }
+
+        .menu-feature:hover {
+            transform: translateY(-1px);
+            border-color: rgba(25, 148, 255, 0.25);
+            box-shadow: 0 14px 30px rgba(25, 148, 255, 0.14);
+        }
+
+        .menu-feature-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            background: linear-gradient(180deg, #f0f7ff, #dbeafe);
+            color: var(--primary-deep);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        .menu-feature-copy {
+            min-width: 0;
+        }
+
+        .menu-feature-title {
+            display: block;
+            color: #0f172a;
+            font-size: 14px;
+            font-weight: 800;
+            margin-bottom: 4px;
+        }
+
+        .menu-feature-text {
+            color: #667085;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .menu-side {
+            display: grid;
+            gap: 16px;
+        }
+
+        .menu-quickboard {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .menu-tile {
+            text-decoration: none;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 16px;
+            background: white;
+            transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+        }
+
+        .menu-tile:hover {
+            border-color: #c7ddf8;
+            box-shadow: 0 12px 26px rgba(15, 23, 42, 0.08);
+            transform: translateY(-1px);
+        }
+
+        .menu-tile-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            background: #f8fafc;
+            color: var(--primary-deep);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+
+        .menu-tile-title {
+            display: block;
+            color: #111827;
+            font-size: 13px;
+            font-weight: 800;
+            margin-bottom: 4px;
+        }
+
+        .menu-tile-text {
+            color: #667085;
+            font-size: 11px;
+            line-height: 1.5;
+        }
+
+        .menu-section-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 18px;
+            margin-top: 22px;
+            padding-top: 20px;
+            border-top: 1px solid #eef2f7;
+        }
+
+        .dropdown-content.compact {
+            width: 340px;
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+
+        .menu-section {
+            min-width: 0;
+        }
+
+        .menu-section h4 {
+            margin: 0 0 16px 0;
+            color: #111827;
+            font-size: 16px;
+            font-weight: 800;
+            padding-bottom: 14px;
+            border-bottom: 1px solid #eef2f7;
+        }
+
+        .menu-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .menu-list.compact-links .dropdown-item {
+            padding: 10px 10px;
+            font-size: 12.5px;
         }
 
         .dropdown-item {
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 10px 14px; /* Reduced */
-            border-radius: 6px;
-            color: var(--text-dim);
+            padding: 11px 12px;
+            border-radius: 12px;
+            color: #475467;
             text-decoration: none;
-            font-size: 12px; /* Reduced */
-            font-weight: 500;
-            transition: all 0.2s;
+            font-size: 13px;
+            font-weight: 700;
+            transition: all 0.18s ease;
         }
 
         .dropdown-item:hover {
-            background: var(--primary);
-            color: white;
+            color: #0b6dcf;
+            background: #f5faff;
         }
 
-        .dropdown-item i { width: 16px; text-align: center; }
+        .dropdown-item i {
+            width: 16px;
+            text-align: center;
+            color: #98a2b3;
+        }
+
+        .dropdown-item:hover i {
+            color: #1994ff;
+        }
 
         /* Main Content Container */
         .main-container {
@@ -141,7 +380,7 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            background: var(--bg);
+            background: var(--page-bg);
         }
 
         .page-header {
@@ -150,7 +389,8 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            background: rgba(15, 23, 42, 0.4);
+            background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.72));
+            backdrop-filter: blur(16px);
         }
 
         .content {
@@ -163,18 +403,16 @@
         .glass-card {
             background: var(--card-bg);
             border: 1px solid var(--border);
-            border-radius: 12px;
+            border-radius: 16px;
             padding: 24px;
-            backdrop-filter: blur(8px);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            box-shadow: var(--shadow);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .glass-card:hover {
-            transform: translateY(-4px) scale(1.01);
-            background: rgba(255, 255, 255, 0.08);
-            border-color: var(--accent);
-            box-shadow: 0 12px 48px rgba(56, 189, 248, 0.15);
+            transform: translateY(-2px);
+            border-color: var(--border-strong);
+            box-shadow: 0 22px 44px rgba(15, 23, 42, 0.1);
         }
 
         .status-badge {
@@ -203,13 +441,13 @@
         .modal-overlay.active { display: flex; opacity: 1; }
 
         .modal-content {
-            background: #1e293b;
+            background: white;
             border: 1px solid var(--border);
             border-radius: 16px;
             width: 100%;
-            max-width: 500px;
+            max-width: 680px;
             padding: 32px;
-            box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+            box-shadow: 0 24px 64px rgba(15,23,42,0.24);
             transform: scale(0.95);
             transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
@@ -224,11 +462,11 @@
         .form-label { display: block; margin-bottom: 8px; font-size: 11px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; }
         .form-input {
             width: 100%;
-            background: rgba(0,0,0,0.2);
+            background: white;
             border: 1px solid var(--border);
             border-radius: 8px;
             padding: 12px;
-            color: white;
+            color: var(--text-main);
             font-family: inherit;
             box-sizing: border-box;
             transition: border-color 0.2s;
@@ -248,6 +486,99 @@
             gap: 8px;
         }
         .action-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+
+        .menu-note {
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-top: 8px;
+            line-height: 1.5;
+        }
+
+        .user-shell {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding-left: 16px;
+            margin-left: 8px;
+            border-left: 1px solid var(--border);
+        }
+
+        .user-meta {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 2px;
+        }
+
+        .user-name {
+            font-size: 13px;
+            font-weight: 800;
+            color: var(--text-main);
+        }
+
+        .user-role {
+            font-size: 10px;
+            color: var(--primary-deep);
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .logout-link {
+            text-decoration: none;
+            color: #667085;
+            font-size: 18px;
+            transition: color 0.2s;
+        }
+
+        .logout-link:hover {
+            color: var(--danger);
+        }
+
+        @media (max-width: 1220px) {
+            .dropdown-content {
+                width: 92vw;
+                left: 50%;
+                transform: translate(-50%, 10px);
+            }
+
+            .nav-dropdown:hover .dropdown-content {
+                transform: translate(-50%, 0);
+            }
+
+            .nav-dropdown.menu-root .dropdown-content {
+                left: 50%;
+                transform: translate(-50%, 10px);
+                width: min(92vw, calc(100vw - 24px));
+                max-width: min(92vw, calc(100vw - 24px));
+            }
+
+            .nav-dropdown.menu-root:hover .dropdown-content {
+                transform: translate(-50%, 0);
+            }
+
+            .menu-dashboard,
+            .menu-section-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 900px) {
+            .dropdown-content,
+            .dropdown-content.compact {
+                width: 94vw;
+            }
+
+            .nav-dropdown.menu-root .dropdown-content {
+                width: min(94vw, calc(100vw - 20px));
+                max-width: min(94vw, calc(100vw - 20px));
+            }
+
+            .menu-hero-actions,
+            .menu-quickboard {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
@@ -255,50 +586,127 @@
     <nav class="navbar">
         <a href="/" class="brand">
             <i class="fas fa-layer-group"></i>
-            <span>Zero-BPM <span style="font-weight: 300; font-size: 12px; opacity: 0.6; color: white;">V4 STUDIO</span></span>
+            <span>Zero-BPM <span class="brand-subtitle">Business Console</span></span>
         </a>
 
         <div class="nav-menu">
-            <div class="nav-dropdown">
-                <a class="nav-trigger"><i class="fas fa-cubes"></i> Studio Tools <i class="fas fa-chevron-down" style="font-size: 10px; opacity: 0.5;"></i></a>
+            <div class="nav-dropdown menu-root">
+                <a class="nav-trigger"><i class="fas fa-bars"></i> Menu <i class="fas fa-chevron-down" style="font-size: 10px; opacity: 0.5;"></i></a>
                 <div class="dropdown-content">
-                    <a href="/" class="dropdown-item"><i class="fas fa-chart-line"></i> Dashboard Home</a>
-                    <% if (user.role === 'admin' || user.permissions.includes('ANALYTICS_VIEW')) { %>
-                        <a href="/analytics" class="dropdown-item"><i class="fas fa-chart-pie"></i> Operational Intelligence</a>
-                    <% } %>
-                    <% if (user.role === 'admin' || user.permissions.includes('PROCESS_MONITOR')) { %>
-                        <a href="/instances" class="dropdown-item"><i class="fas fa-history"></i> Process Monitoring</a>
-                    <% } %>
-                    <a href="/tasks" class="dropdown-item"><i class="fas fa-check-double"></i> My Worklist</a>
-                    <% if (user.role === 'admin' || user.permissions.includes('PROCESS_VIEW')) { %>
-                        <a href="/deployments" class="dropdown-item"><i class="fas fa-cloud-upload-alt"></i> Deployment Center</a>
-                    <% } %>
+                    <div class="menu-dashboard">
+                        <div class="menu-hero">
+                            <div class="menu-eyebrow"><i class="fas fa-sparkles"></i> Workflow Control</div>
+                            <h3>Design flows, launch deployments, and operate runtime work from one control surface.</h3>
+                            <p>Start where the intent is highest, then move into the supporting modules. The core paths stay prominent, while operational and reporting tools remain easy to reach.</p>
+
+                            <div class="menu-hero-actions">
+                                <a href="/projects" class="menu-feature">
+                                    <span class="menu-feature-icon"><i class="fas fa-diagram-project"></i></span>
+                                    <span class="menu-feature-copy">
+                                        <span class="menu-feature-title">Build And Model</span>
+                                        <span class="menu-feature-text">Open project spaces, iterate on BPMN designs, and shape process contracts.</span>
+                                    </span>
+                                </a>
+                                <a href="/instances" class="menu-feature">
+                                    <span class="menu-feature-icon"><i class="fas fa-wave-square"></i></span>
+                                    <span class="menu-feature-copy">
+                                        <span class="menu-feature-title">Run And Inspect</span>
+                                        <span class="menu-feature-text">Launch new instances, follow execution, handle signals, and inspect runtime output.</span>
+                                    </span>
+                                </a>
+                            </div>
+                        </div>
+
+                        <div class="menu-side">
+                            <div class="menu-quickboard">
+                                <a href="/deployments" class="menu-tile">
+                                    <span class="menu-tile-icon"><i class="fas fa-server"></i></span>
+                                    <span class="menu-tile-title">Deployment Hub</span>
+                                    <span class="menu-tile-text">Manage versions, active deployments, and execution endpoints.</span>
+                                </a>
+                                <a href="/tasks" class="menu-tile">
+                                    <span class="menu-tile-icon"><i class="fas fa-list-check"></i></span>
+                                    <span class="menu-tile-title">Task Center</span>
+                                    <span class="menu-tile-text">Claim, complete, and monitor work assigned across users and groups.</span>
+                                </a>
+                                <a href="/task-inbox" class="menu-tile">
+                                    <span class="menu-tile-icon"><i class="fas fa-inbox"></i></span>
+                                    <span class="menu-tile-title">Inbox</span>
+                                    <span class="menu-tile-text">Focus on personal worklists and operational follow-up.</span>
+                                </a>
+                                <a href="<%= (user.role === 'admin' || user.permissions.includes('ANALYTICS_VIEW')) ? '/process-reports' : '/task-inbox' %>" class="menu-tile">
+                                    <span class="menu-tile-icon"><i class="fas fa-chart-line"></i></span>
+                                    <span class="menu-tile-title">Insights</span>
+                                    <span class="menu-tile-text">Review process health, reporting, and execution trends.</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="menu-section-grid">
+                        <div class="menu-section">
+                            <h4>Studio</h4>
+                            <div class="menu-list compact-links">
+                                <a href="/projects" class="dropdown-item"><i class="fas fa-folder-tree"></i> Project Library</a>
+                                <a href="/pages" class="dropdown-item"><i class="fas fa-file-lines"></i> Pages And App Surfaces</a>
+                                <a href="/process-definitions" class="dropdown-item"><i class="fas fa-layer-group"></i> Process Definitions</a>
+                            </div>
+                        </div>
+                        <div class="menu-section">
+                            <h4>Operations</h4>
+                            <div class="menu-list compact-links">
+                                <a href="/deployments" class="dropdown-item"><i class="fas fa-rocket"></i> Provisioning And Releases</a>
+                                <a href="/deployments" class="dropdown-item"><i class="fas fa-network-wired"></i> Execution Servers</a>
+                                <a href="/instances" class="dropdown-item"><i class="fas fa-wave-square"></i> Process Instances</a>
+                                <a href="/jobs" class="dropdown-item"><i class="fas fa-clock-rotate-left"></i> Jobs And Timers</a>
+                            </div>
+                        </div>
+                        <div class="menu-section">
+                            <h4>Assurance</h4>
+                            <div class="menu-list compact-links">
+                                <a href="/execution-errors" class="dropdown-item"><i class="fas fa-triangle-exclamation"></i> Execution Errors</a>
+                                <% if (user.role === 'admin' || user.permissions.includes('ANALYTICS_VIEW')) { %>
+                                    <a href="/process-reports" class="dropdown-item"><i class="fas fa-chart-column"></i> Process Reports</a>
+                                    <a href="/task-reports" class="dropdown-item"><i class="fas fa-chart-bar"></i> Task Reports</a>
+                                <% } else { %>
+                                    <a href="/task-inbox" class="dropdown-item"><i class="fas fa-chart-column"></i> Process Reports</a>
+                                    <a href="/task-inbox" class="dropdown-item"><i class="fas fa-chart-bar"></i> Task Reports</a>
+                                <% } %>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <div class="nav-dropdown">
                 <a class="nav-trigger"><i class="fas fa-shield-alt"></i> Governance</a>
-                <div class="dropdown-content">
-                    <% if (user.role === 'admin' || user.permissions.includes('IAM_ADMIN')) { %>
-                        <a href="/users" class="dropdown-item"><i class="fas fa-users-cog"></i> Identity Management</a>
-                        <a href="/permissions" class="dropdown-item"><i class="fas fa-th-list"></i> Access Matrix</a>
-                    <% } %>
-                    <% if (user.role === 'admin' || user.permissions.includes('AUDIT_VIEW')) { %>
-                        <a href="/audit" class="dropdown-item"><i class="fas fa-shield-halved"></i> Security Logs</a>
-                    <% } %>
-                    <a href="/settings" class="dropdown-item"><i class="fas fa-cog"></i> Tool Settings</a>
+                <div class="dropdown-content compact">
+                    <div class="menu-section">
+                        <h4>Access</h4>
+                        <div class="menu-list">
+                            <% if (user.role === 'admin' || user.permissions.includes('IAM_ADMIN')) { %>
+                                <a href="/users" class="dropdown-item"><i class="fas fa-users-cog"></i> Identity Management</a>
+                                <a href="/users" class="dropdown-item"><i class="fas fa-grid-2"></i> Access Matrix</a>
+                            <% } %>
+                            <% if (user.role === 'admin' || user.permissions.includes('AUDIT_VIEW')) { %>
+                                <a href="/analytics" class="dropdown-item"><i class="fas fa-shield-halved"></i> Security Logs</a>
+                            <% } %>
+                            <a href="/projects" class="dropdown-item"><i class="fas fa-gear"></i> Tool Settings</a>
+                        </div>
+                        <div class="menu-note">Additional governance suites will be added module by module.</div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div style="display: flex; align-items: center; gap: 20px;">
-            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
-                <span style="font-size: 13px; font-weight: 700;"><%= user.full_name %></span>
-                <span style="font-size: 9px; color: var(--accent); font-weight: 800; text-transform: uppercase;">
+        <div class="user-shell">
+            <div class="user-meta">
+                <span class="user-name"><%= user.full_name %></span>
+                <span class="user-role">
                     <%= user.role %> | <%= (user.groups || []).join(', ') || 'Global' %>
                 </span>
             </div>
-            <a href="/logout" style="text-decoration: none; color: var(--text-dim); font-size: 18px; transition: color 0.2s;" onmouseover="this.style.color='var(--success)'" onmouseout="this.style.color='var(--text-dim)'">
+            <a href="/logout" class="logout-link">
                 <i class="fas fa-power-off"></i>
             </a>
         </div>
@@ -335,9 +743,17 @@
                 const overlay = document.getElementById('global-modal');
                 document.getElementById('modal-body').innerHTML = html;
                 overlay.classList.add('active');
+                if (typeof window.onZeroModalToggle === 'function') window.onZeroModalToggle(true);
             },
             close: () => {
-                document.getElementById('global-modal').classList.remove('active');
+                const overlay = document.getElementById('global-modal');
+                overlay.classList.remove('active');
+                setTimeout(() => {
+                    if (!overlay.classList.contains('active')) {
+                        document.getElementById('modal-body').innerHTML = '';
+                    }
+                }, 180);
+                if (typeof window.onZeroModalToggle === 'function') window.onZeroModalToggle(false);
             }
         };
 

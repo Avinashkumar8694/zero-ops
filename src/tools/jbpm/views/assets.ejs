@@ -1,0 +1,339 @@
+<%
+const assetList = assets || [];
+const activeAssetId = selectedAssetId || null;
+%>
+
+<style>
+    .asset-browser-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .asset-browser-hero {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 18px;
+        padding: 28px 32px;
+        background: linear-gradient(135deg, #ffffff 0%, #f7fbff 100%);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        box-shadow: var(--shadow);
+    }
+
+    .asset-browser-title {
+        margin: 0;
+        font-size: 34px;
+        line-height: 1.05;
+        letter-spacing: -0.04em;
+        color: #101828;
+        font-weight: 800;
+    }
+
+    .asset-browser-copy {
+        margin: 10px 0 0 0;
+        max-width: 760px;
+        color: var(--text-dim);
+        font-size: 14px;
+        line-height: 1.6;
+    }
+
+    .asset-browser-actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .asset-browser-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 18px;
+    }
+
+    .asset-browser-card {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        padding: 22px;
+        border-radius: 22px;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.92);
+        box-shadow: var(--shadow);
+        cursor: pointer;
+        transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+    }
+
+    .asset-browser-card:hover {
+        transform: translateY(-2px);
+        border-color: #cfe2ff;
+        box-shadow: 0 24px 55px rgba(15, 23, 42, 0.12);
+    }
+
+    .asset-browser-card.active {
+        border-color: #91c4ff;
+        box-shadow: 0 0 0 3px rgba(25, 148, 255, 0.12), 0 24px 55px rgba(15, 23, 42, 0.12);
+    }
+
+    .asset-browser-card-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        align-items: flex-start;
+    }
+
+    .asset-browser-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, rgba(25, 148, 255, 0.14), rgba(25, 148, 255, 0.04));
+        border: 1px solid rgba(25, 148, 255, 0.16);
+        color: var(--primary);
+        font-size: 20px;
+        flex: 0 0 auto;
+    }
+
+    .asset-browser-name {
+        margin: 0;
+        font-size: 19px;
+        font-weight: 800;
+        color: #101828;
+        letter-spacing: -0.03em;
+    }
+
+    .asset-browser-subtitle {
+        margin: 8px 0 0 0;
+        color: var(--text-dim);
+        font-size: 13px;
+        line-height: 1.55;
+    }
+
+    .asset-browser-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .asset-browser-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        border: 1px solid transparent;
+    }
+
+    .asset-browser-pill.version {
+        background: #eef6ff;
+        color: var(--primary);
+        border-color: #d6e9ff;
+    }
+
+    .asset-browser-pill.status-active {
+        background: #eafaf1;
+        color: var(--success);
+        border-color: #ccefdc;
+    }
+
+    .asset-browser-pill.status-inactive {
+        background: #f2f4f7;
+        color: #667085;
+        border-color: #e1e6ef;
+    }
+
+    .asset-browser-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-top: auto;
+    }
+
+    .asset-browser-date {
+        color: var(--text-dim);
+        font-size: 12px;
+    }
+
+    .asset-browser-inline-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .asset-browser-inline-link {
+        width: 36px;
+        height: 36px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: white;
+        color: #475467;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        cursor: pointer;
+        transition: all 0.18s ease;
+    }
+
+    .asset-browser-inline-link:hover {
+        color: var(--primary);
+        border-color: #cfe2ff;
+        background: #f8fbff;
+    }
+
+    .asset-browser-empty {
+        padding: 120px 48px;
+        text-align: center;
+        background: rgba(255,255,255,0.72);
+        border: 1px dashed var(--border);
+        border-radius: 24px;
+        color: var(--text-dim);
+        box-shadow: var(--shadow);
+    }
+
+    @media (max-width: 900px) {
+        .asset-browser-hero {
+            flex-direction: column;
+            align-items: stretch;
+        }
+    }
+</style>
+
+<div class="asset-browser-shell">
+    <section class="asset-browser-hero">
+        <div>
+            <div style="display:inline-flex; align-items:center; gap:8px; padding:7px 11px; border-radius:999px; background:#eef6ff; color:var(--primary); font-size:11px; font-weight:800; letter-spacing:0.06em; text-transform:uppercase; border:1px solid #d6e9ff;">Project Assets</div>
+            <h1 class="asset-browser-title"><%= project %></h1>
+            <p class="asset-browser-copy">
+                Select an asset to open it in Business Studio. This page is the project asset browser, while the deployment console remains available separately for operational inspection and version controls.
+            </p>
+        </div>
+        <div class="asset-browser-actions">
+            <a href="/deployments?project=<%= encodeURIComponent(project) %><% if (activeAssetId) { %>&assetId=<%= activeAssetId %><% } %>" class="action-btn" style="background:white; color:#344054; border:1px solid var(--border);">
+                <i class="fas fa-server"></i> Open Deployment Console
+            </a>
+            <button onclick="showNewAssetModal()" class="action-btn" style="background:var(--primary); color:white;">
+                <i class="fas fa-plus-circle"></i> Create Asset
+            </button>
+        </div>
+    </section>
+
+    <% if (assetList.length > 0) { %>
+        <section class="asset-browser-grid">
+            <% assetList.forEach(asset => { %>
+                <article
+                    class="asset-browser-card <%= String(activeAssetId || '') === String(asset.id) ? 'active' : '' %>"
+                    role="button"
+                    tabindex="0"
+                    onclick="openAssetEditor('<%= asset.id %>')"
+                    onkeydown="handleAssetKey(event, '<%= asset.id %>')"
+                >
+                    <div class="asset-browser-card-top">
+                        <div class="asset-browser-icon"><i class="fas fa-diagram-project"></i></div>
+                        <div class="asset-browser-inline-actions">
+                            <a
+                                href="/deployments?project=<%= encodeURIComponent(project) %>&workflow=<%= encodeURIComponent(asset.workflow_name) %>&assetId=<%= asset.id %>"
+                                class="asset-browser-inline-link"
+                                title="Inspect in deployment console"
+                                onclick="event.stopPropagation()"
+                            >
+                                <i class="fas fa-circle-info"></i>
+                            </a>
+                            <a
+                                href="/projects/<%= encodeURIComponent(project) %>/modeler?assetId=<%= asset.id %>"
+                                class="asset-browser-inline-link"
+                                title="Open in Business Studio"
+                                onclick="event.stopPropagation()"
+                            >
+                                <i class="fas fa-pen-ruler"></i>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h2 class="asset-browser-name"><%= asset.workflow_name %></h2>
+                        <p class="asset-browser-subtitle">
+                            Versioned orchestration asset for <strong><%= project %></strong>. Open this asset in Studio to edit nodes, mappings, contracts, and subprocess references.
+                        </p>
+                    </div>
+
+                    <div class="asset-browser-meta">
+                        <span class="asset-browser-pill version">v<%= asset.version || '1.0.0' %></span>
+                        <span class="asset-browser-pill <%= asset.is_active ? 'status-active' : 'status-inactive' %>">
+                            <i class="fas <%= asset.is_active ? 'fa-circle-check' : 'fa-circle-pause' %>"></i>
+                            <%= asset.is_active ? 'Active' : 'Inactive' %>
+                        </span>
+                    </div>
+
+                    <div class="asset-browser-footer">
+                        <span class="asset-browser-date">Created <%= new Date(asset.created_at).toLocaleDateString() %></span>
+                        <span style="color:var(--primary); font-size:12px; font-weight:700;">Open Asset</span>
+                    </div>
+                </article>
+            <% }) %>
+        </section>
+    <% } else { %>
+        <section class="asset-browser-empty">
+            <i class="fas fa-layer-group" style="font-size:44px; opacity:0.2; display:block; margin-bottom:18px;"></i>
+            <h2 style="margin:0 0 10px 0; color:#101828; font-size:28px; letter-spacing:-0.04em;">No Assets Yet</h2>
+            <p style="max-width:560px; margin:0 auto 22px auto; line-height:1.7;">
+                This project does not have any process assets yet. Create the first asset and it will open directly in Business Studio for modeling and configuration.
+            </p>
+            <button onclick="showNewAssetModal()" class="action-btn" style="background:var(--primary); color:white; margin:0 auto;">
+                <i class="fas fa-plus-circle"></i> Create First Asset
+            </button>
+        </section>
+    <% } %>
+</div>
+
+<script>
+    function openAssetEditor(assetId) {
+        if (!assetId) return;
+        window.location.href = `/projects/<%= encodeURIComponent(project) %>/modeler?assetId=${encodeURIComponent(assetId)}`;
+    }
+
+    function handleAssetKey(event, assetId) {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openAssetEditor(assetId);
+        }
+    }
+
+    function showNewAssetModal() {
+        const html = `
+            <div class="modal-header">
+                <h2>Create Project Asset</h2>
+                <p>Add a new versioned process asset inside <strong><%= project %></strong> and open it in Business Studio.</p>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Asset Name</label>
+                <input type="text" id="a-name" class="form-input" placeholder="e.g. order-fulfillment-service">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Initial Version</label>
+                <input type="text" id="a-version" class="form-input" value="1.0.0">
+            </div>
+            <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:28px;">
+                <button onclick="ZeroModal.close()" class="action-btn" style="background:#f2f4f7; color:#344054;">Cancel</button>
+                <button onclick="submitNewAsset()" class="action-btn" style="background:var(--primary); color:white;">Create & Open</button>
+            </div>
+        `;
+        ZeroModal.open(html);
+    }
+
+    function submitNewAsset() {
+        const name = document.getElementById('a-name').value;
+        const version = document.getElementById('a-version').value;
+        if (!name) return alert('Asset name is required.');
+        window.location.href = `/projects/<%= encodeURIComponent(project) %>/modeler?newName=${encodeURIComponent(name)}&newVersion=${encodeURIComponent(version)}`;
+    }
+</script>

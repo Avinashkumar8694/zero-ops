@@ -9,10 +9,10 @@ const businessRuleTask: NodePackage = {
     category: pkg.category as any,
     icon: '/nodes/business-rule-task/assets/icon.svg',
     fields: [
-        { key: 'name', label: 'Rule Label', type: 'text' },
-        { key: 'decisionRef', label: 'Decision ID', type: 'text', placeholder: 'e.g. Credit_Check_Table' },
-        { key: 'inputMap', label: 'Rule Inputs', type: 'keyvalue', description: 'Variables to pass to the decision engine.' },
-        { key: 'resultVariable', label: 'Result Variable', type: 'text', default: 'ruleResult' }
+        { key: 'name', label: 'Rule Label', type: 'text', group: 'general' },
+        { key: 'decisionRef', label: 'Decision ID', type: 'text', group: 'general', placeholder: 'e.g. Credit_Check_Table' },
+        { key: 'inputMap', label: 'Rule Inputs', type: 'keyvalue', group: 'mapping', description: 'Map process variables into the decision input contract.', mapping: { typed: true, sourceScope: 'process', targetScope: 'input' } },
+        { key: 'resultVariable', label: 'Result Variable', type: 'text', group: 'mapping', default: 'ruleResult', variableRef: true, description: 'Process variable that receives the decision result.' }
     ],
     documentation: {
         desc: 'Policy Enforcement Node. Evaluates business rules against a DMN table or rule repository.',

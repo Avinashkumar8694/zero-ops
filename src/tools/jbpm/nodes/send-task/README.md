@@ -1,23 +1,24 @@
-# Send Signal (V1.0.0)
+# Send Task
 
-Outbound Notification primitive for fire-and-forget orchestration.
+Outbound message dispatch node.
 
-## Overview
-The Send Task node is used to send asynchronous messages or signals to external systems. Unlike a Service Task, it does not wait for a response body; it simply ensures the signal is transactionally dispatched.
+## What This Node Does
+Sends a message to an external recipient, topic, or channel such as email, SMS, webhook, or Kafka.
 
-## Technical Parameters
-| Field | Description | Type |
-|-------|-------------|------|
-| `messageId` | Protocol/Channel (EMAIL, SMS, WEBHOOK, KAFKA). | Select |
-| `target` | Recipient ID or Topic name. | Text |
-| `payload` | Data body to be sent in the signal. | Snippet |
+## Properties
+- `messageId`: Message transport type.
+- `target`: Recipient, endpoint, or topic.
+- `payload`: Outbound body or event payload.
 
-## Data Movement
-1. **Mapping**: Resolves all variable expressions in the payload.
-2. **Dispatch**: Transmits the data via the selected channel.
-3. **Execution**: The process instance continues immediately.
+## Example
+```json
+{
+  "messageId": "WEBHOOK",
+  "target": "https://hooks.acme.com/order-status",
+  "payload": "{ \"orderId\": \"${variables.orderId}\", \"status\": \"APPROVED\" }"
+}
+```
 
-## Example: Kafka Alert
-- `messageId`: `KAFKA`
-- `target`: `topic.ops.alerts`
-- `payload`: `{ "msg": "System Threshold Exceeded" }`
+## Validation Notes
+- Choose the transport type first.
+- Keep payload format consistent with the receiver.

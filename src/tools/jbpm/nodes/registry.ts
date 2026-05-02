@@ -7,6 +7,8 @@ export interface NodeField {
     key: string;
     label: string;
     type: 'text' | 'select' | 'textarea' | 'keyvalue' | 'toggle' | 'number' | 'snippet';
+    group?: 'general' | 'trigger' | 'assignment' | 'variables' | 'mapping' | 'runtime' | 'advanced';
+    dataType?: 'string' | 'number' | 'boolean' | 'json' | 'object' | 'array' | 'expression' | 'cron' | 'url' | 'any';
     options?: string[]; // For select dropdowns
     placeholder?: string;
     default?: any;
@@ -15,6 +17,13 @@ export interface NodeField {
     visibility?: string; // eval-able logic e.g. "provider === 'SENDGRID'"
     variableRef?: boolean; // Trigger variable suggestion datalist
     flowRef?: boolean; // Trigger process flow selection datalist
+    contractRef?: 'input' | 'output'; // Suggest from a target process contract
+    contractSource?: string; // Field key that specifies the target process name
+    mapping?: {
+        typed?: boolean;
+        sourceScope?: 'process' | 'input' | 'output' | 'local' | 'task' | 'expression';
+        targetScope?: 'process' | 'input' | 'output' | 'local' | 'task';
+    };
 }
 
 export interface NodePackage {

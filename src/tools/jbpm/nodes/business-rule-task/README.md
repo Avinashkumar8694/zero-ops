@@ -1,23 +1,35 @@
-# Decision Table (Business Rule Task) (V1.0.0)
+# Business Rule Task
 
-Policy Enforcement primitive for DMN-based decision orchestration.
+Decision node for invoking a rule or decision table.
 
-## Overview
-The Business Rule Task node integrates with the Zero-Decision engine (DMN). It allows for complex logic (Credit Scoring, Discount Calculation) to be managed in a declarative Decision Table rather than hardcoded in process flows.
+## What This Node Does
+Sends process data into a decision engine and stores the result in a single output variable. Use this when business logic should be centralized in rules instead of embedded in scripts.
 
-## Technical Parameters
-| Field | Description | Type |
-|-------|-------------|------|
-| `decisionRef` | The ID of the DMN Decision Table. | Text |
-| `inputMap` | Variables to pass to the decision engine. | Key-Value |
-| `resultVariable` | Name of the variable to store the result. | Text |
+## Properties
+- `name`: Display label.
+- `decisionRef`: Identifier of the decision, ruleset, or decision table to invoke.
+- `inputMap`: Data sent into the rule engine.
+- `resultVariable`: Process variable that receives the decision result.
 
-## Data Movement
-1. **Preparation**: Maps process variables to the decision table inputs.
-2. **Evaluation**: Triggers the DMN Hit-Policy (Unique, First, Collect).
-3. **Hydration**: Resulting conclusions are transactionally injected into the process context.
+## Mapping And Variable Use
+- `inputMap` is a low-code typed mapping from process variables into decision inputs.
+- Sources are usually process variables or expressions.
+- Targets are rule input names expected by the decision asset.
+- `resultVariable` should be a stable process variable name because downstream nodes may autocomplete and depend on it.
 
-## Example: Credit Approval
-- `decisionRef`: `CREDIT_SCORE_TABLE`
-- `inputMap`: `{ "age": 25, "income": 50000 }`
-- `resultVariable`: `approvalStatus`
+## Example
+```json
+{
+  "name": "Credit Decision",
+  "decisionRef": "Credit_Check_Table",
+  "inputMap": {
+    "customerAge": { "target": "customerAge", "type": "number", "sourceScope": "process", "targetScope": "input" },
+    "annualIncome": { "target": "annualIncome", "type": "number", "sourceScope": "process", "targetScope": "input" }
+  },
+  "resultVariable": "creditDecision"
+}
+```
+
+## Validation Notes
+- `decisionRef` should point to a real decision artifact.
+- `resultVariable` should be stable because downstream nodes will depend on it.

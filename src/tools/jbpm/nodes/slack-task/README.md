@@ -1,27 +1,26 @@
-# Slack Ops (V1.0.0)
+# Slack Task
 
-Industrial ChatOps primitive for interactive alerts and notifications.
+ChatOps notification node for Slack.
 
-## Overview
-The Slack Ops node enables reactive communication with engineering teams. It supports mrkdwn formatting, interactive buttons (via Bolt), and direct channel dispatching via incoming webhooks.
+## What This Node Does
+Sends a Slack message to a channel or user using a configured webhook URL.
 
-## Technical Parameters
-| Field | Description | Type |
-|-------|-------------|------|
-| `channel` | The target channel name or ID. | Text |
-| `message` | The content of the alert (Supports mrkdwn). | Snippet |
-| `webhookUrl` | The environment variable key holding the Webhook URL. | Text |
+## Properties
+- `name`: Friendly label.
+- `channel`: Slack channel or destination.
+- `message`: Slack message body, including interpolation or mrkdwn.
+- `webhookUrl`: Environment or secret key pointing to the webhook URL.
 
-## Data Movement
-1. **Formatting**: Resolves variables within the mrkdwn block.
-2. **Dispatch**: Transmits the structured block to the Slack API.
-3. **Execution**: Continues once Slack acknowledges the payload.
-
-## Example: Incident Alert
+## Example
 ```json
 {
-  "channel": "#critical-ops",
-  "message": "*ALERT*: System Threshold for node ${variables.nodeId} exceeded!",
-  "webhookUrl": "PROD_SLACK_WEBHOOK"
+  "name": "Notify Ops",
+  "channel": "#ops-alerts",
+  "message": "*Order ${variables.orderId}* is waiting for manual review.",
+  "webhookUrl": "${secrets.SLACK_WEBHOOK_URL}"
 }
 ```
+
+## Validation Notes
+- Keep the webhook URL out of plain model text when possible.
+- Keep Slack messages short and actionable.

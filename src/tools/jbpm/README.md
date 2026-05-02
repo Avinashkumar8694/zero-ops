@@ -28,6 +28,8 @@ zero-ops jbpm engine dashboard --port 3000
 ```
 - **Dashboard**: `http://localhost:3000` (Real-time instance monitoring)
 - **Modeler**: `http://localhost:3000/modeler` (Drag-and-Drop BPMN Designer)
+- **Swagger UI**: `http://localhost:3000/api/docs` (Custom BPM engine + operational APIs)
+- **OpenAPI JSON**: `http://localhost:3000/api/docs/openapi.json`
 
 ### 3. Native Execution (CLI)
 Run a JSON workflow definition natively:
@@ -48,6 +50,25 @@ zero-ops jbpm engine run ./onboarding_sample.json --namespace HR
 | `dev` | **Watch Mode**: Real-time hot-reload for developers. |
 | `run <file>` | Primary CLI execution for JSON workflows. |
 | `compile <file>` | Translates Dynamic JSON into standard BPMN 2.0 XML. |
+
+## API-First Usage
+The custom BPM engine is designed to be consumed by SSD apps, external services, low-code orchestration, and human-task clients through API contracts.
+
+Use the built-in Swagger docs to understand:
+- how to trigger a process
+- how Start Event input is normalized into `data`, `headers`, `query`, `params`, and `meta`
+- how End Event output becomes the final API response
+- how to work with human task, signal, deployment, and runtime inspection APIs
+
+### Trigger Model
+- `Start Event.inboundMapping` defines request -> process variable mapping
+- `Start Event.outboundMapping` defines immediate acknowledgement output
+- `End Event.outputMapping` defines the final business response
+
+### Swagger Notes
+- `/api/docs` includes both currently implemented operational APIs and the standardized custom-engine contract under `/api/engine/...`
+- endpoints under `/api/engine/...` document the target API-first surface for the custom BPM engine
+- currently implemented dashboard-backed APIs remain under `/api/...`
 
 ### Legacy jBPM (`infra`)
 Use these if you need to interface with a standard Java KIE Server:

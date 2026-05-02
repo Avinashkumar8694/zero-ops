@@ -1,20 +1,20 @@
-# Message Start (V1.0.0)
+# Message Start Event
 
-Event-Driven Entry primitive for signal-based process orchestration.
+Starts a process when a named message is received.
 
-## Overview
-The Message Start event triggers a process instance when a specific named message is received from an external system or service. It establishes a reactive entry point for asynchronous workflows.
+## What This Node Does
+Creates a process instance from an external message or event bus message that matches the configured message name.
 
-## Technical Parameters
-| Field | Description | Type |
-|-------|-------------|------|
-| `messageName` | The unique identifier for the inbound signal. | Text |
+## Properties
+- `messageName`: Identifier of the message that should start the process.
 
-## Data Movement
-1. **Correlation**: The engine listens for a signal matching the `messageName`.
-2. **Hydration**: Any payload data attached to the signal is transactionally injected into the process variables.
-3. **Trigger**: A new instance is transactionally initialized.
+## Example
+```json
+{
+  "messageName": "orders.created"
+}
+```
 
-## Example: User Registration
-- `messageName`: `USER_REGISTERED_EVENT`
-- The payload `{ "email": "..." }` becomes `variables.email`.
+## Validation Notes
+- Keep the message name stable and aligned with the upstream producer.
+- Use a separate start event type when the process is really time-based or manual.

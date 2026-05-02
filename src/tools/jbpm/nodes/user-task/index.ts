@@ -10,10 +10,13 @@ const userTask: NodePackage = {
     category: pkg.category as any,
     icon: '/nodes/user-task/assets/icon.svg',
     fields: [
-        { key: 'name', label: 'Instruction Label', type: 'text', placeholder: 'e.g., Approve Expense Report' },
-        { key: 'assignee', label: 'Assigned Actor', type: 'text', placeholder: 'admin, roles/approver', description: 'ID or variable expression.' },
-        { key: 'formKey', label: 'Form Identifier', type: 'text', placeholder: 'leave-form-v1', description: 'Zero-Form ID to render.' },
-        { key: 'priority', label: 'Urgency', type: 'select', options: ['LOW', 'NORMAL', 'HIGH', 'CRITICAL'], default: 'NORMAL' }
+        { key: 'name', label: 'Instruction Label', type: 'text', group: 'general', placeholder: 'e.g., Approve Expense Report', required: true },
+        { key: 'assignee', label: 'Assigned Actor', type: 'text', group: 'assignment', placeholder: 'admin, roles/approver', description: 'ID or variable expression.', variableRef: true },
+        { key: 'candidateGroups', label: 'Candidate Groups', type: 'text', group: 'assignment', placeholder: 'FINANCE,HR', description: 'Comma-separated group names or expressions.', variableRef: true },
+        { key: 'formKey', label: 'Form Identifier', type: 'text', group: 'assignment', placeholder: 'leave-form-v1', description: 'Zero-Form ID to render.', required: true },
+        { key: 'priority', label: 'Urgency', type: 'select', group: 'assignment', options: ['LOW', 'NORMAL', 'HIGH', 'CRITICAL'], default: 'NORMAL' },
+        { key: 'inputMapping', label: 'Task Input Mapping', type: 'keyvalue', group: 'mapping', description: 'Map process variables into the task form/task local scope.', mapping: { typed: true, sourceScope: 'process', targetScope: 'task' } },
+        { key: 'outputMapping', label: 'Task Output Mapping', type: 'keyvalue', group: 'mapping', description: 'Map submitted task values back into process variables.', mapping: { typed: true, sourceScope: 'task', targetScope: 'process' } }
     ],
     documentation: {
         desc: 'Human-Centric Node. Halts execution until an actor completes the task.',

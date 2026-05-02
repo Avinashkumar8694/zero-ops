@@ -3,8 +3,31 @@
 <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.0.2/dist/assets/bpmn-font/css/bpmn.css" />
 
 <style>
-    .inspector-layout { display: flex; flex-direction: column; gap: 24px; height: calc(100vh - 180px); }
+    .inspector-layout { display: flex; flex-direction: column; gap: 24px; min-height: calc(100vh - 180px); }
     .inspector-header { display: flex; justify-content: space-between; align-items: flex-start; }
+    .header-actions { display:flex; gap:12px; flex-wrap:wrap; justify-content:flex-end; }
+    .inspector-body { display:grid; grid-template-columns: 300px minmax(0, 1fr); gap:20px; min-height: 0; flex: 1; }
+    .inspector-sidebar { display:flex; flex-direction:column; gap:16px; }
+    .sidebar-panel { background:white; border:1px solid var(--border); border-radius:16px; padding:18px; }
+    .sidebar-panel h3 { margin:0 0 14px 0; font-size:16px; }
+    .family-list { display:grid; gap:10px; }
+    .family-item {
+        display:block; text-decoration:none; border:1px solid var(--border); border-radius:14px; padding:14px;
+        background:#fcfdff; transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+    }
+    .family-item:hover { border-color:#cfe1f6; background:#f9fbff; transform: translateY(-1px); }
+    .family-item.active { border-color:#8cc8ff; background:#eef7ff; box-shadow: inset 0 0 0 1px rgba(25,148,255,0.12); }
+    .family-item-header { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .family-item-title { font-size:13px; font-weight:800; color:#0f172a; }
+    .family-item-meta { margin-top:6px; font-size:11px; color:var(--text-dim); line-height:1.5; }
+    .family-depth { display:inline-flex; align-items:center; gap:6px; font-size:10px; font-weight:800; color:#0b6dcf; text-transform:uppercase; letter-spacing:0.04em; }
+    .main-audit { min-width:0; }
+    .overview-grid { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:16px; margin-bottom:24px; }
+    .overview-card { background:white; border:1px solid var(--border); border-radius:14px; padding:18px; }
+    .overview-card-label { font-size:11px; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-dim); font-weight:800; margin-bottom:8px; }
+    .overview-card-value { font-size:18px; font-weight:800; color:#111827; word-break:break-word; }
+    .overview-panel { display:grid; grid-template-columns: 1.2fr 0.8fr; gap:18px; height:100%; }
+    .overview-stack { display:flex; flex-direction:column; gap:18px; }
     .tab-nav { display: flex; gap: 32px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
     .tab-link { 
         padding-bottom: 12px; color: var(--text-dim); text-decoration: none; font-weight: 600; font-size: 14px; 
@@ -16,7 +39,7 @@
     }
 
     .canvas-container { flex: 1; background: #fff; border-radius: 12px; border: 1px solid var(--border); overflow: hidden; position: relative; }
-    #canvas { width: 100%; height: 100%; }
+    #canvas { width: 100%; height: min(72vh, 760px); min-height: 520px; }
 
     /* Custom BPMN Highlights */
     .highlight-completed .djs-visual rect, 
@@ -37,6 +60,23 @@
         animation: pulse-border 2s infinite;
     }
 
+    .highlight-failed .djs-visual rect,
+    .highlight-failed .djs-visual circle,
+    .highlight-failed .djs-visual polygon {
+        fill: rgba(239, 68, 68, 0.1) !important;
+        stroke: #ef4444 !important;
+        stroke-width: 4px !important;
+    }
+
+    .highlight-waiting .djs-visual rect,
+    .highlight-waiting .djs-visual circle,
+    .highlight-waiting .djs-visual polygon {
+        fill: rgba(245, 158, 11, 0.12) !important;
+        stroke: #f59e0b !important;
+        stroke-width: 3px !important;
+        stroke-dasharray: 8, 4;
+    }
+
     @keyframes pulse-border {
         0% { stroke-opacity: 1; }
         50% { stroke-opacity: 0.4; }
@@ -45,6 +85,52 @@
 
     .log-table th { text-align: left; font-size: 12px; color: var(--text-dim); padding-bottom: 12px; }
     .log-table td { padding: 12px 0; border-top: 1px solid var(--border); font-size: 13px; }
+    .action-btn { border-radius: 12px; padding: 10px 18px; border: 1px solid var(--border); background: white; color: var(--text-main); cursor: pointer; font-weight: 700; }
+    .action-btn.primary { background: var(--primary); color: white; border-color: var(--primary); }
+    .action-btn.danger { background: #ef4444; color: white; border-color: #ef4444; }
+    .runtime-panel { background:white; border:1px solid var(--border); border-radius:16px; padding:18px; }
+    .runtime-panel h3 { margin:0 0 14px 0; font-size:17px; }
+    .runtime-grid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:16px; }
+    .runtime-input, .runtime-textarea, .runtime-select {
+        width:100%; box-sizing:border-box; border:1px solid var(--border); border-radius:12px;
+        background:#f8fafc; color:#111827; padding:12px 14px; font-size:13px;
+    }
+    .runtime-textarea { min-height:110px; resize:vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .runtime-label { display:block; margin-bottom:8px; font-size:11px; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-dim); font-weight:800; }
+    .task-list { display:grid; gap:14px; }
+    .task-card { border:1px solid var(--border); border-radius:14px; padding:16px; background:#fcfdff; }
+    .task-meta { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:12px; flex-wrap:wrap; }
+    .task-title { font-size:15px; font-weight:800; }
+    .task-subline { color:var(--text-dim); font-size:12px; margin-top:4px; }
+    .task-actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
+    .task-json { margin:0; font-size:12px; background:#f8fafc; border:1px solid var(--border); padding:14px; border-radius:12px; overflow:auto; }
+    .toast {
+        position: fixed; right: 24px; bottom: 24px; z-index: 2500; background: #111827; color: white;
+        border-radius: 12px; padding: 12px 16px; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.22); display:none;
+    }
+    .trace-summary { display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:12px; margin-bottom:18px; }
+    .trace-stat { padding:14px; background:#f8fafc; border:1px solid var(--border); border-radius:12px; }
+    .trace-stat-label { font-size:10px; text-transform:uppercase; color:var(--text-dim); font-weight:800; letter-spacing:0.05em; margin-bottom:6px; }
+    .trace-stat-value { font-size:22px; font-weight:900; color:#111827; }
+    .variable-empty { color:var(--text-dim); font-size:13px; padding:18px; text-align:center; border:1px dashed var(--border); border-radius:12px; background:#fcfdff; }
+    .audit-legend { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px; }
+    .audit-legend span { display:inline-flex; align-items:center; gap:8px; font-size:12px; color:var(--text-dim); }
+    .audit-dot { width:10px; height:10px; border-radius:999px; display:inline-block; }
+    .node-count-badge {
+        background:#111827; color:white; border-radius:999px; padding:2px 7px; font-size:10px; font-weight:800;
+        border:2px solid white; box-shadow:0 6px 18px rgba(15,23,42,0.18);
+    }
+
+    @media (max-width: 1200px) {
+        .inspector-body { grid-template-columns: 1fr; }
+        .overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .overview-panel { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 900px) {
+        .inspector-header { flex-direction:column; gap:16px; }
+        .runtime-grid { grid-template-columns: 1fr; }
+        .header-actions { width:100%; justify-content:flex-start; }
+    }
 </style>
 
 <div class="inspector-layout">
@@ -60,24 +146,240 @@
             </div>
             <p style="color: var(--text-dim); font-size: 14px; margin: 0;">Started by <strong><%= details.owner %></strong> on <%= new Date(details.start_time).toLocaleString() %></p>
         </div>
-        <div style="display: flex; gap: 12px;">
-            <button class="action-btn" style="background: var(--card-bg); border: 1px solid var(--border); padding: 10px 20px;">
+        <div class="header-actions">
+            <button class="action-btn" onclick="window.location.reload();">
+                <i class="fas fa-rotate-right"></i> Refresh
+            </button>
+            <button class="action-btn" onclick="switchTab('logs');">
                 <i class="fas fa-terminal"></i> Runtime Trace
             </button>
-            <button class="action-btn" style="background: #ef4444; color: white;">
-                <i class="fas fa-stop-circle"></i> Abort Process
-            </button>
+            <% if (details.status !== 'COMPLETED' && details.status !== 'ABORTED') { %>
+                <button class="action-btn danger" onclick="abortInstance();">
+                    <i class="fas fa-stop-circle"></i> Abort Process
+                </button>
+            <% } %>
         </div>
     </div>
 
+    <div class="inspector-body">
+    <aside class="inspector-sidebar">
+        <div class="sidebar-panel">
+            <h3>Execution Tree</h3>
+            <% if ((family || []).length > 0) { %>
+                <div class="family-list">
+                    <% family.forEach(item => {
+                        const itemMeta = item.metadata || {};
+                        const isActiveItem = item.instance_id === details.instance_id;
+                    %>
+                        <a href="/instances/detail/<%= item.instance_id %>" class="family-item <%= isActiveItem ? 'active' : '' %>">
+                            <div class="family-item-header">
+                                <div>
+                                    <div class="family-depth">
+                                        <i class="fas fa-code-branch"></i>
+                                        <span><%= item.depth === 0 ? 'Root Process' : `Subprocess L${item.depth}` %></span>
+                                    </div>
+                                    <div class="family-item-title"><%= item.workflow_name %></div>
+                                </div>
+                                <span class="status-badge" style="background:<%= item.status === 'ERROR' ? 'rgba(239,68,68,0.12)' : item.status === 'COMPLETED' ? 'rgba(18,183,106,0.12)' : item.status === 'WAITING' ? 'rgba(245,158,11,0.14)' : 'rgba(25,148,255,0.12)' %>; color:<%= item.status === 'ERROR' ? '#ef4444' : item.status === 'COMPLETED' ? '#12b76a' : item.status === 'WAITING' ? '#b54708' : 'var(--primary-deep)' %>;">
+                                    <%= item.status %>
+                                </span>
+                            </div>
+                            <div class="family-item-meta">
+                                <div><strong>Instance:</strong> <span style="font-family:monospace;"><%= item.instance_id %></span></div>
+                                <div><strong>Version:</strong> v<%= itemMeta.assetVersion || itemMeta.version || '1.0.0' %></div>
+                                <% if (itemMeta.parentNodeId) { %>
+                                    <div><strong>Invoked by:</strong> <%= itemMeta.parentNodeId %></div>
+                                <% } %>
+                            </div>
+                        </a>
+                    <% }) %>
+                </div>
+            <% } else { %>
+                <div class="variable-empty">No parent or child executions have been recorded yet.</div>
+            <% } %>
+        </div>
+
+        <div class="sidebar-panel">
+            <h3>Trace Summary</h3>
+            <div class="trace-summary">
+                <div class="trace-stat">
+                    <div class="trace-stat-label">Executed Nodes</div>
+                    <div class="trace-stat-value"><%= logs.filter(log => log.status === 'COMPLETED').length %></div>
+                </div>
+                <div class="trace-stat">
+                    <div class="trace-stat-label">Errors</div>
+                    <div class="trace-stat-value"><%= logs.filter(log => log.status === 'FAILED' || log.status === 'ERROR').length %></div>
+                </div>
+                <div class="trace-stat">
+                    <div class="trace-stat-label">Variables</div>
+                    <div class="trace-stat-value"><%= (variables || []).length %></div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <section class="main-audit">
     <div class="tab-nav">
-        <a onclick="switchTab('diagram')" id="tab-diagram" class="tab-link active">Visual Audit</a>
+        <a onclick="switchTab('overview')" id="tab-overview" class="tab-link active">Overview</a>
+        <a onclick="switchTab('diagram')" id="tab-diagram" class="tab-link">Visual Audit</a>
         <a onclick="switchTab('logs')" id="tab-logs" class="tab-link">Execution Logs</a>
         <a onclick="switchTab('variables')" id="tab-variables" class="tab-link">Process Variables</a>
     </div>
 
+    <div id="content-overview">
+        <div class="overview-grid">
+            <div class="overview-card">
+                <div class="overview-card-label">Instance Id</div>
+                <div class="overview-card-value" style="font-family:monospace;"><%= details.instance_id %></div>
+            </div>
+            <div class="overview-card">
+                <div class="overview-card-label">Process</div>
+                <div class="overview-card-value"><%= details.workflow_name %></div>
+            </div>
+            <div class="overview-card">
+                <div class="overview-card-label">Status</div>
+                <div class="overview-card-value"><%= details.status %></div>
+            </div>
+            <div class="overview-card">
+                <div class="overview-card-label">Version</div>
+                <div class="overview-card-value"><%= details.metadata?.assetVersion || details.metadata?.version || '1.0.0' %></div>
+            </div>
+        </div>
+
+        <div class="overview-panel">
+            <div class="overview-stack">
+                <div class="glass-card" style="background:white;">
+                    <h3 style="margin:0 0 14px 0; font-size:18px;">Runtime Summary</h3>
+                    <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:14px;">
+                        <div>
+                            <div class="overview-card-label">Owner</div>
+                            <div style="font-size:14px; font-weight:700;"><%= details.owner || 'system' %></div>
+                        </div>
+                        <div>
+                            <div class="overview-card-label">Project</div>
+                            <div style="font-size:14px; font-weight:700;"><%= details.metadata?.assetProject || details.metadata?.triggerContext?.meta?.projectName || 'default' %></div>
+                        </div>
+                        <div>
+                            <div class="overview-card-label">Started</div>
+                            <div style="font-size:14px; font-weight:700;"><%= new Date(details.start_time).toLocaleString() %></div>
+                        </div>
+                        <div>
+                            <div class="overview-card-label">Ended</div>
+                            <div style="font-size:14px; font-weight:700;"><%= details.end_time ? new Date(details.end_time).toLocaleString() : 'Still running' %></div>
+                        </div>
+                        <div>
+                            <div class="overview-card-label">Waiting Mode</div>
+                            <div style="font-size:14px; font-weight:700;"><%= details.metadata?.waiting?.kind || 'None' %></div>
+                        </div>
+                        <div>
+                            <div class="overview-card-label">Waiting Node</div>
+                            <div style="font-size:14px; font-weight:700;"><%= details.metadata?.waiting?.nodeId || '-' %></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card" style="background:white;">
+                    <h3 style="margin:0 0 14px 0; font-size:18px;">Final Output</h3>
+                    <pre style="margin:0; font-size:13px; background:#f8fafc; border:1px solid var(--border); padding:16px; border-radius:12px; overflow:auto;"><%= JSON.stringify(details.metadata?.finalOutput || {}, null, 2) %></pre>
+                </div>
+            </div>
+
+            <div class="overview-stack">
+                <div class="glass-card" style="background:white;">
+                    <h3 style="margin:0 0 14px 0; font-size:18px;">Trigger Context</h3>
+                    <pre style="margin:0; font-size:13px; background:#f8fafc; border:1px solid var(--border); padding:16px; border-radius:12px; overflow:auto;"><%= JSON.stringify(details.metadata?.triggerContext || {}, null, 2) %></pre>
+                </div>
+
+                <div class="runtime-panel">
+                    <h3>Runtime Controls</h3>
+                    <% if (details.metadata?.waiting?.kind === 'SIGNAL') { %>
+                        <div style="margin-bottom:16px; color:var(--text-dim); font-size:13px;">This instance is waiting for an external signal. Submit the signal name and payload to continue execution.</div>
+                        <div class="runtime-grid">
+                            <div>
+                                <label class="runtime-label">Signal Name</label>
+                                <input id="signal-name" class="runtime-input" value="<%= details.metadata?.waiting?.signalName || '' %>" placeholder="order-approved" />
+                            </div>
+                            <div>
+                                <label class="runtime-label">Waiting Node</label>
+                                <input class="runtime-input" value="<%= details.metadata?.waiting?.nodeId || '' %>" disabled />
+                            </div>
+                        </div>
+                        <div style="margin-top:16px;">
+                            <label class="runtime-label">Signal Payload (JSON)</label>
+                            <textarea id="signal-payload" class="runtime-textarea" placeholder='{"approved": true, "by": "manager"}'>{}</textarea>
+                        </div>
+                        <div class="task-actions">
+                            <button class="action-btn primary" onclick="sendSignal();">
+                                <i class="fas fa-paper-plane"></i> Send Signal
+                            </button>
+                        </div>
+                    <% } else { %>
+                        <div style="color:var(--text-dim); font-size:13px;">No external signal is required for the current runtime state.</div>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+
+        <div class="runtime-panel" style="margin-top:18px;">
+            <h3>Human Tasks</h3>
+            <% if ((tasks || []).length > 0) { %>
+                <div class="task-list">
+                    <% tasks.forEach(task => { %>
+                        <div class="task-card">
+                            <div class="task-meta">
+                                <div>
+                                    <div class="task-title"><%= task.node_id %></div>
+                                    <div class="task-subline">
+                                        Task #<%= task.id %> · <%= task.status %> ·
+                                        Assignee: <%= task.assignee || 'Unassigned' %> ·
+                                        Groups: <%= (task.potential_groups || []).join(', ') || 'None' %>
+                                    </div>
+                                </div>
+                                <span class="status-badge" style="background:<%= task.status === 'COMPLETED' ? 'rgba(18,183,106,0.16)' : 'rgba(25,148,255,0.14)' %>; color:<%= task.status === 'COMPLETED' ? '#12b76a' : 'var(--accent)' %>;">
+                                    <%= task.status %>
+                                </span>
+                            </div>
+
+                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+                                <div>
+                                    <label class="runtime-label">Task Input / Form Data</label>
+                                    <pre class="task-json"><%= JSON.stringify(task.form_data || {}, null, 2) %></pre>
+                                </div>
+                                <div>
+                                    <label class="runtime-label">Completion Output (JSON)</label>
+                                    <textarea class="runtime-textarea" id="task-output-<%= task.id %>" placeholder='{"approved": true}'><%= task.status === 'COMPLETED' ? JSON.stringify(task.form_data || {}, null, 2) : '{}' %></textarea>
+                                </div>
+                            </div>
+
+                            <% if (task.status !== 'COMPLETED' && task.status !== 'ABORTED') { %>
+                                <div class="task-actions">
+                                    <% if (!task.assignee || task.assignee === user.username) { %>
+                                        <button class="action-btn" onclick="claimTask(<%= task.id %>);">
+                                            <i class="fas fa-hand"></i> Claim
+                                        </button>
+                                    <% } %>
+                                    <button class="action-btn primary" onclick="completeTask(<%= task.id %>);">
+                                        <i class="fas fa-check"></i> Complete
+                                    </button>
+                                </div>
+                            <% } %>
+                        </div>
+                    <% }); %>
+                </div>
+            <% } else { %>
+                <div style="color:var(--text-dim); font-size:13px;">No human tasks are attached to this instance yet.</div>
+            <% } %>
+        </div>
+    </div>
+
     <!-- Tab 1: Visual Diagram -->
-    <div id="content-diagram" class="canvas-container">
+    <div id="content-diagram" class="canvas-container" style="display:none;">
+        <div class="audit-legend" style="padding:16px 16px 0;">
+            <span><i class="audit-dot" style="background:#22c55e;"></i> Completed</span>
+            <span><i class="audit-dot" style="background:#1994ff;"></i> Active</span>
+            <span><i class="audit-dot" style="background:#f59e0b;"></i> Waiting</span>
+            <span><i class="audit-dot" style="background:#ef4444;"></i> Failed</span>
+        </div>
         <div id="canvas"></div>
     </div>
 
@@ -114,8 +416,11 @@
     <!-- Tab 3: Variables -->
     <div id="content-variables" class="glass-card" style="display: none; height: 100%; overflow-y: auto;">
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px;">
+            <% if ((variables || []).length === 0) { %>
+                <div class="variable-empty" style="grid-column:1 / -1;">No process variables were captured for this instance yet.</div>
+            <% } %>
             <% variables.forEach(v => { %>
-                <div style="background: rgba(0,0,0,0.2); padding: 20px; border-radius: 12px; border: 1px solid var(--border);">
+                <div style="background:#fcfdff; padding: 20px; border-radius: 12px; border: 1px solid var(--border);">
                     <div style="font-size: 11px; color: var(--accent); font-weight: 700; margin-bottom: 8px; text-transform: uppercase;">
                         <%= v.variable_name %>
                     </div>
@@ -127,7 +432,11 @@
             <% }); %>
         </div>
     </div>
+    </section>
+    </div>
 </div>
+
+<div id="runtime-toast" class="toast"></div>
 
 <script src="https://unpkg.com/bpmn-js@17.0.2/dist/bpmn-viewer.production.min.js"></script>
 <script>
@@ -135,38 +444,168 @@
     const bpmnXml = `<%- details.bpmn_xml %>`;
     const auditLogs = <%- JSON.stringify(logs) %>;
     const instanceStatus = "<%= details.status %>";
+    const instanceId = "<%= details.instance_id %>";
+    let diagramImported = false;
 
-    async function init() {
+    function buildNodeStats(logs) {
+        return logs.reduce((acc, log) => {
+            const bucket = acc[log.node_id] || { entered: 0, completed: 0, failed: 0, waiting: 0, latest: log.status };
+            if (log.status === 'ENTERED') bucket.entered += 1;
+            if (log.status === 'COMPLETED') bucket.completed += 1;
+            if (log.status === 'FAILED' || log.status === 'ERROR') bucket.failed += 1;
+            if (log.status === 'WAITING') bucket.waiting += 1;
+            bucket.latest = log.status;
+            acc[log.node_id] = bucket;
+            return acc;
+        }, {});
+    }
+
+    function fitDiagramViewport() {
+        const canvasElement = document.getElementById('canvas');
+        if (!canvasElement) return;
+        const rect = canvasElement.getBoundingClientRect();
+        if (!rect.width || !rect.height || !Number.isFinite(rect.width) || !Number.isFinite(rect.height)) {
+            return;
+        }
+        viewer.get('canvas').zoom('fit-viewport', 'auto');
+    }
+
+    function applyAuditMarkers() {
+        const canvas = viewer.get('canvas');
+        const overlays = viewer.get('overlays');
+        const nodeStats = buildNodeStats(auditLogs);
+
+        Object.entries(nodeStats).forEach(([nodeId, stats]) => {
+            if (stats.failed > 0) {
+                canvas.addMarker(nodeId, 'highlight-failed');
+            } else if (stats.waiting > 0 || (instanceStatus === 'WAITING' && stats.latest === 'WAITING')) {
+                canvas.addMarker(nodeId, 'highlight-waiting');
+            } else if (instanceStatus === 'RUNNING' && stats.latest === 'ENTERED') {
+                canvas.addMarker(nodeId, 'highlight-active');
+            } else if (stats.completed > 0) {
+                canvas.addMarker(nodeId, 'highlight-completed');
+            }
+
+            if (stats.entered > 0) {
+                overlays.add(nodeId, {
+                    position: { top: -10, right: -10 },
+                    html: `<div class="node-count-badge">${stats.entered}</div>`
+                });
+            }
+        });
+    }
+
+    async function ensureDiagramRendered() {
+        if (!bpmnXml || !bpmnXml.trim()) return;
         try {
-            await viewer.importXML(bpmnXml);
-            const canvas = viewer.get('canvas');
-            canvas.zoom('fit-viewport');
-
-            // Apply highlights from audit logs (The Blue Line)
-            auditLogs.forEach((log, index) => {
-                const isLast = (index === auditLogs.length - 1);
-                
-                if (instanceStatus === 'RUNNING' && isLast) {
-                    canvas.addMarker(log.node_id, 'highlight-active');
-                } else {
-                    canvas.addMarker(log.node_id, 'highlight-completed');
-                }
-            });
-
+            if (!diagramImported) {
+                await viewer.importXML(bpmnXml);
+                diagramImported = true;
+                applyAuditMarkers();
+            }
+            requestAnimationFrame(() => fitDiagramViewport());
         } catch (err) {
             console.error('BPMN Rendering Failed:', err);
         }
     }
 
     function switchTab(tab) {
-        ['diagram', 'logs', 'variables'].forEach(t => {
+        ['overview', 'diagram', 'logs', 'variables'].forEach(t => {
             document.getElementById(`content-${t}`).style.display = (t === tab) ? 'block' : 'none';
             document.getElementById(`tab-${t}`).classList.toggle('active', t === tab);
         });
         if (tab === 'diagram') {
-            viewer.get('canvas').zoom('fit-viewport');
+            ensureDiagramRendered();
         }
     }
 
-    init();
+    function showToast(message, isError = false) {
+        const toast = document.getElementById('runtime-toast');
+        toast.textContent = message;
+        toast.style.display = 'block';
+        toast.style.background = isError ? '#b42318' : '#111827';
+        clearTimeout(showToast._timer);
+        showToast._timer = setTimeout(() => {
+            toast.style.display = 'none';
+        }, 2800);
+    }
+
+    function parseJsonInput(value, fallback = {}) {
+        if (!value || !String(value).trim()) return fallback;
+        return JSON.parse(value);
+    }
+
+    async function abortInstance() {
+        if (!confirm('Abort this process instance?')) return;
+        const response = await fetch(`/api/engine/processes/instances/${encodeURIComponent(instanceId)}/abort`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+            showToast(payload.error || 'Abort failed.', true);
+            return;
+        }
+        showToast('Process instance aborted.');
+        setTimeout(() => window.location.reload(), 450);
+    }
+
+    async function sendSignal() {
+        try {
+            const signalName = document.getElementById('signal-name').value.trim();
+            const payload = parseJsonInput(document.getElementById('signal-payload').value, {});
+            const response = await fetch(`/api/engine/processes/instances/${encodeURIComponent(instanceId)}/signals`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ signalName, payload })
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) throw new Error(data.error || 'Signal failed.');
+            showToast(`Signal '${signalName}' delivered.`);
+            setTimeout(() => window.location.reload(), 500);
+        } catch (error) {
+            showToast(error.message || 'Signal payload is invalid.', true);
+        }
+    }
+
+    async function claimTask(taskId) {
+        const response = await fetch(`/api/engine/tasks/${taskId}/claim`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+            showToast(payload.error || 'Unable to claim task.', true);
+            return;
+        }
+        showToast(`Task #${taskId} claimed.`);
+        setTimeout(() => window.location.reload(), 450);
+    }
+
+    async function completeTask(taskId) {
+        try {
+            const output = parseJsonInput(document.getElementById(`task-output-${taskId}`).value, {});
+            const response = await fetch(`/api/engine/tasks/${taskId}/complete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ output })
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.success) throw new Error(payload.error || 'Unable to complete task.');
+            showToast(`Task #${taskId} completed.`);
+            setTimeout(() => window.location.reload(), 500);
+        } catch (error) {
+            showToast(error.message || 'Task output must be valid JSON.', true);
+        }
+    }
+
+    if (window.ResizeObserver) {
+        const observer = new ResizeObserver(() => {
+            if (diagramImported && document.getElementById('content-diagram').style.display !== 'none') {
+                fitDiagramViewport();
+            }
+        });
+        observer.observe(document.getElementById('canvas'));
+    }
 </script>

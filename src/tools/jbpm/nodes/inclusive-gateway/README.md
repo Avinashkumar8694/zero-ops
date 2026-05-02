@@ -1,14 +1,14 @@
-# Inclusive Branch (V1.0.0)
+# Inclusive Gateway
 
-Conditional Concurrency Orchestrator for multi-choice logical segments.
+Conditional multi-branch split or join.
 
-## Overview
-The Inclusive Gateway (OR) enables the execution of one or more outgoing paths simultaneously. It evaluates all outgoing conditions and follows every path that evaluates to true. If no conditions match, the Default path is taken.
+## What This Node Does
+Allows more than one outgoing path to be taken when multiple conditions are true. It is useful when several optional branches may run together.
 
-## Technical Parameters
-Parameters are defined on the outgoing **Sequence Flows** connected to this gateway.
+## How To Use It
+- Use it when multiple conditions may match at the same time.
+- Pair it with a matching merge strategy later in the process.
 
-## Data Movement
-1. **Evaluation**: Triggers a simultaneous check across all directed edges.
-2. **Hybrid Concurrency**: Splits and Synchronizes based on matched conditions.
-3. **Transaction Safety**: Operates within the atomic scope of the process state.
+## Validation Notes
+- This node currently has no custom properties.
+- Sequence flow conditions around it are what determine real behavior.

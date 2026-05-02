@@ -10,9 +10,10 @@ const scriptTask: NodePackage = {
     category: pkg.category as any,
     icon: '/nodes/script-task/assets/icon.svg',
     fields: [
-        { key: 'name', label: 'Script Label', type: 'text', placeholder: 'e.g., Calculate Discount' },
-        { key: 'script', label: 'Logic Snippet (JS)', type: 'snippet', description: 'Internal variable manipulation logic.' },
-        { key: 'language', label: 'Language', type: 'select', options: ['javascript'], default: 'javascript' }
+        { key: 'name', label: 'Script Label', type: 'text', group: 'general', placeholder: 'e.g., Calculate Discount', required: true },
+        { key: 'script', label: 'Logic Snippet (JS)', type: 'snippet', group: 'runtime', description: 'Internal variable manipulation logic.', required: true },
+        { key: 'language', label: 'Language', type: 'select', group: 'runtime', options: ['javascript'], default: 'javascript' },
+        { key: 'outputMapping', label: 'Output Mapping', type: 'keyvalue', group: 'mapping', description: 'Map computed script locals into process variables.', mapping: { typed: true, sourceScope: 'local', targetScope: 'process' } }
     ],
     documentation: {
         desc: 'Computational Node. Executes high-performance logic within the Zero-Sandbox.',

@@ -9,9 +9,11 @@ const callActivity: NodePackage = {
     category: pkg.category as any,
     icon: '/nodes/call-activity/assets/icon.svg',
     fields: [
-        { key: 'name', label: 'Call Label', type: 'text' },
-        { key: 'subProcessId', label: 'Process Ref', type: 'text', placeholder: 'e.g. Identity_Verify_v1' },
-        { key: 'variableMapping', label: 'In/Out Mapping', type: 'keyvalue', description: 'Variables to pass to/from child.' }
+        { key: 'name', label: 'Call Label', type: 'text', group: 'general', placeholder: 'e.g. Identity-Verification-Subflow', required: true },
+        { key: 'targetProcess', label: 'Target Process Flow', type: 'text', group: 'general', flowRef: true, required: true, description: 'Select the independent BPMN asset to transactionally invoke.' },
+        { key: 'waitForCompletion', label: 'Wait For Completion', type: 'select', group: 'runtime', options: ['true', 'false'], default: 'true', description: 'When false, the parent process continues asynchronously after invocation.' },
+        { key: 'inputMapping', label: 'Input Mapping (Parent -> Child)', type: 'keyvalue', group: 'mapping', contractRef: 'input', contractSource: 'targetProcess', description: 'Map parent variables into the child process input contract.', mapping: { typed: true, sourceScope: 'process', targetScope: 'input' } },
+        { key: 'outputMapping', label: 'Output Mapping (Child -> Parent)', type: 'keyvalue', group: 'mapping', contractRef: 'output', contractSource: 'targetProcess', description: 'Map child outputs back into the parent process scope.', mapping: { typed: true, sourceScope: 'output', targetScope: 'process' } }
     ],
     documentation: {
         desc: 'Modular Orchestration. Invokes another independent BPMN process as a reusable service.',
@@ -19,7 +21,7 @@ const callActivity: NodePackage = {
         example: 'KYC_Validation_Subflow'
     },
     action: async (ctx) => {
-        ctx.logger(`Spawning sub-orchestration: ${ctx.config.subProcessId}`);
+        ctx.logger(`Spawning sub-orchestration: ${ctx.config.targetProcess}`);
         return { success: true };
     }
 };

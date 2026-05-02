@@ -214,6 +214,16 @@ class Persistence {
     await this.pool.query(query, [JSON.stringify(variables), instanceId]);
   }
 
+  async updateInstanceMetadata(instanceId: string, metadata: Record<string, any>): Promise<void> {
+    const query = `UPDATE zero_instances SET metadata = $1 WHERE instance_id = $2`;
+    await this.pool.query(query, [JSON.stringify(metadata), instanceId]);
+  }
+
+  async updateInstanceStatus(instanceId: string, status: string): Promise<void> {
+    const query = `UPDATE zero_instances SET status = $1 WHERE instance_id = $2`;
+    await this.pool.query(query, [status, instanceId]);
+  }
+
   /**
    * Finalizes an instance.
    */
@@ -234,13 +244,15 @@ class Persistence {
   /**
    * Stores a generated BPMN asset with project context.
    */
-  async saveAsset(workflowName: string, projectName: string, bpmnXml: string, jsonConfig: any, version: string = '1.0.0'): Promise<void> {
+  async saveAsset(workflowName: string, projectName: string, bpmnXml: string, jsonConfig: any, version: string = '1.0.0'): Promise<any> {
     const query = `
       INSERT INTO zero_assets (workflow_name, project_name, bpmn_xml, json_config, version)
       VALUES ($1, $2, $3, $4, $5)
       ON CONFLICT (workflow_name, version) DO UPDATE SET bpmn_xml = $3, json_config = $4
+      RETURNING *
     `;
-    await this.pool.query(query, [workflowName, projectName, bpmnXml, JSON.stringify(jsonConfig), version]);
+    const result = await this.pool.query(query, [workflowName, projectName, bpmnXml, JSON.stringify(jsonConfig), version]);
+    return result.rows[0] || null;
   }
 
   /**
@@ -250,6 +262,34 @@ class Persistence {
     const query = `SELECT * FROM zero_assets WHERE project_name = $1 ORDER BY created_at DESC`;
     const result = await this.pool.query(query, [projectName]);
     return result.rows;
+  }
+
+  async getProjectAssetVersions(projectName: string, workflowName: string): Promise<any[]> {
+    const query = `
+      SELECT *
+      FROM zero_assets
+      WHERE project_name = $1 AND workflow_name = $2
+      ORDER BY created_at DESC
+    `;
+    const result = await this.pool.query(query, [projectName, workflowName]);
+    return result.rows;
+  }
+
+  async getLatestAssetByName(name: string): Promise<any> {
+      const query = `SELECT * FROM zero_assets WHERE workflow_name = $1 ORDER BY version DESC, created_at DESC LIMIT 1`;
+      const result = await this.pool.query(query, [name]);
+      return result.rows[0] || null;
+  }
+
+  async getAssetByNameAndVersion(name: string, version: string): Promise<any> {
+    const result = await this.pool.query(`
+      SELECT *
+      FROM zero_assets
+      WHERE workflow_name = $1 AND version = $2
+      ORDER BY created_at DESC
+      LIMIT 1
+    `, [name, version]);
+    return result.rows[0] || null;
   }
 
   async getAsset(id: number): Promise<any> {
@@ -263,6 +303,10 @@ class Persistence {
 
   async renameAsset(id: number, newName: string): Promise<void> {
     await this.pool.query(`UPDATE zero_assets SET workflow_name = $1 WHERE id = $2`, [newName, id]);
+  }
+
+  async setAssetActiveState(id: number, isActive: boolean): Promise<void> {
+    await this.pool.query(`UPDATE zero_assets SET is_active = $1 WHERE id = $2`, [isActive, id]);
   }
 
   /**
@@ -468,12 +512,27 @@ class Persistence {
     const query = `
       SELECT i.*, a.bpmn_xml, a.json_config 
       FROM zero_instances i
-      LEFT JOIN zero_assets a ON i.workflow_name = a.workflow_name
+      LEFT JOIN LATERAL (
+        SELECT bpmn_xml, json_config
+        FROM zero_assets a
+        WHERE a.workflow_name = i.workflow_name
+          AND (
+            COALESCE(i.metadata->>'assetVersion', '') = ''
+            OR a.version = i.metadata->>'assetVersion'
+          )
+        ORDER BY a.created_at DESC
+        LIMIT 1
+      ) a ON TRUE
       WHERE i.instance_id = $1
       LIMIT 1
     `;
     const result = await this.pool.query(query, [instanceId]);
     return result.rows[0];
+  }
+
+  async getInstance(instanceId: string): Promise<any> {
+    const result = await this.pool.query(`SELECT * FROM zero_instances WHERE instance_id = $1 LIMIT 1`, [instanceId]);
+    return result.rows[0] || null;
   }
 
   /**
@@ -497,6 +556,54 @@ class Persistence {
     `;
     const result = await this.pool.query(query, [instanceId]);
     return result.rows;
+  }
+
+  async getInstanceFamily(instanceId: string): Promise<any[]> {
+    const instance = await this.getInstance(instanceId);
+    if (!instance) return [];
+
+    let rootId = instanceId;
+    let cursor = instance;
+    const visited = new Set<string>();
+
+    while (cursor?.metadata?.parentInstanceId && !visited.has(cursor.metadata.parentInstanceId)) {
+      visited.add(cursor.instance_id);
+      const parent = await this.getInstance(cursor.metadata.parentInstanceId);
+      if (!parent) break;
+      rootId = parent.instance_id;
+      cursor = parent;
+    }
+
+    const query = `
+      WITH RECURSIVE family AS (
+        SELECT i.*, 0 AS depth
+        FROM zero_instances i
+        WHERE i.instance_id = $1
+        UNION ALL
+        SELECT child.*, family.depth + 1
+        FROM zero_instances child
+        JOIN family ON child.metadata->>'parentInstanceId' = family.instance_id
+      )
+      SELECT *
+      FROM family
+      ORDER BY depth ASC, start_time ASC
+    `;
+    const result = await this.pool.query(query, [rootId]);
+    return result.rows;
+  }
+
+  async getNodeStatusSnapshot(instanceId: string): Promise<Record<string, string>> {
+    const result = await this.pool.query(`
+      SELECT DISTINCT ON (node_id) node_id, status
+      FROM zero_nodes
+      WHERE instance_id = $1
+      ORDER BY node_id, enter_time DESC, id DESC
+    `, [instanceId]);
+
+    return result.rows.reduce((acc: Record<string, string>, row: any) => {
+      acc[row.node_id] = row.status;
+      return acc;
+    }, {});
   }
 
   // --- IAM & RBAC Methods ---
@@ -577,6 +684,69 @@ class Persistence {
     return result.rows;
   }
 
+  async getTasks(filters: { assignee?: string; group?: string; status?: string; instanceId?: string } = {}): Promise<any[]> {
+    const clauses: string[] = [];
+    const params: any[] = [];
+
+    if (filters.assignee) {
+      params.push(filters.assignee);
+      clauses.push(`t.assignee = $${params.length}`);
+    }
+
+    if (filters.group) {
+      params.push(filters.group);
+      clauses.push(`t.potential_groups ? $${params.length}`);
+    }
+
+    if (filters.status) {
+      params.push(filters.status);
+      clauses.push(`t.status = $${params.length}`);
+    }
+
+    if (filters.instanceId) {
+      params.push(filters.instanceId);
+      clauses.push(`t.instance_id = $${params.length}`);
+    }
+
+    const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+    const result = await this.pool.query(`
+      SELECT t.*, i.workflow_name
+      FROM zero_tasks t
+      JOIN zero_instances i ON t.instance_id = i.instance_id
+      ${where}
+      ORDER BY t.created_at DESC
+    `, params);
+
+    return result.rows;
+  }
+
+  async getTaskById(taskId: number): Promise<any> {
+    const result = await this.pool.query(`SELECT * FROM zero_tasks WHERE id = $1 LIMIT 1`, [taskId]);
+    return result.rows[0] || null;
+  }
+
+  async createTask(instanceId: string, nodeId: string, options: {
+    assignee?: string | null;
+    potentialGroups?: string[];
+    priority?: number;
+    formData?: Record<string, any>;
+  } = {}): Promise<any> {
+    const result = await this.pool.query(`
+      INSERT INTO zero_tasks (instance_id, node_id, status, assignee, potential_groups, priority, form_data)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *
+    `, [
+      instanceId,
+      nodeId,
+      options.assignee ? 'RESERVED' : 'READY',
+      options.assignee || null,
+      JSON.stringify(options.potentialGroups || []),
+      options.priority || 1,
+      JSON.stringify(options.formData || {})
+    ]);
+    return result.rows[0];
+  }
+
   async claimTask(taskId: number, username: string): Promise<void> {
     const query = `
       UPDATE zero_tasks 
@@ -592,6 +762,17 @@ class Persistence {
   async reassignTask(taskId: number, newAssignee: string): Promise<void> {
     const query = `UPDATE zero_tasks SET assignee = $1, status = 'RESERVED' WHERE id = $2`;
     await this.pool.query(query, [newAssignee, taskId]);
+  }
+
+  async completeTask(taskId: number, output: Record<string, any> = {}, completedBy: string | null = null): Promise<void> {
+    await this.pool.query(`
+      UPDATE zero_tasks
+      SET status = 'COMPLETED',
+          assignee = COALESCE($3, assignee),
+          form_data = $2,
+          completed_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+    `, [taskId, JSON.stringify(output || {}), completedBy]);
   }
 
   /**

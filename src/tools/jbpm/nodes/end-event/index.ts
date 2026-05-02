@@ -9,8 +9,8 @@ const endEvent: NodePackage = {
     category: pkg.category as any,
     icon: '/nodes/end-event/assets/icon.svg',
     fields: [
-        { key: 'name', label: 'Terminal State Label', type: 'text', placeholder: 'e.g. Order-Complete', required: true },
-        { key: 'outputMapping', label: 'Final Result Mapping (Variable -> Response)', type: 'keyvalue', required: true, description: 'Map global process variables to the final response payload.' }
+        { key: 'name', label: 'Terminal State Label', type: 'text', group: 'general', placeholder: 'e.g. Order-Complete', required: true },
+        { key: 'outputMapping', label: 'Final Result Mapping (Variable -> Response)', type: 'keyvalue', group: 'mapping', required: true, description: 'Map global process variables to the final response payload.', mapping: { typed: true, sourceScope: 'process', targetScope: 'output' } }
     ],
     documentation: {
         desc: 'Terminal node. Marks the successful completion of a process branch and defines the exit contract.',

@@ -1,99 +1,841 @@
-<div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 40px;">
+<%
+const selectedProject = project || (projects && projects[0] ? projects[0].name : null);
+const selectedWorkflow = selectedAsset ? selectedAsset.workflow_name : null;
+const projectAssets = assets || [];
+const projectCount = (projects || []).length;
+const liveCount = projectAssets.filter(asset => asset.is_active).length;
+const currentVersions = versions || [];
+const currentContract = contract || { inputs: [], outputs: [], locals: [] };
+%>
+
+<style>
+    .deploy-shell {
+        display: grid;
+        grid-template-columns: 320px 340px minmax(0, 1fr);
+        gap: 0;
+        min-height: calc(100vh - 180px);
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 22px;
+        overflow: hidden;
+        box-shadow: var(--shadow);
+    }
+
+    .deploy-pane {
+        background: white;
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+    .deploy-pane:last-child {
+        border-right: none;
+        background: #fbfcfe;
+    }
+
+    .pane-header {
+        padding: 20px 18px 14px;
+        border-bottom: 1px solid var(--border);
+        background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+    }
+
+    .pane-title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .pane-title {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #384250;
+    }
+
+    .pane-subtitle {
+        margin: 8px 0 0 0;
+        color: var(--text-dim);
+        font-size: 12px;
+        line-height: 1.5;
+    }
+
+    .mini-icon-btn {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: white;
+        color: #475467;
+        cursor: pointer;
+    }
+
+    .mini-icon-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+
+    .pane-toolbar {
+        padding: 16px 18px 12px;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .pane-search {
+        width: 100%;
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px 14px;
+        color: var(--text-main);
+        font-size: 13px;
+        box-sizing: border-box;
+    }
+
+    .pane-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0 0 18px 0;
+        background: #fff;
+    }
+
+    .project-row,
+    .asset-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 18px;
+        text-decoration: none;
+        color: var(--text-main);
+        border-bottom: 1px solid #edf2f7;
+        transition: background 0.2s ease, border-color 0.2s ease;
+    }
+
+    .asset-row {
+        justify-content: space-between;
+    }
+
+    .project-row:hover,
+    .asset-row:hover {
+        background: #f8fbff;
+    }
+
+    .project-row.active,
+    .asset-row.active {
+        background: #e9f5ff;
+        border-left: 4px solid var(--primary);
+        padding-left: 14px;
+    }
+
+    .row-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        background: #f2f7ff;
+        border: 1px solid #d5e8ff;
+        color: var(--primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+    }
+
+    .row-content {
+        min-width: 0;
+        flex: 1;
+    }
+
+    .row-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 0 0 auto;
+    }
+
+    .inline-action {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: white;
+        color: #475467;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        cursor: pointer;
+    }
+
+    .inline-action:hover {
+        color: var(--primary);
+        border-color: #c8e1ff;
+        background: #f8fbff;
+    }
+
+    .row-title {
+        font-weight: 700;
+        font-size: 14px;
+        color: #1d2939;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .row-meta {
+        margin-top: 4px;
+        font-size: 11px;
+        color: var(--text-dim);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .row-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 22px;
+        height: 22px;
+        padding: 0 8px;
+        border-radius: 999px;
+        background: #eff6ff;
+        color: var(--primary);
+        font-size: 10px;
+        font-weight: 800;
+    }
+
+    .server-capabilities {
+        padding: 16px 18px 0;
+        border-top: 1px solid var(--border);
+        background: #fbfcfe;
+    }
+
+    .server-capabilities h4 {
+        margin: 0 0 12px 0;
+        font-size: 12px;
+        color: #475467;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .capability-grid {
+        display: grid;
+        gap: 10px;
+        padding-bottom: 18px;
+    }
+
+    .capability-chip {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--text-dim);
+        font-size: 13px;
+    }
+
+    .chip-indicator {
+        width: 16px;
+        height: 16px;
+        border-radius: 5px;
+        background: #e7f8ef;
+        color: var(--success);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 900;
+    }
+
+    .detail-pane {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        background: #fbfcfe;
+    }
+
+    .detail-topbar {
+        padding: 18px 22px 10px;
+        border-bottom: 1px solid var(--border);
+        background: white;
+    }
+
+    .detail-title-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        align-items: flex-start;
+        margin-bottom: 12px;
+    }
+
+    .detail-id {
+        color: var(--text-soft);
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .detail-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: flex-end;
+    }
+
+    .control-btn {
+        min-width: 120px;
+        padding: 10px 18px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: white;
+        color: #475467;
+        font-weight: 700;
+        font-size: 13px;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+
+    .control-btn.primary {
+        background: #edf6ff;
+        color: var(--primary-deep);
+        border-color: #c8e1ff;
+    }
+
+    .control-btn.danger {
+        color: var(--danger);
+    }
+
+    .detail-tabs {
+        display: flex;
+        gap: 28px;
+        margin-top: 8px;
+    }
+
+    .detail-tab {
+        border: none;
+        background: transparent;
+        padding: 10px 0 12px;
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-dim);
+        border-bottom: 2px solid transparent;
+        cursor: pointer;
+    }
+
+    .detail-tab.active {
+        color: var(--primary);
+        border-bottom-color: var(--primary);
+    }
+
+    .detail-body {
+        padding: 26px 22px 24px;
+        overflow-y: auto;
+        flex: 1;
+    }
+
+    .detail-panel {
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+    }
+
+    .hero-status {
+        background: #f4f7fc;
+        border: 1px solid #e4eaf3;
+        padding: 24px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 12px;
+        min-height: 250px;
+    }
+
+    .status-ring {
+        width: 54px;
+        height: 54px;
+        border-radius: 999px;
+        border: 3px solid #ef4444;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #ef4444;
+        font-size: 22px;
+        background: white;
+    }
+
+    .detail-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+        margin-top: 18px;
+    }
+
+    .stat-card {
+        padding: 18px;
+        border-radius: 14px;
+        background: white;
+        border: 1px solid var(--border);
+    }
+
+    .stat-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-dim);
+        font-weight: 800;
+        margin-bottom: 8px;
+    }
+
+    .stat-value {
+        color: #101828;
+        font-size: 20px;
+        font-weight: 800;
+    }
+
+    .detail-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+
+    .detail-table th,
+    .detail-table td {
+        padding: 14px 12px;
+        border-bottom: 1px solid #edf2f7;
+        text-align: left;
+        vertical-align: top;
+    }
+
+    .detail-table th {
+        color: var(--text-dim);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .contract-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+        margin-top: 18px;
+    }
+
+    .contract-block {
+        border: 1px solid var(--border);
+        background: #fff;
+        border-radius: 14px;
+        padding: 16px;
+    }
+
+    .contract-block h4 {
+        margin: 0 0 12px 0;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #475467;
+    }
+
+    .contract-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .contract-pill {
+        padding: 8px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        background: #eff6ff;
+        color: var(--primary-deep);
+    }
+
+    .version-card {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 16px 18px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        margin-bottom: 12px;
+        background: white;
+    }
+
+    .empty-state {
+        padding: 40px 24px;
+        text-align: center;
+        color: var(--text-dim);
+    }
+
+    @media (max-width: 1400px) {
+        .deploy-shell {
+            grid-template-columns: 280px 300px minmax(0, 1fr);
+        }
+    }
+
+    @media (max-width: 1100px) {
+        .deploy-shell {
+            grid-template-columns: 1fr;
+        }
+
+        .deploy-pane {
+            border-right: none;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .detail-grid,
+        .contract-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:18px; gap:18px;">
     <div>
-        <h1 style="font-size: 28px; margin: 0 0 8px 0; font-weight: 800; letter-spacing: -1px;">Asset Repository</h1>
-        <p style="color: var(--text-dim); margin: 0; font-size: 14px;">Project Context: <strong style="color: var(--accent);"><%= project || 'Global' %></strong></p>
+        <div style="font-size:12px; color:var(--text-dim); font-weight:700; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:8px;">Deploy / Execution Servers</div>
+        <h1 style="margin:0; font-size:30px; font-weight:800; letter-spacing:-0.04em;">Deployment Console</h1>
+        <p style="margin:10px 0 0 0; color:var(--text-dim); max-width:840px; line-height:1.6;">Manage deployed process units by project, inspect available versions, review input and output contracts, and route into process management just like a jBPM-style operational console.</p>
     </div>
-    <div style="display: flex; gap: 12px;">
-        <button onclick="showProjectSettings()" class="action-btn" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border);">
-            <i class="fas fa-cog"></i> Project Settings
+    <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:flex-end;">
+        <button onclick="showProjectSettings()" class="action-btn" style="background:white; color:#344054; border:1px solid var(--border);">
+            <i class="fas fa-gear"></i> Server Settings
         </button>
-        <button onclick="showNewAssetModal()" class="action-btn" style="background: var(--primary); box-shadow: 0 4px 20px rgba(37, 99, 235, 0.3);">
-            <i class="fas fa-plus"></i> Initialize New Asset
+        <button onclick="showNewAssetModal()" class="action-btn" style="background:var(--primary); color:white; box-shadow:0 12px 24px rgba(25,148,255,0.22);">
+            <i class="fas fa-plus"></i> Add Deployment Unit
         </button>
     </div>
 </div>
 
-<div class="glass-card" style="padding: 0; overflow: hidden;">
-    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-        <thead>
-            <tr style="text-align: left; color: var(--text-dim); background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--border);">
-                <th style="padding: 16px 24px;">Artifact & Version</th>
-                <th>Namespace</th>
-                <th>Release State</th>
-                <th>Modified</th>
-                <th style="text-align: right; padding-right: 24px;">Orchestration</th>
-            </tr>
-        </thead>
-        <tbody>
-            <% if (assets && assets.length > 0) { %>
-                <% assets.forEach(asset => { %>
-                    <tr style="border-bottom: 1px solid var(--border); transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.015)'" onmouseout="this.style.background='transparent'">
-                        <td style="padding: 20px 24px;">
-                            <div style="font-weight: 700; display: flex; align-items: center; gap: 12px; color: white;">
-                                <div style="width: 36px; height:36px; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--accent);">
-                                    <i class="fas fa-file-invoice"></i>
-                                </div>
-                                <div>
-                                    <div style="font-size: 14px;"><%= asset.workflow_name %></div>
-                                    <div style="font-size: 10px; color: var(--text-dim); opacity: 0.6; margin-top: 2px;">ID: <%= asset.id %> | v<%= asset.version || '1.0.0' %></div>
-                                </div>
+<div class="deploy-shell">
+    <section class="deploy-pane">
+        <div class="pane-header">
+            <div class="pane-title-row">
+                <h3 class="pane-title">Server Configurations</h3>
+                <button onclick="location.href='/projects'" class="mini-icon-btn" title="Open projects">
+                    <i class="fas fa-rotate"></i>
+                </button>
+            </div>
+            <p class="pane-subtitle">Projects act as execution server contexts. Select a project to inspect its deployed process units and versions.</p>
+        </div>
+        <div class="pane-toolbar">
+            <button onclick="location.href='/projects'" class="action-btn" style="background:white; color:#344054; border:1px solid var(--border); width:100%; justify-content:flex-start;">
+                <i class="fas fa-plus"></i> New Server Configuration
+            </button>
+        </div>
+        <div class="pane-list">
+            <% if (projects && projects.length > 0) { %>
+                <% projects.forEach(item => { %>
+                    <a href="/deployments?project=<%= encodeURIComponent(item.name) %>" class="project-row <%= selectedProject === item.name ? 'active' : '' %>">
+                        <div class="row-icon"><i class="fas fa-folder"></i></div>
+                        <div class="row-content">
+                            <div class="row-title"><%= item.name %></div>
+                            <div class="row-meta">
+                                <span><%= item.namespace || 'default' %></span>
+                                <span class="row-pill"><%= item.owner || 'admin' %></span>
                             </div>
-                        </td>
-                        <td><span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent);"><%= asset.namespace || 'default' %></span></td>
-                        <td>
-                            <% if (asset.is_active) { %>
-                                <span class="status-badge" style="background: rgba(34, 197, 94, 0.1); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.2);">Deployed</span>
-                            <% } else { %>
-                                <span class="status-badge" style="background: rgba(239, 68, 68, 0.1); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.2);">Draft</span>
-                            <% } %>
-                        </td>
-                        <td style="color: var(--text-dim);"><%= new Date(asset.created_at).toLocaleDateString() %></td>
-                        <td style="text-align: right; padding-right: 24px;">
-                            <div style="display: flex; gap: 8px; justify-content: flex-end;">
-                                <a href="/projects/<%= project %>/modeler?assetId=<%= asset.id %>" title="Launch Modeler" class="action-btn" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border); padding: 8px 12px; font-size: 12px; color: white; text-decoration: none;">
-                                    <i class="fas fa-edit"></i> Edit
-                                </a>
-                                <button onclick="renameAsset('<%= asset.id %>', '<%= asset.workflow_name %>')" title="Rename Artifact" style="background: transparent; border: 1px solid var(--border); color: var(--text-dim); padding: 8px 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--accent)'; this.style.color='white'">
-                                    <i class="fas fa-pen-nib"></i>
-                                </button>
-                                <button onclick="deleteAsset('<%= asset.id %>', '<%= asset.workflow_name %>')" title="Destroy Asset" style="background: transparent; border: 1px solid var(--border); color: var(--text-dim); padding: 8px 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--success)'; this.style.color='#f87171'">
-                                    <i class="fas fa-trash-alt"></i>
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                <% }); %>
+                        </div>
+                    </a>
+                <% }) %>
             <% } else { %>
-                <tr>
-                    <td colspan="5" style="padding: 100px; text-align: center; color: var(--text-dim);">
-                        <i class="fas fa-ghost" style="font-size: 48px; margin-bottom: 24px; opacity: 0.1;"></i>
-                        <p style="margin: 0; font-size: 16px; font-weight: 600;">Repository Empty</p>
-                        <p style="margin: 8px 0 0 0; opacity: 0.6;">Initialize your first process artifact to begin orchestration.</p>
-                    </td>
-                </tr>
+                <div class="empty-state">No project servers are configured yet.</div>
             <% } %>
-        </tbody>
-    </table>
+        </div>
+    </section>
+
+    <section class="deploy-pane">
+        <div class="pane-header">
+            <div class="pane-title-row">
+                <h3 class="pane-title"><%= selectedProject || 'No Project Selected' %></h3>
+                <button onclick="location.reload()" class="mini-icon-btn" title="Refresh deployments">
+                    <i class="fas fa-sync"></i>
+                </button>
+            </div>
+            <p class="pane-subtitle">Capabilities and deployment units for the selected execution context.</p>
+        </div>
+
+        <div class="server-capabilities">
+            <h4>Capabilities</h4>
+            <div class="capability-grid">
+                <div class="capability-chip"><span class="chip-indicator"><i class="fas fa-check"></i></span> Decision</div>
+                <div class="capability-chip"><span class="chip-indicator"><i class="fas fa-check"></i></span> Process</div>
+                <div class="capability-chip"><span class="chip-indicator"><i class="fas fa-check"></i></span> Human Tasks</div>
+            </div>
+        </div>
+
+        <div class="pane-header" style="padding-top:16px;">
+            <div class="pane-title-row">
+                <h3 class="pane-title">Deployment Units</h3>
+                <span class="row-pill"><%= projectAssets.length %></span>
+            </div>
+            <p class="pane-subtitle">Each process asset version is grouped under a deployable unit. Select one to inspect status, versions, and contracts.</p>
+        </div>
+
+        <div class="pane-toolbar">
+            <input id="asset-filter" class="pane-search" placeholder="Filter deployment units..." oninput="filterDeployments(this.value)">
+        </div>
+
+        <div class="pane-list" id="asset-list">
+            <% if (projectAssets.length > 0) { %>
+                <% projectAssets.forEach(asset => { %>
+                    <div
+                        class="asset-row <%= selectedAsset && selectedAsset.id === asset.id ? 'active' : '' %>"
+                        data-name="<%= asset.workflow_name.toLowerCase() %>"
+                        role="button"
+                        tabindex="0"
+                        onclick="openAssetEditor('<%= asset.id %>')"
+                        onkeydown="handleAssetRowKey(event, '<%= asset.id %>')"
+                        title="Open this asset in Business Studio"
+                    >
+                        <div class="row-icon"><i class="fas fa-folder-open"></i></div>
+                        <div class="row-content">
+                            <div class="row-title"><%= asset.workflow_name %></div>
+                            <div class="row-meta">
+                                <span>v<%= asset.version || '1.0.0' %></span>
+                                <span><%= asset.is_active ? 'Active' : 'Inactive' %></span>
+                            </div>
+                        </div>
+                        <div class="row-actions">
+                            <a href="/deployments?project=<%= encodeURIComponent(selectedProject) %>&workflow=<%= encodeURIComponent(asset.workflow_name) %>&assetId=<%= asset.id %>" class="inline-action" title="Inspect deployment" onclick="event.stopPropagation()">
+                                <i class="fas fa-circle-info"></i>
+                            </a>
+                            <a href="/projects/<%= encodeURIComponent(selectedProject) %>/modeler?assetId=<%= asset.id %>" class="inline-action" title="Open asset editor" onclick="event.stopPropagation()">
+                                <i class="fas fa-pen-ruler"></i>
+                            </a>
+                        </div>
+                    </div>
+                <% }) %>
+            <% } else { %>
+                <div class="empty-state">No deployment units exist for this project yet.</div>
+            <% } %>
+        </div>
+    </section>
+
+    <section class="detail-pane">
+        <% if (selectedAsset) { %>
+            <div class="detail-topbar">
+                <div class="detail-title-row">
+                    <div>
+                        <div class="detail-id">[ Group Id: <%= selectedProject || 'default' %> | Artifact Id: <%= selectedAsset.workflow_name %> ]</div>
+                        <h2 style="margin:10px 0 0 0; font-size:28px; font-weight:800; letter-spacing:-0.04em;"><%= selectedAsset.workflow_name %></h2>
+                    </div>
+                    <div class="detail-actions">
+                        <a href="/projects/<%= encodeURIComponent(selectedProject) %>/assets?assetId=<%= selectedAsset.id %>" class="control-btn primary"><i class="fas fa-play"></i> Open Studio</a>
+                        <button onclick="toggleActivation('<%= selectedAsset.id %>', <%= selectedAsset.is_active ? 'false' : 'true' %>)" class="control-btn"><%= selectedAsset.is_active ? 'Deactivate' : 'Activate' %></button>
+                        <button onclick="renameAsset('<%= selectedAsset.id %>', '<%= selectedAsset.workflow_name %>')" class="control-btn">Rename</button>
+                        <button onclick="removeDeployment('<%= selectedAsset.id %>', '<%= selectedAsset.workflow_name %>')" class="control-btn danger"><i class="fas fa-trash"></i> Remove Deployment</button>
+                        <button onclick="location.reload()" class="control-btn"><i class="fas fa-rotate"></i> Refresh</button>
+                    </div>
+                </div>
+                <div class="detail-tabs">
+                    <button class="detail-tab active" onclick="switchDeploymentTab('status')" id="tab-status">Status</button>
+                    <button class="detail-tab" onclick="switchDeploymentTab('versions')" id="tab-versions">Version Configuration</button>
+                    <button class="detail-tab" onclick="switchDeploymentTab('process')" id="tab-process">Process Configuration</button>
+                </div>
+            </div>
+
+            <div class="detail-body">
+                <div id="panel-status" class="deployment-panel">
+                    <div class="detail-panel">
+                        <div class="hero-status">
+                            <div style="font-size:28px; font-weight:700; color:#344054;"><%= selectedProject %>@localhost:3000</div>
+                            <div class="status-ring">
+                                <i class="fas <%= selectedAsset.is_active ? 'fa-check' : 'fa-xmark' %>"></i>
+                            </div>
+                            <div style="font-size:36px; font-weight:800; color:#101828;"><%= selectedAsset.is_active ? '1' : '0' %></div>
+                            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:center; text-align:center;">
+                                <span style="font-size:14px; color:var(--primary); font-weight:700;">/api/engine/processes/<%= selectedAsset.workflow_name %>/start</span>
+                                <span style="font-size:13px; color:var(--text-dim);">v<%= selectedAsset.version || '1.0.0' %></span>
+                            </div>
+                        </div>
+
+                        <div class="detail-grid">
+                            <div class="stat-card">
+                                <div class="stat-label">Project Servers</div>
+                                <div class="stat-value"><%= projectCount %></div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Live Units In Project</div>
+                                <div class="stat-value"><%= liveCount %></div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Selected Version</div>
+                                <div class="stat-value">v<%= selectedAsset.version || '1.0.0' %></div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Deployed At</div>
+                                <div class="stat-value" style="font-size:18px;"><%= new Date(selectedAsset.created_at).toLocaleDateString() %></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="panel-versions" class="deployment-panel" style="display:none;">
+                    <div class="detail-panel">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:16px; margin-bottom:18px;">
+                            <div>
+                                <h3 style="margin:0; font-size:20px; font-weight:800;">Version Configuration</h3>
+                                <p style="margin:8px 0 0 0; color:var(--text-dim);">All available deployment versions for this process unit.</p>
+                            </div>
+                        </div>
+                        <% if (currentVersions.length > 0) { %>
+                            <% currentVersions.forEach(version => { %>
+                                <div class="version-card">
+                                    <div>
+                                        <div style="font-size:16px; font-weight:800; color:#111827;">v<%= version.version || '1.0.0' %></div>
+                                        <div style="margin-top:6px; color:var(--text-dim); font-size:12px;">Created <%= new Date(version.created_at).toLocaleString() %></div>
+                                    </div>
+                                    <div style="display:flex; align-items:center; gap:10px;">
+                                        <span class="status-badge" style="background:<%= version.is_active ? '#e7f8ef' : '#f2f4f7' %>; color:<%= version.is_active ? 'var(--success)' : '#667085' %>;"><%= version.is_active ? 'Active' : 'Inactive' %></span>
+                                        <a href="/projects/<%= encodeURIComponent(selectedProject) %>/assets?assetId=<%= version.id %>" class="control-btn primary" style="min-width:auto; padding:9px 14px;">Open Studio</a>
+                                        <a href="/deployments?project=<%= encodeURIComponent(selectedProject) %>&workflow=<%= encodeURIComponent(version.workflow_name) %>&assetId=<%= version.id %>" class="control-btn" style="min-width:auto; padding:9px 14px;">Inspect</a>
+                                    </div>
+                                </div>
+                            <% }) %>
+                        <% } else { %>
+                            <div class="empty-state">No version history is available for this deployment unit yet.</div>
+                        <% } %>
+                    </div>
+                </div>
+
+                <div id="panel-process" class="deployment-panel" style="display:none;">
+                    <div class="detail-panel">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:16px; margin-bottom:18px;">
+                            <div>
+                                <h3 style="margin:0; font-size:20px; font-weight:800;">Process Configuration</h3>
+                                <p style="margin:8px 0 0 0; color:var(--text-dim);">Review the API contract and process variable surfaces before starting instances.</p>
+                            </div>
+                            <a href="/instances" class="control-btn primary" style="min-width:auto; padding:10px 16px;"><i class="fas fa-wave-square"></i> Open Process Instances</a>
+                        </div>
+
+                        <table class="detail-table">
+                            <thead>
+                                <tr>
+                                    <th>Process</th>
+                                    <th>Project</th>
+                                    <th>Version</th>
+                                    <th>Engine Endpoint</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong><%= selectedAsset.workflow_name %></strong></td>
+                                    <td><%= selectedProject || 'default' %></td>
+                                    <td>v<%= selectedAsset.version || '1.0.0' %></td>
+                                    <td><code>/api/engine/processes/<%= selectedAsset.workflow_name %>/start</code></td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <div class="contract-grid">
+                            <div class="contract-block">
+                                <h4>Input Contract</h4>
+                                <div class="contract-list">
+                                    <% if (currentContract.inputs && currentContract.inputs.length > 0) { %>
+                                        <% currentContract.inputs.forEach(item => { %>
+                                            <span class="contract-pill"><%= item %></span>
+                                        <% }) %>
+                                    <% } else { %>
+                                        <span style="color:var(--text-dim); font-size:12px;">No explicit input variables detected.</span>
+                                    <% } %>
+                                </div>
+                            </div>
+                            <div class="contract-block">
+                                <h4>Output Contract</h4>
+                                <div class="contract-list">
+                                    <% if (currentContract.outputs && currentContract.outputs.length > 0) { %>
+                                        <% currentContract.outputs.forEach(item => { %>
+                                            <span class="contract-pill"><%= item %></span>
+                                        <% }) %>
+                                    <% } else { %>
+                                        <span style="color:var(--text-dim); font-size:12px;">No explicit output keys detected.</span>
+                                    <% } %>
+                                </div>
+                            </div>
+                            <div class="contract-block">
+                                <h4>Local Variables</h4>
+                                <div class="contract-list">
+                                    <% if (currentContract.locals && currentContract.locals.length > 0) { %>
+                                        <% currentContract.locals.forEach(item => { %>
+                                            <span class="contract-pill"><%= item %></span>
+                                        <% }) %>
+                                    <% } else { %>
+                                        <span style="color:var(--text-dim); font-size:12px;">No scoped local variables detected.</span>
+                                    <% } %>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        <% } else { %>
+            <div class="detail-body">
+                <div class="detail-panel">
+                    <div class="empty-state">
+                        <i class="fas fa-server" style="font-size:48px; opacity:0.18; display:block; margin-bottom:16px;"></i>
+                        Select a project and deployment unit to inspect its status, versions, and process configuration.
+                    </div>
+                </div>
+            </div>
+        <% } %>
+    </section>
 </div>
 
 <script>
+    function openAssetEditor(assetId) {
+        if (!assetId) return;
+        window.location.href = `/projects/<%= encodeURIComponent(selectedProject || '') %>/modeler?assetId=${encodeURIComponent(assetId)}`;
+    }
+
+    function handleAssetRowKey(event, assetId) {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openAssetEditor(assetId);
+        }
+    }
+
+    function filterDeployments(value) {
+        const term = String(value || '').toLowerCase().trim();
+        document.querySelectorAll('#asset-list .asset-row').forEach(row => {
+            row.style.display = !term || row.dataset.name.includes(term) ? 'flex' : 'none';
+        });
+    }
+
+    function switchDeploymentTab(tab) {
+        ['status', 'versions', 'process'].forEach(key => {
+            document.getElementById(`panel-${key}`).style.display = key === tab ? 'block' : 'none';
+            document.getElementById(`tab-${key}`).classList.toggle('active', key === tab);
+        });
+    }
+
     function showNewAssetModal() {
         const html = `
             <div class="modal-header">
-                <h2>Initialize Process Asset</h2>
-                <p>Register a new BPMN orchestration definition in <strong><%= project %></strong>.</p>
+                <h2>Add Deployment Unit</h2>
+                <p>Create a new process asset inside <strong><%= selectedProject || 'a project' %></strong> and open it in the modeler.</p>
             </div>
             <div class="form-group">
-                <label class="form-label">Asset Identity (Slug)</label>
+                <label class="form-label">Deployment Unit Name</label>
                 <input type="text" id="a-name" class="form-input" placeholder="e.g. order-fulfillment-service">
             </div>
             <div class="form-group">
                 <label class="form-label">Initial Version</label>
                 <input type="text" id="a-version" class="form-input" value="1.0.0">
             </div>
-            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 32px;">
-                <button onclick="ZeroModal.close()" class="action-btn" style="background: transparent; color: var(--text-dim);">Cancel</button>
-                <button onclick="submitNewAsset()" class="action-btn" style="background: var(--primary); min-width: 140px; justify-content: center;">Initialize & Open</button>
+            <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:28px;">
+                <button onclick="ZeroModal.close()" class="action-btn" style="background:#f2f4f7; color:#344054;">Cancel</button>
+                <button onclick="submitNewAsset()" class="action-btn" style="background:var(--primary); color:white;">Create & Open</button>
             </div>
         `;
         ZeroModal.open(html);
@@ -102,24 +844,24 @@
     function submitNewAsset() {
         const name = document.getElementById('a-name').value;
         const version = document.getElementById('a-version').value;
-        if (!name) return alert('Asset name is required.');
-        // Redirect to modeler with fresh intent
-        window.location.href = `/projects/<%= project %>/modeler?newName=${name}&newVersion=${version}`;
+        if (!name) return alert('Deployment unit name is required.');
+        if (!'<%= selectedProject || '' %>') return alert('Select a project first.');
+        window.location.href = `/projects/<%= encodeURIComponent(selectedProject || '') %>/modeler?newName=${encodeURIComponent(name)}&newVersion=${encodeURIComponent(version)}`;
     }
 
     async function renameAsset(id, currentName) {
         const html = `
             <div class="modal-header">
-                <h2>Rename Artifact</h2>
-                <p>Establishing new visual identity for <strong>${currentName}</strong>.</p>
+                <h2>Rename Deployment Unit</h2>
+                <p>Update the public identity for <strong>${currentName}</strong>.</p>
             </div>
             <div class="form-group">
-                <label class="form-label">New Artifact Name</label>
+                <label class="form-label">New Name</label>
                 <input type="text" id="new-a-name" class="form-input" value="${currentName}">
             </div>
-            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 32px;">
-                <button onclick="ZeroModal.close()" class="action-btn" style="background: transparent; color: var(--text-dim);">Cancel</button>
-                <button onclick="submitRename('${id}')" class="action-btn" style="background: var(--primary);">Apply Identity</button>
+            <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:28px;">
+                <button onclick="ZeroModal.close()" class="action-btn" style="background:#f2f4f7; color:#344054;">Cancel</button>
+                <button onclick="submitRename('${id}')" class="action-btn" style="background:var(--primary); color:white;">Apply</button>
             </div>
         `;
         ZeroModal.open(html);
@@ -137,56 +879,55 @@
         else alert('Rename failed.');
     }
 
-    async function deleteAsset(id, name) {
+    async function removeDeployment(id, name) {
         const html = `
             <div class="modal-header">
-                <h2 style="color: #ef4444;"><i class="fas fa-trash-alt"></i> Orchestration Warning</h2>
-                <p>Establishing irreversible destruction sequence for <strong>${name}</strong>.</p>
+                <h2 style="color:#ef4444;">Remove Deployment Unit</h2>
+                <p>This will remove the active deployment for <strong>${name}</strong> without deleting the source asset.</p>
             </div>
-            <div style="padding: 24px; background: rgba(153, 27, 27, 0.1); border: 1px solid rgba(153, 27, 27, 0.2); border-radius: 8px; margin: 20px 0;">
-                <p style="font-size: 13px; color: #fecaca; margin: 0; line-height: 1.5;">
-                    Warning: This operation will transactionally purge the BPMN definition and all associated configurations. This action cannot be reversed within the Zero-BPM registry.
-                </p>
+            <div style="padding:18px; border:1px solid rgba(240,68,56,0.22); background:#fff5f5; border-radius:12px; color:#7a271a; line-height:1.6;">
+                The Business Studio asset and its project membership will remain intact. This action only marks the deployment as removed from the operations surface.
             </div>
-            <div style="display: flex; gap: 12px; justify-content: flex-end;">
-                <button onclick="ZeroModal.close()" class="action-btn" style="background: transparent; color: var(--text-dim);">Cancel</button>
-                <button onclick="submitDestruction('${id}')" class="action-btn" style="background: #991b1b; color: white;">Confirm Destruction</button>
+            <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:28px;">
+                <button onclick="ZeroModal.close()" class="action-btn" style="background:#f2f4f7; color:#344054;">Cancel</button>
+                <button onclick="submitDeploymentRemoval('${id}')" class="action-btn" style="background:#ef4444; color:white;">Remove Deployment</button>
             </div>
         `;
         ZeroModal.open(html);
     }
 
-    async function submitDestruction(id) {
-        const res = await fetch(`/api/assets/${id}`, { method: 'DELETE' });
+    async function submitDeploymentRemoval(id) {
+        const res = await fetch(`/api/deployments/${id}/remove`, { method: 'POST' });
         if (res.ok) location.reload();
-        else {
-             ZeroModal.open(`<div class="modal-header"><h2 style="color: #ef4444;">Destruction Failed</h2><p>An unexpected database conflict prevented asset termination.</p></div>`);
-        }
+        else alert('Deployment removal failed.');
+    }
+
+    async function toggleActivation(id, nextState) {
+        const res = await fetch(`/api/assets/${id}/state`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ isActive: nextState })
+        });
+        if (res.ok) location.reload();
+        else alert('Unable to update deployment state.');
     }
 
     async function showProjectSettings() {
-        const res = await fetch(`/api/projects/<%= project %>/settings`);
+        if (!'<%= selectedProject || '' %>') return alert('Select a project first.');
+        const res = await fetch(`/api/projects/<%= selectedProject || '' %>/settings`);
         const { metadata } = await res.json();
-        
         const html = `
             <div class="modal-header">
-                <h2>Project Orchestration Hub</h2>
-                <p>Managing global standards for project: <strong><%= project %></strong></p>
+                <h2>Execution Server Settings</h2>
+                <p>Manage default deployment metadata for <strong><%= selectedProject || '' %></strong>.</p>
             </div>
             <div class="form-group">
-                <label class="form-label">Semantic Version (Active Release)</label>
+                <label class="form-label">Default Version</label>
                 <input type="text" id="p-version" class="form-input" value="${metadata.version || '1.0.0'}">
-                <p style="font-size: 10px; color: var(--text-dim); margin-top: 4px;">Next deployments will default to this version.</p>
             </div>
-            <div class="form-group">
-                <label class="form-label">Environment Tags</label>
-                <div style="padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; font-family: monospace; font-size: 11px;">
-                    { "env": "${metadata.env || 'production'}", "region": "${metadata.region || 'us-east-1'}" }
-                </div>
-            </div>
-            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 32px;">
-                <button onclick="ZeroModal.close()" class="action-btn" style="background: transparent;">Cancel</button>
-                <button onclick="saveProjectSettings()" class="action-btn" style="background: var(--primary);">Persist Governance</button>
+            <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:28px;">
+                <button onclick="ZeroModal.close()" class="action-btn" style="background:#f2f4f7; color:#344054;">Cancel</button>
+                <button onclick="saveProjectSettings()" class="action-btn" style="background:var(--primary); color:white;">Save</button>
             </div>
         `;
         ZeroModal.open(html);
@@ -194,13 +935,12 @@
 
     async function saveProjectSettings() {
         const version = document.getElementById('p-version').value;
-        const metadata = { version }; 
-        const res = await fetch(`/api/projects/<%= project %>/settings`, {
+        const res = await fetch(`/api/projects/<%= selectedProject || '' %>/settings`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ metadata })
+            body: JSON.stringify({ metadata: { version } })
         });
         if (res.ok) ZeroModal.close();
-        else alert('Persistence failed.');
+        else alert('Settings save failed.');
     }
 </script>

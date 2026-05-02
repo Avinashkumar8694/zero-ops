@@ -1,29 +1,37 @@
-# Data Bridge (Database Task) (V1.0.0)
+# Database Task
 
-Industrial database primitive for tactical SQL/NoSQL orchestration.
+Direct database query node for SQL-style reads or writes.
 
-## Overview
-The Data Bridge node enables high-performance persistence logic within a process flow. It supports parameterized queries, transaction safety, and dynamic result hydration into the Zero-Orchestration variables.
+## What This Node Does
+Executes a query against a configured database connection and stores the result in a process variable.
 
-## Technical Parameters
-| Field | Description | Type |
-|-------|-------------|------|
-| `connectionString` | The environment variable key holding the DB URL. | Text |
-| `query` | The SQL or Query snippet to execute. | Snippet |
-| `params` | Mapping of variables to query placeholders. | Key-Value |
-| `resultVariable` | Name of the variable to store the result set. | Text |
+## Properties
+- `name`: Friendly label.
+- `connectionString`: Environment or secret key for the database connection.
+- `query`: SQL or database query text.
+- `params`: Parameter mapping from process variables into query placeholders.
+- `resultVariable`: Process variable that receives the result.
 
-## Data Movement
-1. **Preparation**: The node maps variables from the `params` table to the query placeholders.
-2. **Execution**: Executes the query against the target connection pool.
-3. **Hydration**: The resulting rows or documents are injected into `variables.[resultVariable]`.
+## Mapping And Variable Use
+- `params` is a typed mapping from process state into query placeholders.
+- Sources are usually process variables or expressions.
+- Targets are placeholder names used by the query, for example `customerId` or `statusCode`.
+- `resultVariable` is the process variable where the query result will be stored.
 
-## Example: Fetch User
+## Example
 ```json
 {
-  "connectionString": "POSTGRES_MASTER",
-  "query": "SELECT * FROM users WHERE status = :status LIMIT 10",
-  "params": { "status": "ACTIVE" },
-  "resultVariable": "activeUsers"
+  "name": "Load Customer Record",
+  "connectionString": "DB_URL_PROD",
+  "query": "SELECT * FROM customers WHERE customer_id = :customerId",
+  "params": {
+    "customerId": { "target": "customerId", "type": "string", "sourceScope": "process", "targetScope": "input" }
+  },
+  "resultVariable": "customerRecord"
 }
 ```
+
+## Validation Notes
+- Keep credentials outside the model.
+- Match `params` keys to placeholders used in the query.
+- Use a stable `resultVariable` name if downstream nodes depend on it.

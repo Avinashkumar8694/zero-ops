@@ -1,21 +1,22 @@
-# Error End (V1.0.0)
+# Error End Event
 
-Industrial Exception primitive for transactional process failure orchestration.
+Terminal node for intentional process failure.
 
-## Overview
-The Error End node is used to signal a non-recoverable failure within a process branch. It transactionally halts execution and triggers any matching Error Boundary Events or global exception handlers defined in the orchestration scope.
+## What This Node Does
+Ends the current path with an error code and error message. Use this when the process should stop and surface a business or technical failure.
 
-## Technical Parameters
-| Field | Description | Type |
-|-------|-------------|------|
-| `errorCode` | The technical identifier for the error. | Text |
-| `errorMessage` | Detailed context about the failure. | Textarea |
+## Properties
+- `errorCode`: Stable machine-readable error identifier.
+- `errorMessage`: Human-readable explanation.
 
-## Data Movement
-1. **Exception Trigger**: Interrupts the current thread and begins stack unwinding.
-2. **Correlation**: Searches for a matching Error Boundary Event on a parent scope (e.g., Sub-Process or Call Activity).
-3. **Audit**: Logs the error code and message to the global audit trail.
+## Example
+```json
+{
+  "errorCode": "CUSTOMER_NOT_ELIGIBLE",
+  "errorMessage": "Customer failed eligibility checks and the process cannot continue."
+}
+```
 
-## Example: Database Failure
-- `errorCode`: `QUERY_FAILED`
-- `errorMessage`: "PostgreSQL connection pool exhausted."
+## Validation Notes
+- Keep `errorCode` stable for dashboards, APIs, and automation.
+- Use actionable messages so operators understand the failure quickly.

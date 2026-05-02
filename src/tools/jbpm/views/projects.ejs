@@ -12,7 +12,7 @@
     <% projects.forEach(project => { %>
         <div class="glass-card" 
              style="position: relative; cursor: pointer; display: flex; flex-direction: column;" 
-             onclick="window.location.href='/projects/<%= project.name %>/assets'"
+             onclick="window.location.href='/projects/<%= encodeURIComponent(project.name) %>/assets'"
              data-id="<%= project.id %>"
              data-name="<%= project.name %>"
              data-project='<%= JSON.stringify(project).replace(/'/g, "&#39;") %>'>
@@ -33,7 +33,7 @@
                 </div>
             </div>
             
-            <h3 style="margin: 0 0 10px 0; font-size: 20px; font-weight: 700; color: white;"><%= project.name %></h3>
+            <h3 style="margin: 0 0 10px 0; font-size: 20px; font-weight: 700; color: var(--text-main);"><%= project.name %></h3>
             <p style="color: var(--text-dim); font-size: 13px; line-height: 1.6; margin-bottom: 28px; flex: 1; opacity: 0.8;">
                 <%= project.description || 'Enterprise orchestration container for versioned business processes and tactical service integration sets.' %>
             </p>
@@ -43,7 +43,10 @@
                 <span><i class="fas fa-clock" style="margin-right: 4px;"></i> <%= new Date(project.created_at).toLocaleDateString() %></span>
             </div>
 
-            <div style="margin-top: 20px; display: flex; gap: 12px;">
+            <div style="margin-top: 20px; display: flex; gap: 12px; flex-wrap: wrap;">
+                <button onclick="event.stopPropagation(); window.location.href='/projects/<%= encodeURIComponent(project.name) %>/assets'" style="background: rgba(25,148,255,0.08); border: 1px solid rgba(25,148,255,0.14); color: var(--primary); padding: 6px 14px; border-radius: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; cursor: pointer;">
+                    <i class="fas fa-layer-group"></i> View Assets
+                </button>
                 <button onclick="event.stopPropagation(); exportProject('<%= project.name %>')" style="background: transparent; border: 1px solid var(--border); color: var(--text-dim); padding: 6px 14px; border-radius: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.borderColor= 'var(--accent)'; this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'; this.style.color='var(--text-dim)'">
                     <i class="fas fa-download"></i> Export Bundle
                 </button>
@@ -52,11 +55,11 @@
     <% }); %>
 
     <% if (projects.length === 0) { %>
-        <div style="grid-column: 1 / -1; padding: 120px 60px; text-align: center; background: rgba(255,255,255,0.01); border: 1px dashed var(--border); border-radius: 20px; backdrop-filter: blur(4px);">
-            <div style="width: 80px; height: 80px; background: rgba(255,255,255,0.03); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 32px auto;">
+        <div style="grid-column: 1 / -1; padding: 120px 60px; text-align: center; background: rgba(255,255,255,0.55); border: 1px dashed var(--border); border-radius: 20px; backdrop-filter: blur(4px);">
+            <div style="width: 80px; height: 80px; background: rgba(25,148,255,0.06); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 32px auto;">
                 <i class="fas fa-folder-open" style="font-size: 32px; color: var(--text-dim); opacity: 0.4;"></i>
             </div>
-            <h2 style="color: white; font-weight: 800; margin-bottom: 12px;">Worksurface Empty</h2>
+            <h2 style="color: var(--text-main); font-weight: 800; margin-bottom: 12px;">Worksurface Empty</h2>
             <p style="color: var(--text-dim); max-width: 400px; margin: 0 auto 32px auto; line-height: 1.6;">Initialize your enterprise orchestration layer by provisioning your first organizational project or importing a pre-configured architecture bundle.</p>
             <button onclick="showNewProjectModal()" class="action-btn" style="background: var(--primary); margin: 0 auto; padding: 12px 32px; box-shadow: 0 4px 20px rgba(37, 99, 235, 0.3);">Initialize First Project</button>
         </div>

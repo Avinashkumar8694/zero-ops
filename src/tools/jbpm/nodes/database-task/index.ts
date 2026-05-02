@@ -9,11 +9,11 @@ const databaseTask: NodePackage = {
     category: pkg.category as any,
     icon: '/nodes/database-task/assets/icon.svg',
     fields: [
-        { key: 'name', label: 'Query Label', type: 'text' },
-        { key: 'connectionString', label: 'Connection (Env Key)', type: 'text', placeholder: 'DB_URL_PROD' },
-        { key: 'query', label: 'SQL/Query Snippet', type: 'snippet', description: 'Supports parameterized queries.' },
-        { key: 'params', label: 'Parameters Mapping', type: 'keyvalue', description: 'Map variables to query placeholders.' },
-        { key: 'resultVariable', label: 'Output Variable', type: 'text', default: 'queryResult' }
+        { key: 'name', label: 'Query Label', type: 'text', group: 'general' },
+        { key: 'connectionString', label: 'Connection (Env Key)', type: 'text', group: 'runtime', placeholder: 'DB_URL_PROD' },
+        { key: 'query', label: 'SQL/Query Snippet', type: 'snippet', group: 'runtime', description: 'Supports parameterized queries.' },
+        { key: 'params', label: 'Parameters Mapping', type: 'keyvalue', group: 'mapping', description: 'Map process variables into query placeholders.', mapping: { typed: true, sourceScope: 'process', targetScope: 'input' } },
+        { key: 'resultVariable', label: 'Output Variable', type: 'text', group: 'mapping', default: 'queryResult', variableRef: true, description: 'Process variable that stores the database result.' }
     ],
     documentation: {
         desc: 'Orchestrates direct database operations (SQL/NoSQL) via tactical connection strings.',

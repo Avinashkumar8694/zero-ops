@@ -1,54 +1,32 @@
-# Email Dispatch (V1.0.0)
+# Email Task
 
-Industrial communication primitive supporting SendGrid and Nodemailer SMTP.
+Outbound email service node.
 
-## Overview
-The Email Dispatch node provides a unified interface for outbound communication. Orchestrators can choose between modern API-based delivery (SendGrid) or traditional SMTP orchestration (Nodemailer).
+## What This Node Does
+Sends an email using either SendGrid or SMTP-style configuration through Nodemailer.
 
-## Technical Parameters
+## Properties
+- `name`: Friendly label.
+- `provider`: `SENDGRID` or `NODEMAILER (SMTP)`.
+- `to`: Recipient address.
+- `subject`: Subject line.
+- `body`: Email body. HTML and variable interpolation are supported.
+- `apiKey`: Required for SendGrid.
+- `smtpHost`, `smtpPort`, `smtpUser`, `smtpPass`: Used for SMTP mode.
 
-### Common Fields
-| Field | Description | Type |
-|-------|-------------|------|
-| `provider` | The dispatch engine (SENDGRID or NODEMAILER). | Select |
-| `to` | Recipient address (supports interpolation). | Text |
-| `subject` | Subject line (supports interpolation). | Text |
-| `body` | HTML or text content. | Snippet |
-
-### Provider: SENDGRID
-| Field | Description | Type |
-|-------|-------------|------|
-| `apiKey` | The SendGrid API Key (SG.***). | Text |
-
-### Provider: NODEMAILER (SMTP)
-| Field | Description | Type |
-|-------|-------------|------|
-| `smtpHost` | Path to the SMTP server. | Text |
-| `smtpPort` | Port number (e.g., 587, 465). | Text |
-| `smtpUser` | Username for SMTP auth. | Text |
-| `smtpPass` | Password for SMTP auth. | Password |
-
-## Data Movement
-1. **Dynamic Hydration**: Resolves variables in the `to`, `subject`, and `body` fields.
-2. **Authentication**: Uses either the API Key or SMTP credentials depending on the `provider` selection.
-3. **Acknowledgment**: The process thread resumes once the dispatch is successfully queued by the provider.
-
-## Example: SendGrid Mode
+## Example
 ```json
 {
+  "name": "Notify Customer",
   "provider": "SENDGRID",
-  "apiKey": "${secrets.SENDGRID_API_KEY}",
-  "to": "dev@ops.ai",
-  "subject": "System Alert: ${variables.errorType}"
+  "to": "${variables.customerEmail}",
+  "subject": "Order ${variables.orderId} received",
+  "body": "<p>Thanks for your order.</p>",
+  "apiKey": "${secrets.SENDGRID_API_KEY}"
 }
 ```
 
-## Example: SMTP Mode
-```json
-{
-  "provider": "NODEMAILER (SMTP)",
-  "smtpHost": "smtp.mailtrap.io",
-  "smtpPort": "587",
-  "to": "test@ops.ai"
-}
-```
+## Validation Notes
+- Select the provider first because it controls which auth fields matter.
+- Keep auth tokens and SMTP passwords in secrets.
+- Validate recipient addresses before runtime where possible.

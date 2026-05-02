@@ -10,12 +10,12 @@ const restTask: NodePackage = {
     category: pkg.category as any,
     icon: '/nodes/rest-task/assets/icon.svg',
     fields: [
-        { key: 'name', label: 'Display Name', type: 'text', placeholder: 'e.g., Fetch User Data' },
-        { key: 'endpoint', label: 'API Endpoint (URL)', type: 'text', placeholder: 'https://api.external.com/v1/resource', description: 'Supports variable interpolation using ${variables.key}', required: true },
-        { key: 'method', label: 'HTTP Method', type: 'select', options: ['GET', 'POST', 'PUT', 'DELETE'], default: 'GET' },
-        { key: 'headers', label: 'Request Headers', type: 'keyvalue', description: 'Authorization tokens or custom headers.' },
-        { key: 'body', label: 'Request Body', type: 'snippet', description: 'JSON payload for POST/PUT.' },
-        { key: 'responseMap', label: 'Response Mapping', type: 'keyvalue', description: 'JSONPath -> Variable name.' }
+        { key: 'name', label: 'Display Name', type: 'text', group: 'general', placeholder: 'e.g., Fetch User Data', required: true },
+        { key: 'endpoint', label: 'API Endpoint (URL)', type: 'text', group: 'general', dataType: 'url', placeholder: 'https://api.external.com/v1/resource', description: 'Supports variable interpolation using ${variables.key}', required: true, variableRef: true },
+        { key: 'method', label: 'HTTP Method', type: 'select', group: 'general', options: ['GET', 'POST', 'PUT', 'DELETE'], default: 'GET' },
+        { key: 'headers', label: 'Request Headers', type: 'keyvalue', group: 'runtime', description: 'Authorization tokens or custom headers.', variableRef: true },
+        { key: 'body', label: 'Request Body', type: 'snippet', group: 'runtime', dataType: 'json', description: 'JSON payload for POST/PUT.', variableRef: true, visibility: 'method === "POST" || method === "PUT"' },
+        { key: 'responseMap', label: 'Response Mapping', type: 'keyvalue', group: 'mapping', description: 'JSONPath -> Variable name.', variableRef: true, mapping: { typed: true, sourceScope: 'output', targetScope: 'process' } }
     ],
     documentation: {
         desc: 'Integration Gateway. Orchestrates calls to external RESTful services.',

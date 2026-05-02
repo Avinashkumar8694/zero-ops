@@ -1,77 +1,708 @@
-<div class="glass-card">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px;">
-        <div>
-            <h2 style="margin: 0;">Lifecycle Monitoring</h2>
-            <p style="color: var(--text-dim); font-size: 14px; margin: 4px 0 0 0;">Total Active Instances: <strong><%= (instances || []).filter(i => i.status === 'RUNNING').length %></strong></p>
-        </div>
-        <div style="display: flex; gap: 12px;">
-            <button onclick="location.reload()" class="action-btn" style="background: var(--card-bg); border: 1px solid var(--border); padding: 8px 16px; font-size: 13px;">
-                <i class="fas fa-sync"></i> Refresh
-            </button>
-        </div>
-    </div>
+<%
+const runtimeDeployments = deployments || [];
+const activeCount = (instances || []).filter(item => item.status === 'RUNNING' || item.status === 'WAITING').length;
+%>
 
-    <table style="width: 100%; border-collapse: collapse;">
-        <thead>
-            <tr style="text-align: left; color: var(--text-dim); border-bottom: 1px solid var(--border);">
-                <th style="padding: 12px 16px;">Instance ID</th>
-                <th>Process Definition</th>
-                <th>Owner</th>
-                <th>Start Time</th>
-                <th>Status</th>
-                <th style="text-align: right; padding-right: 16px;">Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            <% if (instances && instances.length > 0) { %>
-                <% instances.forEach(instance => { %>
-                    <tr style="border-bottom: 1px solid var(--border); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
-                        <td style="padding: 20px 16px; font-family: monospace; color: var(--accent);"><%= instance.instance_id %></td>
-                        <td>
-                            <div style="font-weight: 600;"><%= instance.workflow_name %></div>
-                            <div style="font-size: 12px; color: var(--text-dim);">Namespace: <%= instance.namespace %></div>
-                        </td>
-                        <td><span style="font-size: 13px;"><i class="fas fa-user-circle"></i> <%= instance.owner %></span></td>
-                        <td style="font-size: 13px;"><%= new Date(instance.start_time).toLocaleString() %></td>
-                        <td>
-                            <% if (instance.status === 'RUNNING') { %>
-                                <span class="status-badge" style="background: rgba(34, 197, 94, 0.2); color: #22c55e;">Running</span>
-                            <% } else if (instance.status === 'COMPLETED') { %>
-                                <span class="status-badge" style="background: rgba(37, 99, 235, 0.2); color: #60a5fa;">Completed</span>
-                            <% } else { %>
-                                <span class="status-badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171;"><%= instance.status %></span>
-                            <% } %>
-                        </td>
-                        <td style="text-align: right; padding-right: 16px;">
-                            <div style="display: flex; gap: 8px; justify-content: flex-end;">
-                                <a href="/instances/detail/<%= instance.instance_id %>" style="text-decoration: none; background: transparent; border: 1px solid var(--accent); color: var(--accent); padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 600;">
-                                    <i class="fas fa-search"></i> Inspect
-                                </a>
-                                <% if (instance.status === 'RUNNING' && (user.role === 'admin' || (user.permissions || []).includes('PROCESS_ABORT'))) { %>
-                                    <button onclick="abortInstance('<%= instance.instance_id %>')" style="background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; color: #f87171; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer;">
-                                        <i class="fas fa-stop-circle"></i> Abort
-                                    </button>
-                                <% } %>
-                            </div>
-                        </td>
-                    </tr>
-                <% }); %>
-            <% } else { %>
-                <tr>
-                    <td colspan="6" style="padding: 60px; text-align: center; color: var(--text-dim);">
-                        <i class="fas fa-monitor-heart-rate" style="font-size: 40px; margin-bottom: 16px; display: block; opacity: 0.3;"></i>
-                        No active process instances found.
-                    </td>
-                </tr>
-            <% } %>
-        </tbody>
-    </table>
+<style>
+    .instances-shell {
+        display: grid;
+        grid-template-columns: 360px minmax(0, 1fr);
+        gap: 0;
+        min-height: calc(100vh - 180px);
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: 22px;
+        overflow: hidden;
+        box-shadow: var(--shadow);
+    }
+
+    .filter-rail {
+        background: white;
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+    .filter-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 18px 16px;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .filter-head h2 {
+        margin: 0;
+        font-size: 17px;
+        font-weight: 800;
+    }
+
+    .filter-body {
+        padding: 18px;
+        overflow-y: auto;
+        flex: 1;
+    }
+
+    .filter-section {
+        padding-bottom: 24px;
+        margin-bottom: 24px;
+        border-bottom: 1px solid #edf2f7;
+    }
+
+    .filter-section:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+
+    .filter-section h3 {
+        margin: 0 0 14px 0;
+        font-size: 14px;
+        font-weight: 800;
+        color: #344054;
+    }
+
+    .filter-checkboxes {
+        display: grid;
+        gap: 12px;
+    }
+
+    .filter-option {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #344054;
+        font-size: 13px;
+    }
+
+    .filter-option input {
+        width: 16px;
+        height: 16px;
+    }
+
+    .filter-label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-dim);
+        font-weight: 800;
+    }
+
+    .filter-select,
+    .filter-input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 12px 14px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: white;
+        color: var(--text-main);
+        font-size: 13px;
+    }
+
+    .filter-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 18px;
+    }
+
+    .apply-btn {
+        border: 1px solid var(--border);
+        background: white;
+        border-radius: 10px;
+        padding: 10px 16px;
+        font-weight: 700;
+        font-size: 13px;
+        cursor: pointer;
+    }
+
+    .workspace {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        background: #fbfcfe;
+    }
+
+    .workspace-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 18px 20px 14px;
+        border-bottom: 1px solid var(--border);
+        background: white;
+    }
+
+    .workspace-title {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+    }
+
+    .workspace-title h2 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 800;
+    }
+
+    .filter-chipbar {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+        min-height: 22px;
+    }
+
+    .filter-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border-radius: 999px;
+        background: #dff1ff;
+        color: #0b6dcf;
+        padding: 7px 10px;
+        font-size: 12px;
+        font-weight: 800;
+    }
+
+    .workspace-tools {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .primary-cta,
+    .ghost-cta {
+        border-radius: 10px;
+        padding: 11px 16px;
+        font-size: 13px;
+        font-weight: 800;
+        cursor: pointer;
+        border: 1px solid var(--border);
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .primary-cta {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+        box-shadow: 0 12px 24px rgba(25,148,255,0.22);
+    }
+
+    .ghost-cta {
+        background: white;
+        color: #344054;
+    }
+
+    .workspace-body {
+        padding: 20px;
+        overflow-y: auto;
+        flex: 1;
+    }
+
+    .instance-table-wrap {
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        overflow: hidden;
+    }
+
+    .instance-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
+
+    .instance-table th,
+    .instance-table td {
+        padding: 16px 14px;
+        border-bottom: 1px solid #edf2f7;
+        text-align: left;
+        vertical-align: middle;
+        font-size: 13px;
+    }
+
+    .instance-table th {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-dim);
+        font-weight: 800;
+        background: #f9fafb;
+    }
+
+    .instance-row {
+        cursor: pointer;
+        transition: background 0.2s ease;
+    }
+
+    .instance-row:hover {
+        background: #f8fbff;
+    }
+
+    .instance-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 30px;
+        padding: 6px 9px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 900;
+        background: #fef3f2;
+        color: var(--danger);
+    }
+
+    .action-menu-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: white;
+        color: #475467;
+        cursor: pointer;
+    }
+
+    .instance-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 800;
+    }
+
+    .empty-block {
+        padding: 80px 24px;
+        text-align: center;
+        color: var(--text-dim);
+    }
+
+    .launch-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+    }
+
+    .launch-full {
+        grid-column: 1 / -1;
+    }
+
+    .hint-card {
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: #f8fafc;
+        border: 1px solid var(--border);
+        color: var(--text-dim);
+        font-size: 12px;
+        line-height: 1.5;
+    }
+
+    @media (max-width: 1200px) {
+        .instances-shell {
+            grid-template-columns: 1fr;
+        }
+
+        .filter-rail {
+            border-right: none;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .launch-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div style="display:flex; align-items:center; gap:10px; color:var(--text-dim); font-size:13px; margin-bottom:12px;">
+    <a href="/" style="color:var(--primary); text-decoration:none;">Home</a>
+    <span>&raquo;</span>
+    <span style="font-weight:700; color:#344054;">Manage Process Instances</span>
 </div>
+
+<div class="instances-shell">
+    <section class="filter-rail">
+        <div class="filter-head">
+            <h2>Filters</h2>
+            <button class="action-menu-btn" onclick="clearInstanceFilters()" title="Clear filters"><i class="fas fa-filter-circle-xmark"></i></button>
+        </div>
+        <div class="filter-body">
+            <div class="filter-section">
+                <h3>State</h3>
+                <div class="filter-checkboxes">
+                    <label class="filter-option"><input type="checkbox" class="state-filter" value="RUNNING" checked> Active</label>
+                    <label class="filter-option"><input type="checkbox" class="state-filter" value="ABORTED"> Aborted</label>
+                    <label class="filter-option"><input type="checkbox" class="state-filter" value="COMPLETED"> Completed</label>
+                    <label class="filter-option"><input type="checkbox" class="state-filter" value="WAITING"> Pending</label>
+                    <label class="filter-option"><input type="checkbox" class="state-filter" value="ERROR"> With errors</label>
+                </div>
+            </div>
+
+            <div class="filter-section">
+                <h3>Filter By</h3>
+                <label class="filter-label">Id</label>
+                <input id="filter-id" class="filter-input" placeholder="Filter by process instance id...">
+                <div class="filter-actions">
+                    <button class="apply-btn" onclick="applyInstanceFilters()">Apply</button>
+                </div>
+            </div>
+
+            <div class="filter-section">
+                <label class="filter-label">Name</label>
+                <select id="filter-name" class="filter-select">
+                    <option value="">Select</option>
+                    <% [...new Set((instances || []).map(item => item.workflow_name))].forEach(name => { %>
+                        <option value="<%= name %>"><%= name %></option>
+                    <% }) %>
+                </select>
+            </div>
+
+            <div class="filter-section">
+                <label class="filter-label">Definition Id</label>
+                <select id="filter-definition" class="filter-select">
+                    <option value="">Select</option>
+                    <% runtimeDeployments.forEach(project => { %>
+                        <% (project.units || []).forEach(unit => { %>
+                            <option value="<%= unit.workflow_name %>"><%= unit.workflow_name %></option>
+                        <% }) %>
+                    <% }) %>
+                </select>
+            </div>
+
+            <div class="filter-section">
+                <label class="filter-label">Project</label>
+                <select id="filter-project" class="filter-select">
+                    <option value="">All Projects</option>
+                    <% runtimeDeployments.forEach(project => { %>
+                        <option value="<%= project.name %>"><%= project.name %></option>
+                    <% }) %>
+                </select>
+            </div>
+        </div>
+    </section>
+
+    <section class="workspace">
+        <div class="workspace-head">
+            <div>
+                <div class="workspace-title">
+                    <h2>Manage</h2>
+                    <select class="filter-select" style="width:300px;" disabled>
+                        <option>Process Instances</option>
+                    </select>
+                </div>
+                <div class="filter-chipbar" id="active-filter-chips"></div>
+            </div>
+            <div class="workspace-tools">
+                <button class="ghost-cta" onclick="location.reload()"><i class="fas fa-rotate"></i> Refresh</button>
+                <button class="primary-cta" onclick="openStartProcessModal()"><i class="fas fa-plus"></i> New Process Instance</button>
+            </div>
+        </div>
+
+        <div class="workspace-body">
+            <div class="instance-table-wrap">
+                <table class="instance-table">
+                    <thead>
+                        <tr>
+                            <th style="width:64px;"></th>
+                            <th style="width:120px;">Id</th>
+                            <th>Name</th>
+                            <th>Description</th>
+                            <th style="width:120px;">Version</th>
+                            <th style="width:170px;">Last update</th>
+                            <th style="width:90px;">Errors</th>
+                            <th style="width:100px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="instances-table-body">
+                        <% if (instances && instances.length > 0) { %>
+                            <% instances.forEach((instance) => {
+                                const metadata = instance.metadata || {};
+                                const displayStatus = instance.status === 'WAITING' ? 'Pending' : (instance.status === 'RUNNING' ? 'Active' : instance.status);
+                                const version = metadata.assetVersion || metadata.version || '1.0.0';
+                                const errorCount = instance.status === 'ERROR' ? 1 : 0;
+                                const projectName = metadata.assetProject || metadata.projectName || '';
+                            %>
+                                <tr
+                                    class="instance-row"
+                                    data-status="<%= instance.status %>"
+                                    data-id="<%= instance.instance_id %>"
+                                    data-name="<%= instance.workflow_name %>"
+                                    data-definition="<%= instance.workflow_name %>"
+                                    data-project="<%= projectName %>"
+                                    onclick="openInstanceDetail('<%= instance.instance_id %>')"
+                                >
+                                    <td><input type="checkbox" onclick="event.stopPropagation()"></td>
+                                    <td style="font-family:monospace; color:var(--primary); font-weight:700;"><%= instance.instance_id %></td>
+                                    <td>
+                                        <div style="font-weight:800; color:#111827; display:flex; align-items:center; gap:8px;">
+                                            <%= instance.workflow_name %>
+                                            <% if (instance.status === 'ERROR') { %>
+                                                <i class="fas fa-triangle-exclamation" style="color:var(--danger);" title="Execution error"></i>
+                                            <% } %>
+                                        </div>
+                                        <div style="margin-top:4px;">
+                                            <span class="instance-status" style="background:<%= instance.status === 'COMPLETED' ? '#ecfdf3' : instance.status === 'ABORTED' ? '#fef3f2' : instance.status === 'ERROR' ? '#fef3f2' : instance.status === 'WAITING' ? '#fff7ed' : '#eff8ff' %>; color:<%= instance.status === 'COMPLETED' ? 'var(--success)' : instance.status === 'ABORTED' ? 'var(--danger)' : instance.status === 'ERROR' ? 'var(--danger)' : instance.status === 'WAITING' ? '#b54708' : 'var(--primary)' %>;">
+                                                <i class="fas <%= instance.status === 'COMPLETED' ? 'fa-circle-check' : instance.status === 'ABORTED' ? 'fa-circle-stop' : instance.status === 'ERROR' ? 'fa-triangle-exclamation' : instance.status === 'WAITING' ? 'fa-hourglass-half' : 'fa-play' %>"></i>
+                                                <%= displayStatus %>
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td style="color:var(--text-dim);">
+                                        <div>Triggered by <strong><%= instance.owner || 'system' %></strong></div>
+                                        <div style="margin-top:4px; font-size:12px;">Instance <span style="font-family:monospace;"><%= instance.instance_id.slice(0, 10) %></span></div>
+                                    </td>
+                                    <td>v<%= version %></td>
+                                    <td><%= new Date(instance.end_time || instance.start_time).toLocaleString() %></td>
+                                    <td><span class="instance-pill"><%= errorCount %></span></td>
+                                    <td>
+                                        <button class="action-menu-btn" onclick="event.stopPropagation(); openInstanceDetail('<%= instance.instance_id %>')"><i class="fas fa-ellipsis-vertical"></i></button>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        <% } else { %>
+                            <tr>
+                                <td colspan="8">
+                                    <div class="empty-block">
+                                        <i class="fas fa-wave-square" style="font-size:42px; opacity:0.18; display:block; margin-bottom:14px;"></i>
+                                        No process instances are available yet.
+                                    </div>
+                                </td>
+                            </tr>
+                        <% } %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+</div>
+
 <script>
-async function abortInstance(id) {
-    if (!confirm(`Are you sure you want to FORCE TERMINATE instance ${id}? This action is irreversible.`)) return;
-    const res = await fetch(`/api/instances/${id}/abort`, { method: 'POST' });
-    if (res.ok) location.reload();
-    else alert('Abort operation failed.');
-}
+    const deploymentCatalog = <%- JSON.stringify(runtimeDeployments) %>;
+
+    function openInstanceDetail(instanceId) {
+        window.location.href = `/instances/detail/${instanceId}`;
+    }
+
+    function getSelectedStates() {
+        return Array.from(document.querySelectorAll('.state-filter:checked')).map(item => item.value);
+    }
+
+    function updateFilterChips() {
+        const chips = [];
+        const states = getSelectedStates();
+        if (states.length) chips.push(`State: ${states.join(', ')}`);
+        const id = document.getElementById('filter-id').value.trim();
+        const name = document.getElementById('filter-name').value;
+        const definition = document.getElementById('filter-definition').value;
+        const project = document.getElementById('filter-project').value;
+        if (id) chips.push(`Id: ${id}`);
+        if (name) chips.push(`Name: ${name}`);
+        if (definition) chips.push(`Definition: ${definition}`);
+        if (project) chips.push(`Project: ${project}`);
+
+        const container = document.getElementById('active-filter-chips');
+        container.innerHTML = chips.map(chip => `<span class="filter-chip">${chip}</span>`).join('');
+    }
+
+    function applyInstanceFilters() {
+        const states = getSelectedStates();
+        const id = document.getElementById('filter-id').value.trim().toLowerCase();
+        const name = document.getElementById('filter-name').value;
+        const definition = document.getElementById('filter-definition').value;
+        const project = document.getElementById('filter-project').value;
+
+        document.querySelectorAll('#instances-table-body .instance-row').forEach(row => {
+            const matchesState = states.length === 0 || states.includes(row.dataset.status);
+            const matchesId = !id || row.dataset.id.toLowerCase().includes(id);
+            const matchesName = !name || row.dataset.name === name;
+            const matchesDefinition = !definition || row.dataset.definition === definition;
+            const matchesProject = !project || row.dataset.project === project;
+            row.style.display = matchesState && matchesId && matchesName && matchesDefinition && matchesProject ? '' : 'none';
+        });
+
+        updateFilterChips();
+    }
+
+    function clearInstanceFilters() {
+        document.querySelectorAll('.state-filter').forEach((item, index) => { item.checked = index === 0; });
+        document.getElementById('filter-id').value = '';
+        document.getElementById('filter-name').value = '';
+        document.getElementById('filter-definition').value = '';
+        document.getElementById('filter-project').value = '';
+        applyInstanceFilters();
+    }
+
+    function parseInputValue(raw) {
+        const value = String(raw || '').trim();
+        if (!value) return '';
+        if (value === 'true') return true;
+        if (value === 'false') return false;
+        if (value === 'null') return null;
+        if (/^-?\\d+(\\.\\d+)?$/.test(value)) return Number(value);
+        if ((value.startsWith('{') && value.endsWith('}')) || (value.startsWith('[') && value.endsWith(']'))) {
+            try { return JSON.parse(value); } catch (e) {}
+        }
+        return value;
+    }
+
+    function getProjectUnits(projectName) {
+        return deploymentCatalog.find(project => project.name === projectName)?.units || [];
+    }
+
+    function getUnit(projectName, workflowName) {
+        return getProjectUnits(projectName).find(unit => unit.workflow_name === workflowName) || null;
+    }
+
+    function renderStartFormFields(projectName, workflowName, version) {
+        const unit = getUnit(projectName, workflowName);
+        const versionConfig = unit?.versions?.find(item => item.version === version) || unit?.versions?.[0] || null;
+        const inputs = versionConfig?.contract?.inputs || [];
+        const host = document.getElementById('dynamic-start-fields');
+        const helper = document.getElementById('selected-endpoint');
+
+        helper.textContent = workflowName
+            ? `/api/engine/processes/${workflowName}/start`
+            : '/api/engine/processes/{processName}/start';
+
+        if (!host) return;
+
+        if (!inputs.length) {
+            host.innerHTML = `<div class="hint-card">No explicit input variables were detected for this deployment. You can still trigger the process without a payload, or enrich the Start Event variable definitions and mappings to generate a richer launch form.</div>`;
+            return;
+        }
+
+        host.innerHTML = inputs.map(input => `
+            <div class="${inputs.length > 1 ? '' : 'launch-full'}">
+                <label class="form-label">${input}</label>
+                <input class="form-input start-dynamic-input" data-key="${input}" placeholder="Enter ${input}">
+            </div>
+        `).join('');
+    }
+
+    function onProjectChange() {
+        const projectName = document.getElementById('launch-project').value;
+        const unitSelect = document.getElementById('launch-workflow');
+        const versionSelect = document.getElementById('launch-version');
+        const units = getProjectUnits(projectName);
+
+        unitSelect.innerHTML = `<option value="">Select deployment</option>` + units.map(unit => `<option value="${unit.workflow_name}">${unit.workflow_name}</option>`).join('');
+        versionSelect.innerHTML = `<option value="">Select version</option>`;
+        document.getElementById('dynamic-start-fields').innerHTML = `<div class="hint-card">Select a deployment and version to generate the input form from the process contract.</div>`;
+        document.getElementById('selected-endpoint').textContent = '/api/engine/processes/{processName}/start';
+    }
+
+    function onWorkflowChange() {
+        const projectName = document.getElementById('launch-project').value;
+        const workflowName = document.getElementById('launch-workflow').value;
+        const versionSelect = document.getElementById('launch-version');
+        const unit = getUnit(projectName, workflowName);
+        const versions = unit?.versions || [];
+        versionSelect.innerHTML = `<option value="">Select version</option>` + versions.map(version => `<option value="${version.version}">${version.version}${version.is_active ? ' (Active)' : ''}</option>`).join('');
+        if (versions[0]) {
+            versionSelect.value = versions[0].version;
+            renderStartFormFields(projectName, workflowName, versions[0].version);
+        } else {
+            document.getElementById('dynamic-start-fields').innerHTML = `<div class="hint-card">No versions are available for the selected deployment.</div>`;
+        }
+    }
+
+    function onVersionChange() {
+        renderStartFormFields(
+            document.getElementById('launch-project').value,
+            document.getElementById('launch-workflow').value,
+            document.getElementById('launch-version').value
+        );
+    }
+
+    function openStartProcessModal() {
+        const html = `
+            <div class="modal-header">
+                <h2>Start New Process Instance</h2>
+                <p>Select the deployment unit and version, then fill the generated process input contract.</p>
+            </div>
+            <div class="launch-grid">
+                <div>
+                    <label class="form-label">Project</label>
+                    <select id="launch-project" class="form-input" onchange="onProjectChange()">
+                        <option value="">Select project</option>
+                        ${deploymentCatalog.map(project => `<option value="${project.name}">${project.name}</option>`).join('')}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Deployment</label>
+                    <select id="launch-workflow" class="form-input" onchange="onWorkflowChange()">
+                        <option value="">Select deployment</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Version</label>
+                    <select id="launch-version" class="form-input" onchange="onVersionChange()">
+                        <option value="">Select version</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Engine Endpoint</label>
+                    <div class="hint-card" id="selected-endpoint">/api/engine/processes/{processName}/start</div>
+                </div>
+                <div class="launch-full">
+                    <label class="form-label">Process Inputs</label>
+                    <div class="launch-grid" id="dynamic-start-fields">
+                        <div class="hint-card">Select a deployment and version to generate the input form from the process contract.</div>
+                    </div>
+                </div>
+            </div>
+            <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:28px;">
+                <button onclick="ZeroModal.close()" class="action-btn" style="background:#f2f4f7; color:#344054;">Cancel</button>
+                <button onclick="triggerProcessInstance()" class="action-btn" style="background:var(--primary); color:white;">Trigger Process</button>
+            </div>
+        `;
+        ZeroModal.open(html);
+    }
+
+    async function triggerProcessInstance() {
+        const projectName = document.getElementById('launch-project').value;
+        const workflowName = document.getElementById('launch-workflow').value;
+        const version = document.getElementById('launch-version').value;
+        if (!projectName || !workflowName || !version) {
+            return alert('Select project, deployment, and version first.');
+        }
+
+        const data = {};
+        document.querySelectorAll('.start-dynamic-input').forEach(input => {
+            data[input.dataset.key] = parseInputValue(input.value);
+        });
+
+        const response = await fetch(`/api/engine/processes/${encodeURIComponent(workflowName)}/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                version,
+                meta: { projectName },
+                data
+            })
+        });
+
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+            return alert(payload.error || 'Unable to start process instance.');
+        }
+
+        ZeroModal.close();
+        window.location.href = `/instances/detail/${payload.instanceId}`;
+    }
+
+    document.getElementById('filter-name').addEventListener('change', applyInstanceFilters);
+    document.getElementById('filter-definition').addEventListener('change', applyInstanceFilters);
+    document.getElementById('filter-project').addEventListener('change', applyInstanceFilters);
+    document.querySelectorAll('.state-filter').forEach(item => item.addEventListener('change', applyInstanceFilters));
+    applyInstanceFilters();
 </script>

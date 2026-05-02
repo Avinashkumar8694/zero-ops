@@ -1,19 +1,19 @@
-# Terminate Instance (V1.0.0)
+# Terminate Event
 
-Global Termination primitive for transactional process halting.
+Immediate stop for the whole active process context.
 
-## Overview
-The Terminate End event immediately stops all active execution threads within the current process instance. Unlike a standard end event, it does not wait for parallel branches to complete; it transactionally kills the entire context.
+## What This Node Does
+Ends the process immediately and should stop all remaining active branches.
 
-## Technical Parameters
-| Field | Description | Type |
-|-------|-------------|------|
-| `name` | Termination Label (e.g., "Manual Stop"). | Text |
+## Properties
+- `name`: Friendly termination label.
 
-## Data Movement
-1. **Thread Interruption**: All active and sleeping threads are transactionally halted.
-2. **State Persistence**: The final process variables are persisted to the audit trail.
-3. **Instance Closure**: The process is marked as `TERMINATED`.
+## Example
+```json
+{
+  "name": "Terminate Fraudulent Order"
+}
+```
 
-## Example: Critical Error
-- Triggered when a non-recoverable system error occurs, ensuring no further logic executes.
+## Validation Notes
+- Use this only when all remaining work must stop, not just the current path.

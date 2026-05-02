@@ -1,22 +1,21 @@
-# Exclusive Junction (Gateway) (V1.0.0)
+# Exclusive Gateway
 
-Structural Primitive for mutually exclusive branching logic.
+Single-choice decision point.
 
-## Overview
-The Exclusive Gateway (XOR) serves as a decision point in the process. It evaluates outgoing Sequence Flows in a tactical sequence and selects the **first** path where the condition evaluates to true. If no conditions match, the Default path is taken.
+## What This Node Does
+Chooses exactly one outgoing path based on sequence flow conditions connected after the gateway.
 
-## Technical Parameters
-This node is primarily structural and uses the conditions defined on its outgoing **Sequence Flows** to determine movement.
+## Properties
+- `name`: Friendly label for the decision point.
 
-| Field | Description | Type |
-|-------|-------------|------|
-| `name` | Decision Label (e.g. "Is Approved?"). | String |
+## How To Use It
+- Put conditions on outgoing sequence flows, not inside the gateway.
+- Mark one route as default if the flow should always continue.
 
-## Data Movement
-1. **Convergence**: Acts as a merge point for multiple incoming flows.
-2. **Evaluation**: Triggers the evaluation of all outgoing Sequence Flow conditions.
-3. **Branching**: Transactionally selects a single execution thread.
+## Example
+Use a gateway named `Is Credit Approved?` with outgoing flows such as:
+- `approved` path with `variables.creditDecision === 'APPROVED'`
+- default `rejected` path
 
-## Example: Workflow Split
-- Path A: `variables.amount > 1000` -> "High Value Approval"
-- Path B: `isDefault` -> "Standard Processing"
+## Validation Notes
+- The gateway itself is lightweight; most validation belongs to outgoing sequence flows.
